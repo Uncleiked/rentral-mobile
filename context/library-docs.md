@@ -1,555 +1,325 @@
-# Library Docs
+## Rentral Library Docs & Integration Patterns
 
-Project-specific usage patterns for every third party library in this project. This file only covers how we use each library in this specific project — rules, patterns, and constraints specific to JobPilot.
+This document serves as the absolute, definitive architectural guide for implementing every third-party library and SDK within the Rentral marketplace. Because Rentral operates as a zero-trust, spatially locked financial infrastructure for the African digital economy, generic implementations of these libraries will introduce severe vulnerabilities.
 
-Read the relevant section before implementing any feature that touches these libraries.
+Every engineer and AI agent operating on this codebase must read the relevant section thoroughly before writing any code that touches these systems.
 
----
+## 0. Universal Implementation Rules
 
-## Before Using Any Library
+Before utilizing any third-party service, you must adhere to the following strict hierarchy of authority:
 
-Before implementing any feature that uses a third party library:
+Check AGENTS.md: Always verify the project root AGENTS.md to see which MCP servers and agent skills are actively installed.
 
-1. **Check AGENTS.md** at the project root — it lists every skill installed for this project and how to use them. Skills contain up-to-date API documentation, usage patterns, and best practices specific to this codebase.
+Prioritize MCP Servers: If an MCP server is configured for a tool (e.g., Supabase, PostHog, Stripe/OPay), query it to read live documentation or database schema states before falling back to generalized training data.
 
-2. **Check if an MCP server is configured** for that library. Some tools have MCP servers that give the AI agent direct access to documentation, logs, and debugging tools. If an MCP server is available — use it before falling back to general knowledge.
+Strict Adherence to this Document: The patterns defined here override general library knowledge.
 
-3. **Read this file** for project-specific patterns that override general library knowledge.
+Order of Authority: MCP Server (Real-time) → Skills via AGENTS.md → This Document (Project Rules) → General Training Knowledge.
 
-The order of authority is:
+## 1. Supabase & PostGIS (@supabase/ssr & @supabase/supabase-js)
 
-```
-MCP server (real-time docs) → Skills via AGENTS.md → This file (project rules) → General training knowledge
-```
+Rentral relies entirely on Supabase for data persistence and the PostGIS extension for spatial mathematical locking.
 
-Never rely on general training knowledge alone for library APIs — they change frequently and training data may be outdated.
+## 1.1 Client vs. Server Context Isolation
 
----
+We maintain three strictly separated Supabase instances. Never cross-contaminate them.
 
-## InsForge
+## Browser Client (Client Components Only):
+Used exclusively for read-only operations on public feeds or subscribing to Realtime WebSocket chat channels.
 
-**Check first:** Check AGENTS.md for an installed InsForge skill. If an InsForge MCP server is configured — use it. The skill/MCP will have the latest API patterns.
+// lib/supabase/client.ts
+import { createBrowserClient } from "@supabase/ssr";
 
-### Client vs Server
+export const createClient = () =>
+  createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-Two separate instances — never mix them:
 
-```typescript
-// lib/insforge-client.ts — browser context only
-import { createBrowserClient } from "@insforge/ssr";
+## Server Client (Server Components, Actions, User API Routes):
+Used when executing authenticated actions on behalf of the user. Automatically parses Clerk/Supabase synced cookies.
 
-export const insforge = createBrowserClient(
-  process.env.NEXT_PUBLIC_INSFORGE_URL!,
-  process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-);
-```
-
-```typescript
-// lib/insforge-server.ts — server context only
-import { createServerClient } from "@insforge/ssr";
+// lib/supabase/server.ts
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-export const createInsforgeServer = async () => {
+export const createClient = async () => {
   const cookieStore = await cookies();
   return createServerClient(
-    process.env.NEXT_PUBLIC_INSFORGE_URL!,
-    process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (cookiesToSet) => {
           cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
+            cookieStore.set(name, value, options)
           );
         },
       },
-    },
+    }
   );
 };
-```
 
-**Rules:**
 
-- Browser client — Client Components, browser-side auth state, realtime subscriptions
-- Server client — Server Components, API routes, Server Actions, agent functions
-- Never use browser client in server context
-- Never use server client in browser context
+## Admin / Service Role Client (Webhooks & Edge CRONs Only):
+Used strictly in /api/webhooks/* or Supabase Edge Functions where Row Level Security (RLS) must be bypassed to execute automated financial settlements or multi-year lease updates.
 
----
+// lib/supabase/admin.ts
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-### Auth
-
-```typescript
-// Get current user in server context
-const insforge = await createInsforgeServer();
-const {
-  data: { user },
-  error,
-} = await insforge.auth.getUser();
-if (!user) redirect("/login");
-```
-
----
-
-### DB Queries
-
-```typescript
-// Read
-const { data, error } = await insforge
-  .from("jobs")
-  .select("*")
-  .eq("user_id", user.id)
-  .order("found_at", { ascending: false });
-
-// Insert
-const { data, error } = await insforge
-  .from("jobs")
-  .insert({ user_id: user.id, title, company, match_score })
-  .select()
-  .single();
-
-// Update
-const { error } = await insforge
-  .from("jobs")
-  .update({ company_research: dossier })
-  .eq("id", jobId)
-  .eq("user_id", user.id); // always scope to user
-```
-
-**Rules:**
-
-- Always scope queries to `user_id` — never query without user filter
-- Always handle the `error` return — never assume success
-- Use `.single()` when expecting exactly one row
-
----
-
-### Storage
-
-```typescript
-// Upload file
-const { data, error } = await insforge.storage
-  .from("resumes")
-  .upload(`${userId}/resume.pdf`, fileBuffer, {
-    contentType: "application/pdf",
-    upsert: true, // overwrites existing file
-  });
-
-// Get public URL
-const { data } = insforge.storage
-  .from("resumes")
-  .getPublicUrl(`${userId}/resume.pdf`);
-
-const url = data.publicUrl;
-```
-
-**Storage paths:**
-
-- Base resume: `resumes/{user_id}/resume.pdf`
-
-**Rules:**
-
-- Always use `upsert: true` for base resume uploads — overwrites existing file
-- Always save the public URL back to the DB after upload
-- Never write files to disk — always upload buffer directly to storage
-
----
-
-## Adzuna API
-
-**Check first:** Check AGENTS.md for an installed Adzuna skill. If none exists — use this file and the official Adzuna API docs.
-
-### Job Search
-
-```typescript
-// lib/adzuna.ts
-export async function searchJobs(
-  jobTitle: string,
-  location: string,
-  country: string = "us",
-): Promise<AdzunaJob[]> {
-  const params = new URLSearchParams({
-    app_id: process.env.ADZUNA_APP_ID!,
-    app_key: process.env.ADZUNA_APP_KEY!,
-    what: jobTitle,
-    category: "it-jobs", // always filter to IT jobs
-    results_per_page: "10",
-    "content-type": "application/json",
-  });
-
-  // Only add where if location is provided
-  if (location) {
-    params.set("where", location);
-  }
-
-  const response = await fetch(
-    `https://api.adzuna.com/v1/api/jobs/${country}/search/1?${params}`,
+export const createAdminClient = () =>
+  createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  if (!response.ok) {
-    throw new Error(`Adzuna API error: ${response.status}`);
-  }
 
+## 1.2 Executing PostGIS Spatial Queries
+
+## Supabase JS does not natively support raw SQL geometry insertions. All PostGIS spatial math (ST_DWithin, ST_MakePoint) must be executed via pre-defined Remote Procedure Calls (RPCs).
+
+## Inserting Spatial Data (Listing Creation):
+When saving a listing, pass the raw coordinates from navigator.geolocation directly to the RPC.
+
+const { data, error } = await supabase.rpc('insert_listing_with_postgis', {
+  p_lister_id: userId,
+  p_category: 'house',
+  p_base_price: 5000000,
+  p_longitude: lng, 
+  p_latitude: lat,
+  p_lease_duration_years: 1 // Default, can be overridden by multi-year config
+});
+
+
+## Validating Proximity (The Spatial Handshake):
+
+const { data: isWithinRange, error } = await supabase.rpc('verify_handshake_proximity', {
+  p_listing_id: listingId,
+  p_seeker_lng: currentLng,
+  p_seeker_lat: currentLat,
+  p_radius_meters: 20 // STRICT SYSTEM CONSTANT: 20 meters
+});
+
+
+## Rules for Supabase/PostGIS:
+
+Never expose raw hardware_coordinates to the client-side frontend. Abstract it to neighborhood zones or distance_meters.
+
+Always handle the error return object.
+
+Always scope queries using .eq('id', userId) even with RLS enabled to prevent accidental cross-pollination in complex joins.
+
+## 2. Clerk Authentication (@clerk/nextjs)
+
+Rentral relies on Clerk for the initial authentication loop, generating the base userId that maps exactly to our Supabase profiles table.
+
+## 2.1 Edge Middleware Protection
+
+Clerk acts as our primary route firewall. Unauthenticated users are strictly barred from transaction interfaces.
+
+// middleware.ts
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/checkout(.*)', 
+  '/listing/create(.*)', 
+  '/listing/edit(.*)', 
+  '/profile(.*)',
+  '/messages(.*)'
+]);
+
+export default clerkMiddleware(async (auth, req) => {
+  const { userId } = await auth();
+  if (!userId && isProtectedRoute(req)) {
+    return auth().redirectToSignIn();
+  }
+});
+
+
+## 2.2 Retrieving User Identity
+
+In Server Actions, always use auth() to extract the ID securely.
+
+import { auth } from "@clerk/nextjs/server";
+
+export async function processHoldingLock(listingId: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+  
+  // Proceed to use userId as seeker_id in transactions
+}
+
+
+## 3. Smile ID Identity Verification (@smile_identity/web-sdk)
+
+Because Rentral operates high-value escrows, Clerk identity alone is insufficient. Users must pass Smile ID KYC (NIN, BVN, or Passport).
+
+## 3.1 Webhook Resolution
+
+Smile ID processing is asynchronous. Never block the UI waiting for KYC. Instead, rely on the webhook.
+
+Route: app/api/webhooks/smile-id/route.ts
+
+Logic: When Smile ID fires a KYC_APPROVED payload, use the createAdminClient() to update the Supabase profiles table, flipping kyc_status from 'pending' to 'verified'.
+
+## 4. Google Gemini 1.5 Pro (@google/generative-ai)
+
+We utilize Gemini 1.5 Pro exclusively as an automated, multimodal forensic compliance auditor. It evaluates Deeds of Assignment, Certificates of Occupancy, and Mutual Lease Termination documents.
+
+## 4.1 Structured Forensic Analysis
+
+We strictly enforce JSON responses and low temperatures to prevent hallucination.
+
+// lib/gemini.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+export async function analyzeDocumentWithGemini(base64Image: string, mimeType: string) {
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-pro",
+    generationConfig: {
+      temperature: 0.1, // Highly deterministic for strict forensic analysis
+      responseMimeType: "application/json",
+    }
+  });
+
+  const prompt = `You are a forensic real estate document auditor in Nigeria.
+  Analyze the provided document (C of O, CAC, or Vacation Deed).
+  Detect signs of digital manipulation, inconsistent fonts, mismatched dates, or AI generation.
+  
+  Return STRICTLY valid JSON matching this schema:
+  {
+    "authentic": boolean,
+    "confidenceScore": number (0 to 100),
+    "documentType": string,
+    "findings": string[] (Array of detected anomalies or confirmations)
+  }`;
+
+  const imagePart = {
+    inlineData: { data: base64Image, mimeType: mimeType }
+  };
+
+  try {
+    const result = await model.generateContent([prompt, imagePart]);
+    return JSON.parse(result.response.text());
+  } catch (error) {
+    console.error("Gemini Forensic Parse Error:", error);
+    return { authentic: false, confidenceScore: 0, findings: ["AI System Failure"] };
+  }
+}
+
+
+## Rules for Gemini:
+
+Never use Gemini for conversational chatbots in this specific application layer. It is a gatekeeper.
+
+Always handle potential JSON.parse failures gracefully.
+
+If confidenceScore is below 85, automatically flag the document for human administrative review.
+
+## 5. Financial Escrow Routing (OPay & Paystack)
+
+Rentral routes billions of Naira through split-escrow mechanisms. OPay handles dynamic virtual accounts and outbound transfers for Nigeria. Paystack is utilized for Open Banking hash validations during Year 2+ lease renewals.
+
+## 5.1 OPay Virtual Account Generation
+
+Triggered when a user locks an inspection, holding deposit, or multi-year lease.
+
+// lib/opay.ts
+export async function createVirtualAccount(transactionId: string, amountNgn: number, email: string) {
+  const response = await fetch("[https://api.opay.com/v1/virtual-accounts](https://api.opay.com/v1/virtual-accounts)", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPAY_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      reference: transactionId,
+      amount: amountNgn * 100, // MANDATORY: OPay operates in Kobo
+      currency: "NGN",
+      customer_email: email,
+      expires_in: 60 // minutes
+    })
+  });
+
+  if (!response.ok) throw new Error("Failed to provision OPay Virtual Account");
+  return await response.json();
+}
+
+
+## 5.2 Paystack Open Banking Hash Validation
+
+Used specifically for the Continuous Trust Renewal loop (Year 2, Year 3, etc.) when tenants bypass agents.
+
+// lib/paystack.ts
+export async function verifyRenewalTransferHash(referenceHash: string) {
+  const response = await fetch(`https://api.paystack.co/transaction/verify/${referenceHash}`, {
+    headers: {
+      "Authorization": `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
+    }
+  });
+  
   const data = await response.json();
-  return data.results || [];
+  // Validates if the recipient bank account matches the registered Landlord's account
+  return data.data; 
 }
-```
 
-### Response Shape
 
-Each Adzuna job result contains:
+## Rules for Financial APIs:
 
-```typescript
-type AdzunaJob = {
-  id: string;
-  title: string;
-  company: { display_name: string };
-  location: { display_name: string };
-  description: string; // snippet only — not full description
-  redirect_url: string; // Adzuna tracking URL → redirects to actual job
-  salary_min?: number;
-  salary_max?: number;
-  salary_is_predicted: "0" | "1"; // "1" means salary is estimated
-  contract_type?: string;
-  created: string; // ISO date string
-  category: { tag: string; label: string };
-};
-```
+Kobo Conversion: Always multiply NGN by 100 before sending to OPay/Paystack. Always divide by 100 when reading from webhooks.
 
-### Saving Jobs to DB
+Webhook Security: Never process an OPay or Paystack webhook without cryptographically verifying the signature header (x-opay-signature or x-paystack-signature) against our secret keys.
 
-```typescript
-// Map Adzuna result to jobs table
-const jobRecord = {
-  user_id: userId,
-  run_id: runId,
-  source: "search", // always 'search' for Adzuna jobs
-  source_url: job.redirect_url,
-  external_apply_url: job.redirect_url,
-  title: job.title,
-  company: job.company.display_name,
-  location: job.location.display_name,
-  salary: job.salary_min
-    ? `$${Math.round(job.salary_min / 1000)}k - $${Math.round(job.salary_max! / 1000)}k`
-    : null,
-  job_type: job.contract_type || "fulltime",
-  about_role: job.description, // Adzuna returns snippet — used as description
-  match_score: scoredJob.matchScore,
-  match_reason: scoredJob.matchReason,
-  matched_skills: scoredJob.matchedSkills,
-  missing_skills: scoredJob.missingSkills,
-  found_at: new Date().toISOString(),
-};
-```
+No P2P: All initial transaction flows MUST pass through Rentral's Master Ledger.
 
-**Rules:**
+## 6. Video Ingestion & Transcoding (@mux/mux-node & @mux/mux-player-react)
 
-- Always include `category=it-jobs` — never search Adzuna without this filter
-- Never pass `where` if location is empty — omit the parameter entirely
-- `source` is always `'search'` for Adzuna jobs — never any other value
-- `salary_is_predicted: "1"` means Adzuna estimated the salary — this is normal
-- Adzuna description is a snippet — GPT-4o scores from it, not a full description
-- Default country to `'us'` — support `gb`, `au`, `ca` as alternatives
+To support users on restricted bandwidth networks across Africa, we use Mux for signed HLS adaptive streaming.
 
----
+## 6.1 Backend Ingestion
 
-## Browserbase
+After the video_raw.mp4 is saved to Supabase Storage, a Server Action passes the public URL to Mux.
 
-**Check first:** Check AGENTS.md for an installed Browserbase skill. If a Browserbase MCP server is configured — use it. The skill/MCP will have the latest session management and API patterns.
+import Mux from '@mux/mux-node';
+const mux = new Mux({ tokenId: process.env.MUX_TOKEN_ID, tokenSecret: process.env.MUX_TOKEN_SECRET });
 
-### Session Creation — Company Research
-
-```typescript
-import Browserbase from "@browserbasehq/sdk";
-
-const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY! });
-
-// Single session for company research — sequential page visits
-const session = await bb.sessions.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  timeout: 120, // 2 minute session — visits 3-4 pages max
-});
-```
-
-**Important — Browserbase runs independently from your Next.js server:**
-Browserbase sessions run on Browserbase's cloud infrastructure, not inside your Next.js API route. The API route triggers the Browserbase session and returns a response while the session continues running independently on Browserbase's platform. Do not add `maxDuration` or any timeout configuration to Next.js API routes to accommodate Browserbase session length.
-
-**Rules:**
-
-- Always use single sessions — never parallel sessions (free plan limit)
-- Session timeout is 120 seconds — sufficient for 3-4 page visits
-- Always end sessions cleanly — call stagehand.close() when done
-- Project ID always from `process.env.BROWSERBASE_PROJECT_ID` — never hardcode
-- Browserbase client lives in `lib/browserbase.ts` — always import from there
-
----
-
-## Stagehand
-
-**Check first:** Check AGENTS.md for an installed Stagehand skill. If a Stagehand MCP server is configured — use it. The skill/MCP will have the latest act() and extract() patterns.
-
-### Initialisation
-
-```typescript
-import { Stagehand } from "@browserbasehq/stagehand";
-
-const stagehand = new Stagehand({
-  env: "BROWSERBASE",
-  apiKey: process.env.BROWSERBASE_API_KEY!,
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  browserbaseSessionID: session.id,
-  model: { modelName: "openai/gpt-4o", apiKey: process.env.OPENAI_API_KEY! },
-  disablePino: true,
-});
-
-await stagehand.init();
-const page = stagehand.context.activePage()!;
-```
-
-### extract()
-
-```typescript
-import { z } from "zod";
-
-const result = await stagehand.extract({
-  instruction:
-    "Extract the company overview, main product description, and any technology mentions from this page.",
-  schema: z.object({
-    companyOverview: z.string().optional(),
-    mainProduct: z.string().optional(),
-    techMentions: z.array(z.string()).optional(),
-    navLinks: z
-      .array(
-        z.object({
-          label: z.string(),
-          url: z.string(),
-        }),
-      )
-      .optional(),
-  }),
-});
-```
-
-### act()
-
-```typescript
-// Always wrap in try/catch
-try {
-  await stagehand.act({
-    action: "Click the About link in the navigation",
+export async function ingestWalkthroughVideo(supabaseUrl: string) {
+  const asset = await mux.video.assets.create({
+    input: supabaseUrl,
+    playback_policy: ['public'],
+    video_quality: 'basic' // Optimize for mobile networks
   });
-} catch (error) {
-  await logAgentError(jobId, null, error);
-}
-```
-
-## Company Research Section
-
-Replace the existing Stagehand "Company Research Pattern" section in library-docs.md with this:
-
----
-
-### Company Research Pattern
-
-Three-step process: homepage extraction → sub-page extraction → GPT-4o synthesis.
-Job description and user profile come from DB — never re-fetch what you already have.
-Browser's only job is the company website.
-
-```typescript
-// Step 1 — Homepage extraction
-const homepageData = await stagehand.extract({
-  instruction:
-    "This is a company's homepage. Capture what the company actually does, who it's for, and any concrete signals (funding, customers, scale, mission, recent launches). Then find the internal links most worth visiting to research them as an employer.",
-  schema: z.object({
-    oneLiner: z.string().describe("What the company does in one sentence"),
-    productSummary: z
-      .string()
-      .describe("What they build/sell and who it's for"),
-    signals: z
-      .array(z.string())
-      .describe("Funding, notable customers, scale, mission, recent news"),
-    pageLinks: z
-      .array(
-        z.object({
-          url: z.string(),
-          kind: z.enum([
-            "about",
-            "careers",
-            "blog",
-            "engineering",
-            "product",
-            "team",
-            "other",
-          ]),
-        }),
-      )
-      .describe("Internal links worth visiting"),
-  }),
-});
-
-// If oneLiner and productSummary are empty — wrong site or parked domain
-// Skip to synthesis with job description and profile only
-if (!homepageData.oneLiner && !homepageData.productSummary) {
-  await stagehand.close();
-  // proceed to synthesis with empty companyResearch
+  return asset.playback_ids[0].id; // Save this ID to the listings table
 }
 
-// Step 2 — Sub-page extraction (max 3, prefer about/blog/engineering/product over careers)
-const subPageData = await stagehand.extract({
-  instruction:
-    "Extract substance that helps a candidate understand this company before applying: what they do, their values and how they work, the specific technologies and tools they use, notable projects or customers, and how the team operates. Ignore nav, footers, cookie banners, and generic marketing copy.",
-  schema: z.object({
-    keyPoints: z.array(z.string()),
-    technologies: z
-      .array(z.string())
-      .describe("Specific languages, frameworks, tools, platforms"),
-    valuesOrCulture: z
-      .array(z.string())
-      .describe("Stated values, working style, team norms"),
-    notable: z
-      .array(z.string())
-      .describe("Customers, funding, scale, projects, awards"),
-  }),
-});
 
-// Step 3 — GPT-4o synthesis (after browser closes)
-// Feed three data sources: company research + job from DB + profile from DB
-const systemPrompt = `You are a sharp career strategist preparing a candidate to apply for a specific role. You are given (a) research collected from the company's own website, (b) the job posting, and (c) the candidate's profile. Produce a concise, concrete briefing that gives this specific candidate an edge for this specific role.
+## 6.2 Frontend Playback
 
-Rules:
-- Ground every company claim in the provided research or job posting. Never invent funding, customers, headcount, or facts. If research was thin, infer carefully from the job posting and say what's inferred.
-- Be specific to THIS candidate. Connect their actual skills and past work to this company's stack, product, and values. No generic advice that would apply to anyone.
-- Turn the candidate's missing skills into a strategy: how to frame the gap honestly and what adjacent experience to lean on.
-- Talking points and questions must reference real things from the research, the kind of detail that signals the candidate did their homework.
-- Keep every item tight: one or two sentences. No fluff.
+import MuxPlayer from "@mux/mux-player-react";
 
-Return ONLY valid JSON matching this shape:
-{
-  "companyOverview": string,
-  "techStack": string[],
-  "culture": string[],
-  "whyThisRole": string,
-  "yourEdge": string[],
-  "gapsToAddress": string[],
-  "smartQuestions": string[],
-  "interviewPrep": string[],
-  "sources": string[]
-}`;
+export function FeedPlayer({ playbackId }: { playbackId: string }) {
+  return (
+    <MuxPlayer
+      streamType="on-demand"
+      playbackId={playbackId}
+      autoPlay="muted"
+      loop
+      className="object-cover w-full h-full rounded-[32px]"
+    />
+  );
+}
 
-const userPrompt = `COMPANY RESEARCH (from their website):
-${JSON.stringify(companyResearch)}
 
-JOB POSTING:
-Title: ${job.title}
-Company: ${job.company}
-Description: ${job.description}
-Matched skills (already computed): ${job.matched_skills.join(", ")}
-Missing skills (already computed): ${job.missing_skills.join(", ")}
+## 7. Telemetry & Predictive Analytics (posthog-js & posthog-node)
 
-CANDIDATE PROFILE:
-Current title: ${profile.current_title}
-Experience: ${profile.years_experience} years, level ${profile.experience_level}
-Skills: ${profile.skills.join(", ")}
-Work history: ${JSON.stringify(profile.work_experience)}`;
+PostHog is the backbone of our B2B 'Rentral Insights' portal, tracking geospatial demand elasticity.
 
-const response = await openai.chat.completions.create({
-  model: "gpt-4o",
-  response_format: { type: "json_object" },
-  temperature: 0.4,
-  messages: [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt },
-  ],
-});
-```
+## 7.1 Client-Side Initialization
 
-**Dossier fields:**
-
-| Field           | Type     | Purpose                                             |
-| --------------- | -------- | --------------------------------------------------- |
-| companyOverview | string   | What the company does                               |
-| techStack       | string[] | Technologies they use                               |
-| culture         | string[] | Values and working style                            |
-| whyThisRole     | string   | Why this role exists                                |
-| yourEdge        | string[] | Specific links between THIS candidate and this role |
-| gapsToAddress   | string[] | Missing skills reframed as strategy                 |
-| smartQuestions  | string[] | Questions that show real research                   |
-| interviewPrep   | string[] | Topics to prepare for this role                     |
-| sources         | string[] | Pages the company info came from                    |
-
-**Rules:**
-
-- Always use `extract()` with a Zod schema — never parse raw HTML or use regex
-- Always wrap every `act()` and `extract()` in try/catch
-- Always call `await stagehand.close()` when done — ends the Browserbase session
-- Model is always `gpt-4o` — never use other models
-- Temperature is `0.4` for synthesis — grounded but flexible enough to make real connections
-- Max 3 sub-pages — never exceed this on free plan
-- Always close session in finally block — never leave sessions open even if research fails
-- Job description and profile always come from DB — never re-fetch via browser
-- If browser research returns empty — still run synthesis with job + profile only
-- yourEdge, gapsToAddress, and smartQuestions are the most valuable fields — never skip them
-
-## OpenAI GPT-4o
-
-**Check first:** Check AGENTS.md for an installed OpenAI skill. The skill will have the latest API patterns and model capabilities.
-
-### Structured JSON Response
-
-```typescript
-import OpenAI from "openai";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-
-const response = await openai.chat.completions.create({
-  model: "gpt-4o",
-  response_format: { type: "json_object" },
-  temperature: 0.3,
-  messages: [
-    {
-      role: "system",
-      content: "You are a job matching assistant. Return only valid JSON.",
-    },
-    {
-      role: "user",
-      content: `Your prompt here`,
-    },
-  ],
-});
-
-const result = JSON.parse(response.choices[0].message.content!);
-```
-
-**Temperature settings:**
-
-- `0.3` — matching, scoring, extraction, research synthesis — deterministic results
-- `0.7` — resume generation — natural variation
-
-**Max tokens:**
-
-- Job matching + scoring: `300`
-- Company research synthesis: `800`
-- Resume generation: `1000`
-- Profile extraction from resume: `800`
-
-**Rules:**
-
-- Model string is always `'gpt-4o'` — never use other model names
-- Always use `response_format: { type: 'json_object' }` for structured data
-- Always parse `response.choices[0].message.content` as string — even with json_object it returns a string
-- Always validate parsed JSON before using — wrap in try/catch
-- Match threshold is always `MATCH_THRESHOLD` from `lib/utils.ts` — never hardcode 70
-- Company research synthesis must always return a complete dossier — never return empty even if browser research failed
-
----
-
-## PostHog
-
-**Check first:** Check AGENTS.md for an installed PostHog skill. If a PostHog MCP server is configured — use it. The skill/MCP will have the latest client and server patterns.
-
-### Client Setup (Browser)
-
-```typescript
 // lib/posthog-client.ts
 import posthog from "posthog-js";
 
@@ -557,133 +327,172 @@ export function initPostHog() {
   if (typeof window !== "undefined") {
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST!,
-      capture_pageview: false, // manual pageview tracking
+      capture_pageview: false, // We trigger this manually in Next.js App Router
     });
   }
 }
 
-// Capture event client-side
-posthog.capture("job_found", {
-  userId,
-  source: "search",
-  matchScore: score,
-});
-```
 
-### Server Setup
+## 7.2 Serverless Environment Tracking (CRITICAL)
 
-```typescript
+In Server Actions, API routes, or Supabase Edge Functions, you must use flushAt: 1 and await posthog.shutdown().
+
 // lib/posthog-server.ts
 import { PostHog } from "posthog-node";
 
 export const createPostHogServer = () =>
   new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
     host: process.env.NEXT_PUBLIC_POSTHOG_HOST!,
-    flushAt: 1, // send immediately
-    flushInterval: 0, // no batching — Next.js functions are short-lived
+    flushAt: 1, // MANDATORY: Next.js functions spin down instantly
+    flushInterval: 0,
   });
 
-// Always use and shutdown in the same function
+// Usage inside an action:
 const posthog = createPostHogServer();
 posthog.capture({
-  distinctId: userId,
-  event: "company_researched",
-  properties: { userId, jobId, company },
+  distinctId: seekerId,
+  event: "multi_year_escrow_locked",
+  properties: { 
+    listingId: listingId, 
+    durationYears: selectedYears,
+    totalValue: calculatedTotal 
+  },
 });
-await posthog.shutdown(); // required — ensures event is sent
-```
+await posthog.shutdown(); // MANDATORY: Forces event queue dispatch before lambda death
 
-**Rules:**
 
-- Always call `await posthog.shutdown()` in server-side functions — events are lost without it
-- `flushAt: 1` and `flushInterval: 0` always set on server client
-- Event names must match exactly the list in `code-standards.md`
-- Always include `userId` as a property on every server-side event
-- Call `posthog.identify(userId)` after login on client side
-- Call `posthog.reset()` on logout on client side
+## Required PostHog Events:
 
----
+onboarding_kyc_completed
 
-## @react-pdf/renderer
+listing_hardware_locked
 
-**Check first:** Check AGENTS.md for an installed react-pdf skill. PDF generation APIs can differ from general training knowledge.
+inspection_escrow_deposited
 
-### Resume PDF Generation
+spatial_handshake_success
 
-```typescript
-import { renderToBuffer } from '@react-pdf/renderer'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+multi_year_escrow_locked
 
-const styles = StyleSheet.create({
-  page: { padding: 30, fontFamily: 'Helvetica' },
-  section: { marginBottom: 10 },
-  heading: { fontSize: 14, fontWeight: 'bold' },
-  text: { fontSize: 10 },
-})
+holding_lock_expired
 
-const ResumePDF = ({ profile }: { profile: Profile }) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      <View style={styles.section}>
-        <Text style={styles.heading}>{profile.fullName}</Text>
-        <Text style={styles.text}>{profile.email}</Text>
-      </View>
-    </Page>
-  </Document>
-)
+year2_route_updated
 
-// Generate buffer
-const buffer = await renderToBuffer(<ResumePDF profile={profile} />)
+lease_termination_verified
 
-// Upload directly to InsForge Storage
-await insforge.storage
-  .from('resumes')
-  .upload(`${userId}/resume.pdf`, buffer, {
-    contentType: 'application/pdf',
-    upsert: true
-  })
-```
+## 8. Client State Management (zustand)
 
-**Supported CSS properties:**
-Only use these — others are silently ignored:
-`padding, margin, fontSize, color, fontFamily, flexDirection, alignItems, justifyContent, borderRadius, width, height, fontWeight, textAlign, lineHeight`
+We use Zustand to persist complex UI flows that should not hit the database until finalized, such as the multi-step mobile camera capture and the Multi-Year Escrow configurator.
 
-**Rules:**
+## 8.1 Rentral Global Store
 
-- Server-side only — never import in client components
-- Always use `renderToBuffer` — not `renderToStream` or `PDFDownloadLink`
-- PDF generation only in `app/api/resume/` routes
-- Generated buffer uploaded directly to InsForge Storage — never written to disk
-- Always save public URL to DB after upload
+// store/useRentralStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
----
-
-## pdf-parse
-
-**Check first:** Check AGENTS.md for an installed pdf-parse skill.
-
-### Extract Text from Uploaded Resume
-
-```typescript
-import pdf from "pdf-parse";
-
-// In API route handling resume upload
-export async function POST(req: NextRequest) {
-  const formData = await req.formData();
-  const file = formData.get("resume") as File;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  const pdfData = await pdf(buffer);
-  const extractedText = pdfData.text; // raw text content
-
-  // Send to GPT-4o for structured extraction
+interface RentralState {
+  activeListingId: string | null;
+  activeBookingDurationYears: number;
+  adminBypassEnabled: boolean; // Sandbox usage only
+  setActiveListing: (id: string | null) => void;
+  setBookingDuration: (years: number) => void;
+  toggleAdminBypass: (enabled: boolean) => void;
+  resetCheckout: () => void;
 }
-```
 
-**Rules:**
+export const useRentralStore = create<RentralState>()(
+  persist(
+    (set) => ({
+      activeListingId: null,
+      activeBookingDurationYears: 1, // Defaults to standard 1 year
+      adminBypassEnabled: false,
+      setActiveListing: (id) => set({ activeListingId: id }),
+      setBookingDuration: (years) => set({ activeBookingDurationYears: years }),
+      toggleAdminBypass: (enabled) => set({ adminBypassEnabled: enabled }),
+      resetCheckout: () => set({ activeListingId: null, activeBookingDurationYears: 1 })
+    }),
+    { name: 'rentral-client-state' }
+  )
+);
 
-- Server-side only — never import in client components
-- `pdfData.text` is raw unformatted text — GPT-4o handles the structure extraction
-- Always handle parse errors — some PDFs are image-based and return empty text
-- If `pdfData.text` is empty or very short — return error to user: "Could not extract text from this PDF. Please try a different file."
+
+## Rules for Zustand:
+
+Do not duplicate database state in Zustand. Only store ephemeral session data, wizard progression, or configuration overrides.
+
+Use the persist middleware sparingly. Ensure sensitive data (like un-hashed OTPs) is never persisted to localStorage.
+
+## 9. RENTRAL DATABASE SCHEMA (The Integrity Engine)
+
+The Rentral database is not a passive data store; it is an active, zero-trust "Integrity Engine." By leveraging Supabase (PostgreSQL) and PostGIS, the schema enforces spatial realities, financial compliance, and identity verification at the row level.
+
+The following notes define the foundational structures of this engine, specifically detailing how human and corporate identities are managed to prevent the ghost-listing and agent-fraud epidemics prevalent in the African real estate and mobility markets.
+
+## 9.1 DATABASE ENTITIES: CORE STRUCTURES
+
+The core architecture relies on a unified ledger. A single, mathematically verified identity must be able to seamlessly lease a co-living space, rent a vehicle, and book a marine vessel without redundant verification or fragmented trust scores.
+
+## 9.1.1 CORE TABLES: USER IDENTITY & ROLES (profiles table)
+
+The profiles table is the central source of truth for all actors on the platform (Seekers, Listers, Licensed Agents, and Enterprise Organizations). It is strictly synchronized with our Clerk authentication middleware and acts as the gatekeeper for all financial and spatial operations.
+
+## A. Primary Identification & Authentication Mapping
+
+id (text, Primary Key): * Architecture Note: This strictly mirrors the userId generated by Clerk. We do not generate custom UUIDs for primary identification. By using the Clerk UID as the primary key, we guarantee a 1-to-1 mapping between the edge-authenticated session and the database row, enforcing Row Level Security (RLS) policies flawlessly.
+
+username (text, Unique): * Architecture Note: The public-facing handle chosen by the user during the onboarding wizard. Used for public routing (e.g., rentral.com/@username) and masking actual names in public reviews for privacy.
+
+country_code (text): * Architecture Note: Defaults to 'NG' (Nigeria). Ensures platform readiness for Pan-African scaling (e.g., 'KE', 'ZA') by allowing localized query filtering and payment gateway dynamic routing (OPay for NG, Paystack for wider regions).
+
+## B. KYC & Regulatory Compliance (Smile ID Integration)
+
+full_name (text, Not Null): * Architecture Note: Must perfectly match the legal name returned by the Smile ID registry check. Users cannot arbitrarily edit this field to prevent identity spoofing.
+
+kyc_status (kyc_state Enum): * States: 'unverified', 'pending', 'verified', 'flagged'.
+
+Architecture Note: No user can create a listing, lock an escrow, or perform a spatial handshake unless this state evaluates to 'verified'. This state is mutated exclusively by backend server actions listening to async Smile ID webhooks.
+
+id_type (text): * Constraints: Locked to 'NIN', 'BVN', or 'PASSPORT'.
+
+id_number (text): * Architecture Note: The encrypted string of the national identifier. Stored securely and only visible to internal compliance administrative roles.
+
+## C. Role-Based Access Control (RBAC)
+
+role (user_role_type Enum): * States: 'user', 'licensed_agent', 'organization'.
+
+Architecture Note: Dictates UI permissions and verification badge rendering on the frontend discovery feed. A 'user' is a standard peer-to-peer participant, whereas agents and organizations unlock bulk-listing management tools.
+
+is_admin (boolean, Default false): * Architecture Note: The ultimate system override flag. Only granted to Rentral internal staff. Permits bypassing of PostGIS spatial coordinate checks (for sandbox testing) and authorizes the manual force-release/refunding of locked escrows in the /admin console.
+
+## D. Corporate & Professional Verification (Gemini AI Audit)
+
+cac_registration_number (text): * Architecture Note: Mandatory if the user selects the 'organization' role (e.g., Enterprise Fleet Operators, Real Estate Developers).
+
+license_document_url (text): * Architecture Note: Mandatory if the user claims the 'licensed_agent' role. Points to the Supabase Storage bucket holding their professional credentials.
+
+is_business_verified (boolean, Default false): * Architecture Note: This flag is flipped to true exclusively by the Gemini 1.5 Pro AI verification pipeline. Once Gemini scans the CAC or license document for typographic anomalies or digital alterations and confirms authenticity, this flag unlocks the coveted blue/green verification badges on the frontend.
+
+## E. Financial Routing Ledger (The NIP Gateway)
+
+bank_code (text): * Architecture Note: The Central Bank of Nigeria (CBN) routing code for the user's traditional commercial bank (e.g., Access, GTBank, Zenith).
+
+account_number (text): * Architecture Note: The 10-digit NUBAN.
+
+Integration Rule: We do not force Listers to download OPay. When an escrow completes via the PostGIS handshake, Rentral's backend dynamically hits the OPay/Paystack Payout API using these two columns to automatically disburse the net platform funds to the user's legacy bank account.
+
+## F. The Trust & Reputation Metric
+
+reputation_score (numeric(3,2), Default 5.00): * Constraints: Min 0.00, Max 5.00.
+
+Architecture Note: The core of the "Rentral Trust Score." This is a dynamic integer. It decreases if a user defaults on an inspection handshake (no-show) and increases via consistent multi-year lease renewals (verified via Open Banking hashes). If it drops below 3.50, the UI automatically renders a high-visibility red warning banner on all of the user's active listings.
+
+created_at (timestamp with time zone): * Architecture Note: Immutable timestamp generated by the database upon profile insertion.
+
+## 9.1.2 Implementation Invariants for Identity
+
+To guarantee the structural integrity of the profiles table, all engineers must strictly adhere to the following rules:
+
+Clerk Webhook Synchronization: The initial INSERT into the profiles table is never triggered directly from the frontend React client. It must be triggered exclusively by a secure user.created webhook emitted directly from Clerk's servers to our api/webhooks/clerk endpoint.
+
+Row Level Security (RLS) Dominance: The profiles table must have an absolute RLS policy enforced. Users can only SELECT or UPDATE their own rows (auth.uid() = id). All public profile fetches (for viewing a lister's reputation) must be explicitly handled via restricted, read-only database views or specific edge functions, stripping out PII (like account_number and id_number).
+
+No Client-Side KYC Mutations: A frontend client MUST NEVER pass a payload to update the kyc_status or is_business_verified columns. These columns are mathematically protected and can only be updated by the SUPABASE_SERVICE_ROLE_KEY operating in secure backend routes after receiving validated payloads from Smile ID or the Gemini AI engine.

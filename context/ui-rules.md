@@ -1,198 +1,239 @@
-# UI Rules
+## UI Rules
 
-Concise rules for building JobPilot UI. Design assets are available — use them as the source of truth for visual decisions. These rules cover the most important patterns and constraints to keep the UI consistent without over-specifying every detail.
-
----
+Concise rules for building the Rentral UI. Design assets and the @theme token definitions in globals.css act as the absolute source of truth for visual decisions. These rules cover the most important patterns and constraints to keep the UI consistent, mobile-first, and immersive across our zero-trust, multi-asset marketplace without over-specifying every detail.
 
 ## Font
 
-Always import Inter via `next/font/google` in the root layout.
+Always import Inter via next/font/google in the root layout. The application exclusively relies on Inter to maintain a modern, clean, and highly legible interface.
 
-```typescript
 import { Inter } from "next/font/google";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-```
 
-The `--font-sans` variable is already declared in `@theme` in globals.css. Apply the font variable class to the `<html>` tag in root layout. Never use system fonts as the primary font.
 
----
+The --font-sans variable is already declared in the @theme directive in globals.css. Apply the font variable class to the <html> tag in the root layout. Never fallback to generic system fonts directly in components.
 
 ## Layout
 
-- Page max-width: 1440px, centered
-- Main content area padding: 32px on all sides
-- Gap between page sections: 24px
-- Header height: 64px, full width, white background, padding 0 24px
-- All pages use top navbar only — no sidebar, no drawer
+The architecture is built for an immersive, mobile-first social discovery feed experience, gracefully expanding for desktop viewports.
 
----
+App Background Vault: bg-background-app (#0a0a0a). This serves as the absolute base layer behind video feeds and dashboards.
+
+Discovery Feed Width: Max-width for feed cards is max-w-md (448px) with mx-auto to center them on desktop while bleeding perfectly on mobile.
+
+Aspect Ratio (Media): Video walkthroughs use aspect-[9/16] (TikTok/Reels format).
+
+Spacing: Rely on spacious, mobile-optimized padding to ensure high-fidelity touch targets. Gap between feed cards should be my-4.
+
+Navigation: All pages use a top navbar only. No complex, screen-narrowing sidebars or persistent drawers.
 
 ## Navbar
 
-Three nav items: Dashboard, Find Jobs, Profile.
+Rentral features a clean, responsive top navigation bar designed for rapid viewport adjustments.
 
-- Active item: `color: #7C5CFC`, font-weight 500, 14px
-- Inactive item: `color: #4A5565`, font-weight 500, 14px
-- No underline — active state is color change only
-- Navbar always white background, full viewport width
+Navigation Items: Marketplace, My Bookings, My Assets, Dashboard, Profile.
 
----
+Desktop Header Height: 64px, full viewport width.
 
-## Cards
+Background: bg-background-app (#0a0a0a) with a subtle bottom border border-b border-border-subtle.
 
-Every content section lives in a card.
+Active Item: color: var(--color-text-primary) (#ffffff), font-weight 600, 14px.
 
-```
-background: #FFFFFF
-border: 1px solid #E7EAF3
-border-radius: 16px
+Inactive Item: color: var(--color-text-muted) (#a3a3a3), font-weight 500, 14px.
+
+Interaction: No underlines. Active state relies on color brightness and font-weight shifts.
+
+## Cards & Surfaces
+
+Rentral utilizes two distinct surface treatments. Never use arbitrary colored card backgrounds; adhere strictly to the dark and glassmorphic palette.
+
+## 1. Base Card Surface (Dashboards, Forms, Settings)
+Used for static content that requires high legibility.
+
+background: var(--color-surface-card) /* #171717 */
+border: 1px solid var(--color-border-subtle) /* #262626 */
+border-radius: var(--radius-2xl) /* 32px */
 padding: 24px
-box-shadow: 0px 1px 3px rgba(0,0,0,0.1), 0px 1px 2px -1px rgba(0,0,0,0.1)
-```
 
-Never use colored card backgrounds — always white. Color goes inside cards via badges, bars, and text, never on the card surface itself.
 
----
+## 2. Contextual Glassmorphic Panel (Video Overlays)
+Used for the floating information layer over active Mux video streams.
+
+background: var(--color-glass-dark) /* rgba(0, 0, 0, 0.4) */
+backdrop-filter: blur(16px) /* backdrop-blur-lg */
+border: 1px solid var(--color-glass-border-light)
+border-radius: var(--radius-xl) /* 24px */
+padding: 20px /* px-5 py-5 */
+box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) /* shadow-2xl */
+
 
 ## Typography Hierarchy
 
-Three levels used consistently throughout:
+Maintain strict adherence to these typographic levels to ensure a clean visual hierarchy.
 
-**Section headings** — card titles, page section titles
+### Hero / Listing Title (Over Media)
 
-```
-font-size: 16px
-font-weight: 600
-color: #101828
-line-height: 24px
-```
+font-size: 18px /* text-lg */
+font-weight: 700 /* font-bold */
+color: var(--color-text-primary) /* #ffffff */
+letter-spacing: 0.025em /* tracking-wide */
+/* Must include line-clamp-1 to prevent video occlusion */
 
-**Body / primary content text**
 
-```
-font-size: 14px
-font-weight: 500
-color: #101828
-line-height: 20px
-```
+## Pricing Metric (High-Value Data)
 
-**Secondary / muted text** — labels, timestamps, subtitles
+font-size: 20px /* text-xl */
+font-weight: 800 /* font-extrabold */
+color: var(--color-accent-hover) /* #34d399 */
 
-```
-font-size: 12px
-font-weight: 400
-color: #99A1AF
-line-height: 16px
-```
 
-Stat numbers on dashboard use 30px / weight 600 / color #101828.
+## Pricing Denomination (e.g., / DAY, / YEAR)
 
----
+font-size: 10px /* text-[10px] */
+font-weight: 500 /* font-medium */
+color: var(--color-text-muted) /* #a3a3a3 */
+text-transform: uppercase
+letter-spacing: 0.05em /* tracking-wider */
 
-## Badges
 
-All badges use `border-radius: 9999px` (pill shape) unless specified otherwise.
+## Standard Body Text
 
-```
-padding: 2px 8px
-font-size: 12px
-font-weight: 500
-```
+font-size: 14px /* text-sm */
+font-weight: 500 /* font-medium */
+color: var(--color-text-secondary) /* #d4d4d4 */
+line-height: 1.625 /* leading-relaxed */
 
-Trend badges on stat cards use `border-radius: 4px` (not pill) with `#ECFDF5` background and `#009966` text.
 
----
+## Badges & Status Indicators
+
+Rentral utilizes heavily rounded badges for structural data and trust metrics.
+
+### Dynamic Structural Badges (Bedrooms, Engine, Vessel Type)
+
+background: var(--color-glass-light)
+color: var(--color-text-primary)
+border: 1px solid var(--color-glass-border-light)
+border-radius: var(--radius-full) /* 9999px */
+padding: 4px 12px /* px-3 py-1 */
+font-size: 12px /* text-xs */
+font-weight: 500 /* font-medium */
+
+
+## Trust Score Badge
+
+background: var(--color-accent-muted) /* rgba(16, 185, 129, 0.2) */
+color: var(--color-accent-hover) /* #34d399 */
+border: 1px solid var(--color-glass-border-success)
+border-radius: var(--radius-full)
+padding: 4px 12px /* px-3 py-1 */
+font-size: 12px /* text-xs */
+font-weight: 600 /* font-semibold */
+
+
+## Global Trust Warning Banner (Flagged Users)
+
+background: var(--color-glass-warning) /* rgba(220, 38, 38, 0.9) */
+backdrop-filter: blur(12px) /* backdrop-blur-md */
+border: 1px solid var(--color-trust-flagged) /* #ef4444 */
+border-radius: var(--radius-lg) /* 16px */
+color: var(--color-text-primary)
+padding: 12px 16px /* px-4 py-3 */
+
 
 ## Buttons
 
-**Primary button:**
+Hardware acceleration is critical. Always couple active:scale-95 or active:scale-98 with transition-all to ensure the GPU handles the frame rendering for a flawless 60fps mobile feel.
 
-```
-background: #7C5CFC
-color: #FFFFFF
-border-radius: 8px
-padding: 8px 16px
-font-size: 14px
-font-weight: 500
-```
+### Primary Operational Button (e.g., "Book Physical Verification")
 
-**Secondary button:**
+background: var(--color-accent-primary) /* #10b981 */
+color: var(--color-text-inverse) /* #0a0a0a */
+border-radius: var(--radius-lg) /* 16px */
+padding: 12px 16px /* py-3 px-4 */
+font-size: 12px /* text-xs */
+font-weight: 700 /* font-bold */
+text-transform: uppercase
+letter-spacing: 0.025em /* tracking-wide */
+/* Interactions: hover:bg-accent-hover active:scale-98 shadow-lg transition-all */
 
-```
-background: #FFFFFF
-border: 1px solid #E7EAF3
-color: #101828
-border-radius: 8px
-padding: 8px 16px
-```
 
----
+## Social Interaction Buttons (Floating Actions: Share, Message, Bookmark)
+
+background: var(--color-glass-light)
+backdrop-filter: blur(12px) /* backdrop-blur-md */
+border: 1px solid var(--color-glass-border-medium)
+border-radius: var(--radius-full)
+padding: 12px /* p-3 */
+/* Interactions: hover:bg-glass-light-hover active:scale-95 transition-all */
+
 
 ## Form Inputs
 
-```
-background: #FFFFFF
-border: 1px solid #E7EAF3
-border-radius: 8px
-padding: 8px 12px
-font-size: 14px
-color: #101828
-placeholder color: #99A1AF
-focus: ring-1 ring-accent border-accent
-```
+Designed to recede into the dark interface while maintaining high accessibility and clear focus states.
 
----
+background: var(--color-surface-card) /* #171717 */
+border: 1px solid var(--color-border-subtle) /* #262626 */
+border-radius: var(--radius-md) /* 12px */
+padding: 12px 16px /* py-3 px-4 */
+font-size: 14px /* text-sm */
+color: var(--color-text-primary) /* #ffffff */
+placeholder-color: var(--color-text-muted) /* #a3a3a3 */
+focus: ring-1 ring-accent-primary border-accent-primary outline-none transition-all
 
-## Table (Jobs List)
 
-- No alternating row colors — white rows only, separated by border
-- Row border: `1px solid #E7EAF3` between rows
-- Column headers: uppercase, 12px, font-weight 500, color `#6A7282`
-- Row text: 14px, color `#101828`
-- Hover state: `background: #F9FAFB`
+## Discovery Feed & Lists
 
----
+Rather than traditional tabular data, Rentral relies on vertical media streams and list items for active negotiations and assets.
 
-## Match Score Bar
+Feed Orientation: Vertical scroll, one active listing per viewport snap.
 
-Inline progress bar shown next to the percentage number.
+List Items (Inbox/Bookings): Use bg-surface-card with border-b border-border-subtle separating items.
 
-```
-height: 4px
-border-radius: 9999px
-background track: #E7EAF3
-```
+Hover State for Lists: hover:bg-[#262626] (subtle lighten).
 
-Fill color by score:
+Separators: Use border-border-subtle (#262626) exclusively. Avoid alternating row colors.
 
-- 80-100%: `#10B981` (green)
-- 60-79%: `#61A8FF` (blue)
-- Below 60%: `#FF8904` (orange)
+## Trust Score & Status Indicators
 
----
+The proprietary Rentral Trust Score (out of 5.00) is visually reinforced via semantic colors, driving user behavior.
+
+Score 4.50 - 5.00 (Excellent): Emerald (--color-accent-hover).
+
+Score 3.50 - 4.49 (Fair): Neutral (--color-text-primary).
+
+Score Below 3.50 (Warning): Red (--color-trust-flagged). Must trigger the Global Trust Warning Banner on their listings.
+
+Active Status Dot: Use a small 6px by 6px circular element with bg-trust-verified (#22c55e) next to verified addresses or online status.
 
 ## Empty States
 
-Every section that can be empty must have an empty state. Keep it minimal:
+Every section that can be empty (e.g., active bookings, inbox, saved listings) must have a clean, dark-themed empty state.
 
-- Short descriptive text in `color: #99A1AF`
-- Optional icon above text
-- CTA button if there's a logical next action
+Container: Centered flex column, ample padding (py-12).
 
----
+Icon: Glassmorphic container (bg-glass-light with p-4 rounded-full) holding a text-text-muted Lucide icon.
+
+Text: Short descriptive text in color: var(--color-text-muted).
+
+Action: A primary or secondary CTA button routing the user to the discovery feed or listing creation wizard.
 
 ## Tailwind v4 Note
 
-This project uses Tailwind v4. Tokens are defined with `@theme` in globals.css — no `tailwind.config.ts` needed. Never define colors in a config file. Always use `@theme` for new tokens.
+This project strictly utilizes Tailwind CSS v4.0. Design tokens are defined using the new @theme directive inside app/globals.css.
 
----
+You do not need a tailwind.config.ts file. Tailwind v4 automatically generates utility classes from the @theme variables (e.g., --color-accent-primary automatically creates bg-accent-primary, text-accent-primary, border-accent-primary).
 
 ## Do Nots
 
-- Never use Tailwind's built-in color classes (`bg-purple-500`, `text-gray-600`) — use project tokens only
-- Never define colors in `tailwind.config.ts` — use `@theme` in globals.css
-- Never add gradients to card backgrounds
-- Never use more than one font weight in a single UI element
-- Never show raw error messages to users — always show human readable text
-- Never stack more than 2 levels of border radius inside each other
-- Never use `position: fixed` for UI elements — use normal flow layout
+Never use arbitrary hex codes: Do not hardcode colors (e.g., text-[#10b981]) in React components. Always map strictly to the semantic @theme tokens to maintain dynamic theming.
+
+Never use generic Tailwind colors for financial actions: Only use Emerald (--color-accent-primary) for successful verifications, pricing, trust scores, and checkout triggers. Avoid Tailwind's default blue or green for monetary UI.
+
+Never stack Tailwind opacity classes manually for glassmorphism: Prefer utilizing the pre-defined RGBA variables in CSS (e.g., avoid bg-black/40 if bg-glass-dark is semantically available).
+
+Never show raw backend errors: Map all PostGIS or Supabase errors to UX-friendly messages. (e.g., "Coordinate mismatch" instead of "ST_Distance null vector").
+
+Never use inline styles: All styling must be executed via Tailwind CSS utility classes.
+
+Never use position: fixed for standard elements: Outside of specific, z-indexed floating action bars or mobile navs, maintain standard document flow.
+
+Never expose raw hardware coordinates in the UI: The frontend must only display the calculated distance_meters offset or obfuscated text_address until escrow is cleared.

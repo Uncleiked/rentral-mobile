@@ -1,321 +1,319 @@
-# Code Standards
+## Rentral Code Standards
 
-Implementation rules and conventions for the entire project. The AI agent must follow these in every session without exception. These rules prevent pattern drift across sessions.
+Implementation rules and strict conventions for the Rentral marketplace. Any AI agent or engineer operating on this codebase must adhere to these guidelines without exception. These rules prevent pattern drift, enforce spatial security, and maintain the integrity of our zero-trust architecture.
 
----
+## Engineering Mindset & Spatial Security
 
-## Engineering Mindset
+The AI agent and engineers on this project operate as senior PropTech & Data infrastructure experts. This means:
 
-The AI agent on this project operates as a senior engineer. This means:
+Spatial Integrity is Absolute — Never allow a listing to be created without raw navigator.geolocation data. Never expose raw hardware_coordinates to the client-side frontend; only expose computed distances.
 
-- **Think before implementing** — understand what is being built and why before writing a single line
-- **Read context files first** — never assume, always verify against architecture.md and project-overview.md
-- **Scope is sacred** — only build what the current feature requires. Never go beyond scope even if it seems helpful
-- **Every feature must be testable** — if it cannot be verified immediately after implementation, it is incomplete
-- **Clean over clever** — simple readable code that a junior developer can understand is always preferred over clever abstractions
-- **One thing at a time** — complete one feature fully before touching the next
-- **Failures are expected** — wrap agent operations in try/catch, log failures, never let one failure crash everything
+Think Before Implementing — Understand the financial and physical routing consequences of the feature before writing a line of code. Always verify against architecture.md and build-plan.md.
 
----
+Strict Scope — Build only what the current feature phase dictates. Do not wire backend Supabase mutations if the UI is not 100% complete and visually tested with mock data.
 
-## TypeScript
+Fail-Safes for Financials — Wrap all OPay/Paystack API calls and Supabase Edge Functions in aggressive try/catch blocks. A failed webhook must never result in a silent success state.
 
-- Strict mode enabled in tsconfig.json — no exceptions
-- Never use `any` — use `unknown` and narrow the type
-- Never use type assertions (`as SomeType`) unless absolutely necessary and commented why
-- All function parameters and return types must be explicitly typed
-- Use `type` for object shapes and unions — use `interface` only for extendable component props
-- All async functions must have proper error handling — never let promises float unhandled
-- Use `const` by default — only use `let` when reassignment is necessary
+Clean Over Clever — Simple, readable code that a junior developer can audit is preferred over clever, heavily abstracted logic.
 
----
+One Feature at a Time — Complete one architectural milestone fully before attempting the next.
 
-## Next.js 16 Conventions
+## TypeScript Conventions
 
-- App Router only — no Pages Router
-- React 19 — use React 19 APIs throughout
-- All components are Server Components by default
-- Only add `"use client"` when the component requires:
-  - useState or useReducer
-  - useEffect
-  - Browser APIs
-  - Event listeners
-  - Third party client-only libraries (PostHog browser side)
-- Never add `"use client"` to layout files unless absolutely required
-- Data fetching happens in Server Components — never fetch in Client Components directly
-- Route handlers live in `app/api/` — never put business logic directly in route handlers
-- Server Actions live in `actions/` — never define Server Actions inline in components
-- Caching is uncached by default — all dynamic code runs at request time
-- Always read Next.js documentation before implementing any Next.js specific feature — APIs may differ from training data
+Strict Mode — Enabled in tsconfig.json. No exceptions.
 
----
+No any — Use unknown and narrow the type using type guards.
 
-## File and Folder Naming
+No Type Assertions — Avoid using as SomeType unless interacting with a strictly untyped third-party library, and always comment why.
 
-- Folders: kebab-case — `job-details`, `agent-controls`
-- Component files: PascalCase — `StatsBar.tsx`, `RecentActivity.tsx`
-- Utility files: camelCase — `browserbase.ts`, `posthog-client.ts`
-- Type files: camelCase — `index.ts`
-- API route files: always `route.ts`
-- Server Action files: camelCase — `profile.ts`, `jobs.ts`
-- One component per file — never export multiple components from one file
-- Index files only in `components/ui/` — never barrel export from other folders
+Explicit Typing — All function parameters and return types must be explicitly typed, particularly for Supabase database responses and PostGIS geography payloads.
 
----
+Types vs. Interfaces — Use type for object shapes, unions, and database row definitions. Use interface only for extendable React component props.
+
+Async/Await — All async functions must have proper error handling. Never let Promises float unhandled.
+
+Variable Declarations — Use const by default. Only use let when reassignment is mathematically necessary (e.g., calculating multi-year lease multipliers).
+
+## Next.js 16 (App Router) & React 19 Conventions
+
+App Router Only — The pages/ directory is strictly forbidden.
+
+React 19 APIs — Leverage modern hooks and Server Actions.
+
+Server Components by Default — All components default to running on the server.
+
+Judicious "use client" — Only add "use client" when the component specifically requires:
+
+useState, useReducer, or Zustand (useRentralStore).
+
+Browser APIs (navigator.geolocation for spatial locks, window for Mux streaming).
+
+Event listeners (onClick, onChange).
+
+Client-only wrappers (PostHog provider, Clerk hooks).
+
+Layout Immutability — Never add "use client" to root layout files.
+
+Data Fetching — Read data in Server Components via @supabase/ssr. Never execute direct database fetches inside Client Components.
+
+Route Handlers — Live in app/api/. These are reserved for webhooks (OPay, Smile ID) and AI orchestration (Gemini). Do not put complex business logic inline; extract it to utility functions.
+
+Server Actions — Live in app/actions/. Use these strictly for UI-triggered mutations (e.g., saving a listing, initiating an escrow setup).
+
+##File and Folder Naming
+
+Folders — kebab-case (e.g., escrow-setup, continuous-renewal).
+
+Component Files — PascalCase (e.g., DiscoveryFeedCard.tsx, MultiYearConfigurator.tsx).
+
+Utility Files — camelCase (e.g., opayEngine.ts, spatialMath.ts).
+
+Type Files — camelCase (e.g., platform.ts, database.ts).
+
+API Routes — Always named route.ts.
+
+Server Actions — camelCase (e.g., listingActions.ts, escrowActions.ts).
+
+Component Structure — Strictly one component per file. Never export multiple React components from a single file.
 
 ## Component Structure
 
-Every component follows this exact order:
+Every React component must follow this exact structural hierarchy:
 
-```typescript
-"use client"; // only if needed
+"use client"; // Only if interactivity or browser APIs are required
 
 // 1. External imports
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 // 2. Internal imports
-import { StatsCard } from "@/components/dashboard/StatsCard";
+import { useRentralStore } from "@/store/useRentralStore";
+import { Button } from "@/components/ui/button";
 
 // 3. Type definitions
 type Props = {
-  jobId: string;
-  matchScore: number;
+  listingId: string;
+  baseRentAmount: number;
 };
 
-// 4. Component
-export function ComponentName({ jobId, matchScore }: Props) {
-  // state
-  // derived values
-  // handlers
+// 4. Component Definition
+export function MultiYearConfigurator({ listingId, baseRentAmount }: Props) {
+  // state hooks
+  // derived calculations (e.g., baseRentAmount * selectedYears)
+  // action handlers
   // return JSX
 }
-```
 
-- Never use default exports for components — always named exports
-- Props type defined directly above the component — not in a separate types file unless shared
-- No inline styles — all styling via Tailwind classes using CSS variables from ui-tokens.md
 
----
+Named Exports — Never use default exports for components (except for Next.js page/layout requirements).
 
-## API Route Handlers
+Prop Definitions — Defined directly above the component.
 
-```typescript
-// app/api/agent/find/route.ts
+Styling — No inline styles. All styling is executed via Tailwind CSS v4 using semantic utility classes.
+
+## API Route Handlers (Webhooks & AI)
+
+// app/api/verify/document-upload/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { createInsforgeServer } from "@/lib/insforge-server";
+import { createClient } from "@/lib/supabase/server";
+import { analyzeDocumentWithGemini } from "@/lib/gemini";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    // validate body
-    // call agent function
-    return NextResponse.json({ success: true, data: result });
+    // 1. Validate body (ensure document URL and docType exist)
+    // 2. Execute AI logic via isolated utility
+    const aiResult = await analyzeDocumentWithGemini(body.documentUrl);
+    
+    return NextResponse.json({ success: true, data: aiResult });
   } catch (error) {
-    console.error("[agent/find]", error);
+    console.error("[api/verify/document-upload]", error);
+    // Never expose raw backend errors to the client
     return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 },
+      { success: false, error: "Document verification pipeline failed." },
+      { status: 500 }
     );
   }
 }
-```
 
-- Every route handler has a try/catch
-- Every route handler validates the request body before processing
-- Errors are logged with the route path as prefix: `[agent/find]`
-- Always return `{ success: boolean, data?: T, error?: string }`
-- Never return raw data without the success wrapper
 
----
+Error Boundaries — Every route handler must contain a try/catch.
 
-## Server Actions
+Validation — Always validate the incoming req.json() structure.
 
-```typescript
-// actions/profile.ts
+Logging Prefix — Console errors must prefix the exact file path (e.g., [api/webhooks/opay]).
 
+Standardized Response — Always return { success: boolean, data?: T, error?: string }.
+
+## Server Actions (Mutations)
+
+// app/actions/escrowActions.ts
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createInsforgeServer } from "@/lib/insforge-server";
+import { createClient } from "@/lib/supabase/server";
 
-export async function saveProfile(formData: ProfileFormData) {
+export async function lockInspectionEscrow(listingId: string, amount: number) {
   try {
-    const insforge = await createInsforgeServer();
-    // validate
-    // write to DB
-    revalidatePath("/profile");
+    const supabase = await createClient();
+    // 1. Validate inputs and authentication
+    // 2. Execute DB write (e.g., insert into transactions table)
+    
+    revalidatePath(`/listing/${listingId}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions/profile]", error);
-    return { success: false, error: "Failed to save profile" };
+    console.error("[actions/escrowActions]", error);
+    return { success: false, error: "Failed to lock inspection escrow." };
   }
 }
-```
 
-- Every Server Action has a try/catch
-- Every Server Action returns `{ success: boolean, error?: string }`
-- Always call `revalidatePath` after mutations that affect page data
-- Never throw from Server Actions — always return the error
 
----
+Path Revalidation — Always call revalidatePath when a mutation modifies UI-dependent data.
 
-## Agent Code
+Error Returns — Never throw an unhandled error from a Server Action; catch it and return the { success: false, error: string } payload to be handled gracefully by the UI toast system.
 
-```typescript
-// agent/adzuna.ts
+## Supabase Client Usage Pattern
 
-export async function discoverJobs(
-  jobTitle: string,
-  location: string,
-  profile: Profile,
-  runId: string,
-): Promise<{ success: boolean; jobs?: Job[]; error?: string }> {
-  try {
-    // implementation
-    return { success: true, jobs };
-  } catch (error) {
-    await logAgentError(runId, null, error);
-    return { success: false, error: String(error) };
-  }
-}
-```
+There is a strict firewall between the browser client and the server client. Never mix them.
 
-- Every agent function returns `{ success: boolean, error?: string }`
-- Every agent function has a try/catch — never let one failure crash the run
-- Errors are always logged to agent_logs table before returning
-- Agent functions never import from `components/` or `actions/`
-- Agent functions never use React hooks or browser APIs
+Browser Context (Client Components Only):
 
----
+Path: import { createClient } from "@/lib/supabase/client";
 
-## InsForge Client Usage
+Usage: Read-only operations for public feeds, or subscribing to Realtime WebSocket chat threads.
 
-```typescript
-// Browser context — Client Components only
-import { insforge } from "@/lib/insforge-client";
+Server Context (Server Components, Actions, API Routes):
 
-// Server context — Server Components, Route Handlers, Server Actions, Agent
-import { createInsforgeServer } from "@/lib/insforge-server";
-const insforge = await createInsforgeServer();
-```
+Path: import { createClient } from "@/lib/supabase/server";
 
-- Never use the browser client in server context
-- Never use the server client in browser context
-- Always await createInsforgeServer() — it reads cookies asynchronously
-- Always scope every query to the current user_id — never query without a user filter
+Usage: Secure data fetching, inserts, and updates.
 
----
+Admin Override: If a webhook (like OPay settlement) needs to update a record outside of a user's RLS policy, the server client must be instantiated explicitly with the SUPABASE_SERVICE_ROLE_KEY.
 
-## Error Handling
+## Error Handling & Spatial Privacy
 
-- Never use empty catch blocks — always log or handle
-- Console errors always include context prefix: `[component/function name]`
-- User-facing errors must be human readable — never expose raw error messages
-- Agent errors go to agent_logs table — never surface raw agent errors to the UI
-- API route errors return `status: 500` with generic message — never expose internals
+No Empty Catches — Never swallow an error silently.
 
----
+Human-Readable UI Errors — Map technical failures to UX-friendly messages (e.g., "We couldn't verify your location. Please ensure GPS is enabled." instead of "PostGIS ST_Distance null vector").
 
-## PostHog Events
+Spatial Privacy — In error logs, never output exact raw latitude/longitude coordinates of users or properties. Abstract to neighborhood context or log simply as "Coordinate mismatch."
 
-All PostHog events must use these exact event names. Never invent new event names without adding them here first.
+## PostHog Telemetry Events
 
-| Event                | When                                       | Key Properties             |
-| -------------------- | ------------------------------------------ | -------------------------- |
-| `job_search_started` | Find Jobs button clicked                   | userId, jobTitle, location |
-| `job_found`          | Each job discovered and saved              | userId, source, matchScore |
-| `profile_completed`  | User saves complete profile for first time | userId                     |
-| `company_researched` | Company research dossier generated         | userId, jobId, company     |
+Rentral relies on factual behavioral data to power the B2B 'Rentral Insights' platform. All PostHog events must use these exact event names.
 
-These four events are the only events in this project. Do not add more without updating this list first.
+onboarding_kyc_completed
 
-`job_found` powers the Jobs Found Over Time and Match Score Distribution dashboard charts.
-`company_researched` powers the Company Research Activity dashboard chart.
-Always fire these with correct properties.
+When: User successfully passes Smile ID verification.
 
----
+Properties: userId, idType (NIN/BVN).
+
+listing_hardware_locked
+
+When: A lister successfully completes a walkthrough and PostGIS locks the coordinates.
+
+Properties: userId, category, basePrice, neighborhood.
+
+inspection_escrow_deposited
+
+When: Seeker pays ₦3,000 to lock an inspection slot.
+
+Properties: seekerId, listingId, amount.
+
+spatial_handshake_success
+
+When: OTP is scanned and PostGIS confirms both devices are within 20 meters.
+
+Properties: seekerId, listerId, listingId, distanceMeters.
+
+multi_year_escrow_locked
+
+When: A Seeker commits to a custom duration lease.
+
+Properties: seekerId, listingId, durationYears, totalValue.
+
+holding_lock_expired
+
+When: Supabase Edge Function executes a split payout because a 24-hour hold defaulted.
+
+Properties: listingId, defaultedSeekerId, compensationAmount.
+
+year2_route_updated
+
+When: Tenant verifies a lease renewal Open Banking hash.
+
+Properties: tenantId, listingId, managementType (agent vs. direct).
 
 ## Environment Variables
 
-All environment variables defined in `.env.local` for development. Never hardcode any key, URL, or secret anywhere in the codebase.
+All variables are defined in .env.local. Never hardcode keys, URLs, or secrets in the codebase.
 
-| Variable                        | Used In                |
-| ------------------------------- | ---------------------- |
-| `NEXT_PUBLIC_INSFORGE_URL`      | lib/insforge-client.ts |
-| `NEXT_PUBLIC_INSFORGE_ANON_KEY` | lib/insforge-client.ts |
-| `BROWSERBASE_API_KEY`           | lib/browserbase.ts     |
-| `BROWSERBASE_PROJECT_ID`        | lib/browserbase.ts     |
-| `OPENAI_API_KEY`                | agent/ functions       |
-| `ADZUNA_APP_ID`                 | lib/adzuna.ts          |
-| `ADZUNA_APP_KEY`                | lib/adzuna.ts          |
-| `NEXT_PUBLIC_POSTHOG_KEY`       | lib/posthog-client.ts  |
-| `NEXT_PUBLIC_POSTHOG_HOST`      | lib/posthog-client.ts  |
+## Frontend-Exposed Variables (Must start with NEXT_PUBLIC_):
 
-`NEXT_PUBLIC_` prefix means the variable is exposed to the browser. Never add `NEXT_PUBLIC_` to secret keys.
+NEXT_PUBLIC_SUPABASE_URL — Database routing.
 
----
+NEXT_PUBLIC_SUPABASE_ANON_KEY — Client-side DB requests.
 
-## Match Threshold
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY — Authentication UI.
 
-The job match threshold is defined once as a constant. Never hardcode this value anywhere else.
+NEXT_PUBLIC_POSTHOG_KEY — Browser telemetry.
 
-```typescript
+NEXT_PUBLIC_POSTHOG_HOST — Telemetry routing.
+
+## Secure Server-Only Variables (No prefixes):
+
+SUPABASE_SERVICE_ROLE_KEY — Admin DB overrides (Webhooks/CRONs).
+
+CLERK_SECRET_KEY — Server-side auth validation.
+
+OPAY_SECRET_KEY — Virtual Account and Transfer APIs.
+
+PAYSTACK_SECRET_KEY — Open Banking verification fallback.
+
+SMILE_ID_API_KEY — Identity verification.
+
+GEMINI_API_KEY — Multimodal forgery detection.
+
+## Architectural Constants
+
+System-wide thresholds must be defined in a centralized utility file. Never hardcode these values inline.
+
 // lib/utils.ts
-export const MATCH_THRESHOLD = 70;
-```
 
-Import and use `MATCH_THRESHOLD` everywhere this value is needed.
+// Spatial Trust Threshold
+export const PROXIMITY_RADIUS_METERS = 20;
 
----
+// Anti-Spam Gate
+export const LISTING_CREATION_FEE_NGN = 1000;
 
-## Import Aliases
+// Inspection Escrow
+export const INSPECTION_FEE_NGN = 3000;
 
-Always use the `@/` alias — never use relative imports that go up more than one level.
+// Default Leasing
+export const DEFAULT_LEASE_YEARS = 1;
 
-```typescript
-// Correct
-import { Button } from "@/components/ui/button";
-import { insforge } from "@/lib/insforge-client";
-import { MATCH_THRESHOLD } from "@/lib/utils";
+// Holding Lock Configuration
+export const HOLDING_LOCK_HOURS = 24;
+export const PLATFORM_SPLIT_PERCENTAGE = 0.30; // 30% to Rentral on default
 
-// Never
-import { Button } from "../../../components/ui/button";
-```
 
----
+## Approved Dependencies
 
-## Comments
+Do not install new packages without architectural review. Rely on native Next.js solutions or the Shadcn UI library first.
 
-- No comments explaining what the code does — code must be self-explanatory
-- Comments only for why — explaining a non-obvious decision
-- Agent functions may have a brief comment explaining the Browserbase or Stagehand strategy
-- Never leave TODO comments in committed code
+Authentication & Identity: @clerk/nextjs, @smile_identity/web-sdk
 
----
+Database & State: @supabase/ssr, @supabase/supabase-js, zustand, @tanstack/react-query
 
-## Dependencies
+Media & Processing: @mux/mux-player-react
 
-Never install a new package without a clear reason. Before installing anything check:
+Artificial Intelligence: @google/generative-ai
 
-1. Does shadcn/ui already have this component?
-2. Does Next.js already provide this functionality?
-3. Is there a simpler native solution?
+Analytics: posthog-js, posthog-node
 
-Approved dependencies for this project:
+UI & Styling: tailwindcss (v4), lucide-react (Icons), clsx, tailwind-merge (via Shadcn)
 
-- `@insforge/ssr` — InsForge client
-- `@browserbasehq/sdk` — Browserbase sessions
-- `@browserbasehq/stagehand` — AI browser control
-- `openai` — GPT-4o API
-- `posthog-js` — PostHog browser client
-- `posthog-node` — PostHog server client
-- `@react-pdf/renderer` — Resume PDF generation
-- `pdf-parse` — Extract text from uploaded PDF
-- `zod` — Schema validation
-- `lucide-react` — Icons
-- `tailwindcss` — Styling
-- `shadcn/ui` components — UI primitives
+Date & Validation: date-fns, zod
 
-Do not install any other packages without updating this list first.
+(Note: Do not install any mapping libraries like Leaflet or Mapbox unless strictly rendering read-only analytical heatmaps for the B2B portal. Consumer-facing spatial checks are handled mathematically via PostGIS behind the scenes).

@@ -1,456 +1,343 @@
-# Build Plan
+## Rentral Build Plan
 
 ## Core Principle
 
-Full page UI built with mock data first — verified visually before any logic is written. Then functionality is built and wired to the UI step by step. Every feature must be visible and testable before moving to the next. No invisible backend phases.
+Strict Decoupling of Presentation and Logic: Full-page UI is built with mock data first and verified visually before any backend infrastructure, AI orchestration, or spatial logic is written. Every feature must follow a visible, testable, two-step lifecycle. There are no invisible backend phases. If the UI is not polished, responsive, and behaviorally sound, no database mutations or third-party APIs (OPay, Gemini, PostGIS) are wired.
 
----
+## Phase 1 — Foundation & Core Infrastructure
 
-## Phase 1 — Foundation
+### 01 Homepage & Navigation
 
-### 01 Homepage
+Build the complete homepage UI acting as the entry point to the marketplace.
 
-Build the complete homepage UI.
+#### UI:
 
-**UI:**
+Navigation: Top navbar featuring Rentral logo, category links (Houses, Cars, Boats), "Rentral Insights" B2B link, and primary "Sign In / Get Started" button.
 
-- Navbar — logo, Dashboard, Find Jobs, Profile links, Start for free button
-- Hero section — headline, subheadline, Get Started CTA and Find Your First Match CTA
-- Dashboard preview screenshot embedded below hero
-- Features section — three value props with descriptions
-- Testimonial section
-- Bottom CTA section
-- Footer
+Hero Section: High-converting headline focusing on "Zero-Fraud, Geolocation-Backed Rentals," category search pill, and dynamic background video loop.
 
-**Logic:**
+Value Proposition: Three-column layout detailing the trust loop: 1. Hardware-locked listings, 2. Geo-fenced Escrow, 3. AI verified documents.
 
-- Get Started and Start for free → /login if not authenticated, /dashboard if authenticated
+Testimonial & Social Proof: Cards showing successful handshakes and total escrow volume securely processed.
 
----
+Footer: Standard secondary routing, legal links, and social proofs.
 
-### 02 Auth
+#### Logic:
 
-InsForge authentication — Google and GitHub OAuth.
+"Get Started" triggers Clerk authentication modal/redirect.
 
-**UI:**
+Unauthenticated users can view the homepage but clicking any "Book Inspection" or "Create Listing" CTA routes them strictly to the Auth flow (/sign-in).
 
-- Login page — Google OAuth button, GitHub OAuth button
+### 02 Authentication & KYC Onboarding
 
-**Logic:**
+Establish identity verification using Clerk and Smile ID.
 
-- Google OAuth via InsForge
-- GitHub OAuth via InsForge
-- OAuth callback handler
-- Session management
-- Middleware protecting /dashboard, /profile, /find-jobs, /find-jobs/[id]
-- After login → redirect to /dashboard
+#### UI:
 
----
+Auth Canvas: Minimalist Clerk login/signup page supporting Google OAuth, Apple ID, and Email OTP.
 
-### 03 PostHog Initialization
+KYC Onboarding: Post-login multi-step form requesting Legal Name, Username, and Document Type (NIN, BVN, Passport). Include a "Processing" state with a pulsing trust badge and progress indicator.
 
-Set up PostHog before any events fire. Must be done before any agent features.
+#### Logic:
 
-**Logic:**
+Integrate Clerk Next.js Middleware to protect /listing/create, /checkout, /messages, and /profile.
 
-- Create lib/posthog-client.ts — PostHog browser client, initialized with NEXT_PUBLIC_POSTHOG_KEY and NEXT_PUBLIC_POSTHOG_HOST
-- Create lib/posthog-server.ts — PostHog server client with flushAt: 1 and flushInterval: 0
-- Initialize PostHog in root app layout — wraps entire app
-- posthog.identify() called after successful login with user ID
-- posthog.reset() called on logout
+Identity Resolution: On onboarding submission, fire payload to Smile ID API.
 
----
+Listen for Smile ID async webhooks in /api/webhooks/smile-id.
 
-### 04 Database Schema
+Update Supabase profiles table kyc_status from pending to verified.
 
-All InsForge tables and storage bucket created before any data is written.
+Restrict listing creation and booking capabilities if kyc_status is not verified.
 
-**Logic:**
+### 03 Telemetry & PostHog Initialization
 
-- Create `profiles` table with all columns from architecture.md
-- Create `agent_runs` table
-- Create `jobs` table with all columns including:
-  - tailored fields
-  - company_research jsonb column
-  - source values: 'search' | 'url'
-- Create `agent_logs` table
-- Create `resumes` storage bucket with authenticated access only
-- Row level security policies on all four tables — always filter by user_id
+Set up behavioral tracking before any core marketplace logic to power the B2B 'Rentral Insights' portal.
 
----
+#### Logic:
 
-## Phase 2 — Profile Page
+Create lib/posthog-client.ts — initialize PostHog browser client with NEXT_PUBLIC_POSTHOG_KEY.
 
-### 05 Profile Page — Full UI
+Create lib/posthog-server.ts — initialize PostHog server client with flushAt: 1 and flushInterval: 0 for immediate backend event logging.
 
-Build the complete profile page UI with mock data. No save logic yet.
+Wrap the Next.js App Layout in the PostHog Provider.
 
-**UI:**
+Call posthog.identify() upon Clerk login success with the user ID.
 
-- Profile needs attention banner at top — completion percentage ring, missing field tags highlighted (e.g. PHONE, LOCATION, EDUCATION)
-- Resume section — drag and drop upload area, "Click to upload or drag and drop" text, PDF only note, Select Resume button, Generate Resume from Profile button below
-- Profile Information form with clearly labeled sections:
-  - Personal Info — Full Name, Email (pre-filled, not editable), Phone Number, Location, LinkedIn URL, Portfolio/GitHub, Work Authorization dropdown
-  - Professional Info — Current Job Title, Experience Level dropdown, Years of Experience, Skills tag input with Add button, Industries tag input with Add button
-  - Work Experience — up to 3 roles, each with Company Name, Job Title, Start Date, End Date, Currently working here checkbox, Key Responsibilities textarea. Add role button.
-  - Education — Highest Degree dropdown, Field of Study, Institution Name, Graduation Year
-  - Job Preferences — Job Titles Seeking, Remote Preference dropdown, Salary Expectation, Preferred Locations, Cover Letter Tone dropdown
-- Save Profile button at bottom
+Configure abstract grid mapping (strip exact PII/GPS) before ingestion to comply with data privacy laws while enabling real estate B2B data monetization.
 
----
+#### 04 Database & Spatial Schema Setup
 
-### 06 Profile Save Logic
+Provision the Supabase/PostgreSQL schema with PostGIS extensions before any data flows.
 
-Wire profile form to InsForge DB.
+#### Logic:
 
-**Logic:**
+Enable PostGIS extension on Supabase SQL editor.
 
-- Server Action in actions/profile.ts saves all form fields to profiles table
-- Resume PDF uploaded to InsForge Storage at resumes/{user_id}/resume.pdf with upsert: true
-- resume_pdf_url saved to profiles table after upload
-- is_complete set to true when all required fields are filled
-- Completion percentage and missing fields calculated and saved
-- Form pre-fills with existing data on return visits
-- revalidatePath('/profile') called after save
+Create profiles table: id, username, full_name, kyc_status, reputation_score, account_number.
 
----
+Create listings table: id, lister_id, category, base_rent_amount, total_package_price, asset_metadata (jsonb), lease_expiration_date, listing_status. Include PostGIS geography columns hardware_coordinates and address_coordinates (Point, 4326).
 
-### 07 AI Profile Extraction from Resume
+Create transactions table: id, listing_id, seeker_id, amount, status, lease_duration_years, escrow_otp_hash.
 
-Extract from Resume button — GPT-4o reads uploaded PDF and auto-fills profile form fields.
+Provision Storage Buckets: listings-media, compliance-docs, termination-docs.
 
-**UI:**
+Enforce Row Level Security (RLS) policies on all tables ensuring users can only mutate their own records.
 
-- Extract from Resume button appears after resume is uploaded
-- Loading state while processing
-- Form fields populate automatically after extraction
-- User reviews and edits if needed before saving
+## Phase 2 — Hardware-Locked Inventory & AI Audits
 
-**Logic:**
+#### 05 Listing Capture — Full UI
 
-- pdf-parse extracts raw text from uploaded PDF buffer
-- If extracted text is empty or too short — return error: "Could not extract text from this PDF. Please try a different file."
-- GPT-4o reads extracted text and returns structured JSON matching all profile field names
-- Form fields populated with extracted data
-- User saves manually after reviewing
+Build the mobile-first asset capture flow with mock video streams. No DB saves yet.
 
----
+#### UI:
 
-### 08 Resume PDF Generation from Profile
+Capture Canvas: Full-screen camera interface with "Start 120s Walkthrough" button, a visible GPS lock indicator (red/green dot), and a countdown timer.
 
-Generate a clean professional PDF resume from current profile data using GPT-4o.
+Metadata Form: Dynamic Zustand-powered multi-step fields based on category (e.g., Bedrooms/Bathrooms for Houses; Engine/Mileage for Cars). Base price and agent fee inputs.
 
-**Logic:**
+AI Document Upload Zone: Drag-and-drop area for C of O or CAC registration, clearly labeled "AI Forgery Check".
 
-- POST /api/resume/generate
-- Reads current profile data from profiles table
-- GPT-4o generates professional resume content:
-  - Professional summary paragraph
-  - Polished work experience bullet points
-  - Clean professional language throughout
-- @react-pdf/renderer renders GPT-4o output into clean single-page PDF using renderToBuffer()
-- Buffer uploaded to InsForge Storage at resumes/{user_id}/resume.pdf with upsert: true
-- resume_pdf_url updated in profiles table
+Checkout Prompt: UI for the ₦1,000 anti-spam platform listing fee.
 
----
+#### 06 Spatial Integrity & Upload Logic
 
-## Phase 3 — Find Jobs Page
+Wire hardware-level GPS capture, media streaming, and creation logic to DB.
 
-### 09 Find Jobs Page — Full UI
+#### Logic:
 
-Build the complete Find Jobs page UI with mock data. No logic yet.
+Request navigator.geolocation concurrently with HTML5 MediaDevices (WebRTC) in the browser.
 
-**UI:**
+Invariant: Deny capture completely if GPS permission is rejected, unavailable, or spoofed.
 
-- Search controls card at top:
-  - JOB TITLE label + input with search icon placeholder "Frontend Engineer"
-  - LOCATION label + input placeholder "Remote, New York..."
-  - Find Jobs button with search icon
-  - Success message area below controls — green banner: "Found 8 jobs and saved 4 strong matches."
-- Job list section below:
-  - Filter bar: text search input "Filter by company or role...", All Matches dropdown, Match Score sort dropdown
-  - Jobs table with columns: COMPANY, ROLE, MATCH SCORE (color coded progress bar + percentage), SALARY EST., SOURCE (Search/URL badge), DATE FOUND
-  - Pagination — "Showing 1 to 6 of 24 results", Previous, page numbers, Next
+Pipe video buffer to Mux Video API for HLS transcoding; store raw backup in listings-media bucket.
 
----
+Generate OPay dynamic Virtual Account for the ₦1,000 listing fee. Wait for webhook confirmation.
 
-### 10 Adzuna Job Discovery
-
-Agent calls Adzuna API to find jobs matching user's search criteria, scores them against user profile, saves to DB.
-
-**Logic:**
-
-- POST /api/agent/find receives jobTitle and location from client
-- Call Adzuna API:
-  - GET https://api.adzuna.com/v1/api/jobs/{country}/search/1
-  - params: what={jobTitle}, where={location}, results_per_page=10, app_id, app_key
-  - Detect country from location input — default to 'us'
-- For each job returned:
-  - Extract title, company, location, salary, description snippet, redirect_url
-  - GPT-4o scores job against user profile:
-    - matchScore — integer 0-100
-    - matchReason — one paragraph explanation
-    - matchedSkills — skills user has that job requires
-    - missingSkills — skills job requires that user lacks
-  - Save complete record to jobs table:
-    - source: 'search'
-    - run_id from agent_runs record
-    - All structured fields saved
-- Create agent_run record in DB
-- After all jobs saved — update agent_run with total count, return success message to frontend
-
-**PostHog events:** `job_search_started`, `job_found`
-
----
-
-### 11 Filter + Sort + Pagination
-
-Wire filter tabs, sort dropdown, text search, and pagination to real InsForge DB data.
-
-**Logic:**
-
-- All Matches tab — all jobs for current user
-- High Match filter — jobs with match_score >= 70
-- Low Match filter — jobs with match_score < 70
-- Sort by Match Score — order by match_score descending
-- Sort by Newest — order by found_at descending
-- Sort by Oldest — order by found_at ascending
-- Text search — filter by company name or job title (case insensitive)
-- Pagination — 20 jobs per page, total count shown
-
----
-
-## Phase 4 — Job Details Page
-
-### 12 Job Details Page — Full UI
-
-Build the complete job details page UI. Job data from DB is already available from Phase 3 — wire real data for all job info and match sections immediately. Company research section shows empty state only.
-
-**UI:**
-
-- Back to Jobs link
-- Job header — company logo placeholder, job title, company name, match score badge with percentage, View Job Post button (links to redirect_url)
-- Info cards row — Salary Est., Location, Job Type, Date Found
-- AI Match Reasoning section — match reason paragraph from GPT-4o
-- Required Skills vs Your Profile — matched skills as green badges, missing skills as red/orange badges
-- Job Description section — description content from Adzuna
-- Company Research card — empty state with Research Company button. After research: structured dossier with company overview, tech stack, culture, why this role, interview prep
-- Apply Now button (links to redirect_url, opens in new tab)
-
----
-
-# Feature 13 — Company Research Agent (Updated)
-
-Agent researches the company using their public website and builds a structured dossier using a single Browserbase session. Three data sources fused together: company website content, job description from DB, user profile from DB.
-
-**Logic:**
-
-- POST /api/agent/research receives jobId
-- Load job data from DB — extract company_name, job description, matched_skills, missing_skills
-- Load user profile from DB — skills, experience, work history
-- Derive company homepage URL by following the Adzuna redirect with server-side fetch() — no browser needed for this step:
-  - fetch(redirect_url, { redirect: "follow" }) follows HTTP redirects natively before the browser opens
-  - Use response.url as the real employer job page URL
-  - Strip subdomain from response.url hostname (e.g. jobs.stripe.com → stripe.com)
-  - Construct homepage URL as https://{rootDomain}
-  - If response.url still contains "adzuna.com" or fetch throws — fall back to https://www.{company}.com (company name from DB)
-  - If Stagehand gets no meaningful content (oneLiner and productSummary empty) — skip browser research entirely, proceed to GPT-4o synthesis with job description and profile only
-- Open single Browserbase session with Stagehand
-  **Stagehand homepage extraction:**
-
-```typescript
-const homepage = await stagehand.extract({
-  instruction:
-    "This is a company's homepage. Capture what the company actually does, who it's for, and any concrete signals (funding, customers, scale, mission, recent launches). Then find the internal links most worth visiting to research them as an employer.",
-  schema: z.object({
-    oneLiner: z.string().describe("What the company does in one sentence"),
-    productSummary: z
-      .string()
-      .describe("What they build/sell and who it's for"),
-    signals: z
-      .array(z.string())
-      .describe("Funding, notable customers, scale, mission, recent news"),
-    pageLinks: z
-      .array(
-        z.object({
-          url: z.string(),
-          kind: z.enum([
-            "about",
-            "careers",
-            "blog",
-            "engineering",
-            "product",
-            "team",
-            "other",
-          ]),
-        }),
-      )
-      .describe("Internal links worth visiting"),
-  }),
-});
-```
-
-If oneLiner and productSummary are empty — bail to synthesis with job description and profile only.
-
-**Stagehand sub-page extraction (max 3 pages — prefer about/blog/engineering/product over careers):**
-
-```typescript
-const page = await stagehand.extract({
-  instruction:
-    "Extract substance that helps a candidate understand this company before applying: what they do, their values and how they work, the specific technologies and tools they use, notable projects or customers, and how the team operates. Ignore nav, footers, cookie banners, and generic marketing copy.",
-  schema: z.object({
-    keyPoints: z.array(z.string()),
-    technologies: z
-      .array(z.string())
-      .describe("Specific languages, frameworks, tools, platforms"),
-    valuesOrCulture: z
-      .array(z.string())
-      .describe("Stated values, working style, team norms"),
-    notable: z
-      .array(z.string())
-      .describe("Customers, funding, scale, projects, awards"),
-  }),
-});
-```
-
-- Close Browserbase session after homepage + max 3 sub-pages
-  **GPT-4o synthesis (runs after browser closes):**
-
-System prompt:
-
-```
-You are a sharp career strategist preparing a candidate to apply for a specific role.
-You are given (a) research collected from the company's own website, (b) the job posting,
-and (c) the candidate's profile. Produce a concise, concrete briefing that gives this
-specific candidate an edge for this specific role.
-
-Rules:
-- Ground every company claim in the provided research or job posting. Never invent
-  funding, customers, headcount, or facts. If research was thin, infer carefully from
-  the job posting and say what's inferred.
-- Be specific to THIS candidate. Connect their actual skills and past work to this
-  company's stack, product, and values. No generic advice that would apply to anyone.
-- Turn the candidate's missing skills into a strategy: how to frame the gap honestly
-  and what adjacent experience to lean on.
-- Talking points and questions must reference real things from the research, the kind
-  of detail that signals the candidate did their homework.
-- Keep every item tight: one or two sentences. No fluff.
-
-Return ONLY valid JSON.
-```
-
-User prompt feeds three data sources:
-
-```
-COMPANY RESEARCH (from their website): {companyResearch}
-JOB POSTING: title, company, description, matched_skills, missing_skills
-CANDIDATE PROFILE: current_title, years_experience, experience_level, skills, work_experience
-```
-
-Temperature: 0.4
-
-**Dossier shape saved to jobs.company_research jsonb:**
-
-```json
-{
-  "companyOverview": "string",
-  "techStack": ["string"],
-  "culture": ["string"],
-  "whyThisRole": "string",
-  "yourEdge": ["string"],
-  "gapsToAddress": ["string"],
-  "smartQuestions": ["string"],
-  "interviewPrep": ["string"],
-  "sources": ["string"]
-}
-```
-
-- Save complete dossier to jobs.company_research jsonb column
-- Always return a dossier — never fail silently. If browser research failed, GPT-4o synthesizes from job description and profile alone.
-  **PostHog event:** `company_researched` — { userId, jobId, company }
-
----
-
-## Job Details UI — Company Research Card (Updated)
-
-The Company Research card on the job details page must render all 9 fields:
-
-- **Company Overview** — paragraph
-- **Tech Stack** — tag list
-- **Culture** — bullet list
-- **Why This Role** — paragraph
-- **Your Edge** — bullet list (highlight — specific to this candidate)
-- **Gaps to Address** — bullet list (reframed as strategy, not weaknesses)
-- **Smart Questions** — bullet list (questions to ask in interview)
-- **Interview Prep** — bullet list
-- **Sources** — small text, links to pages researched
-
-## Phase 5 — Dashboard
-
-### 14 Dashboard Page — Full UI
-
-Build the complete dashboard UI with mock data.
-**UI:**
-
-- Four stat cards: Total Jobs Found, Avg. Match Rate, Companies Researched, Cover Letters Generated — all showing mock numbers with trend indicators
-- Recent Activity card — list of 5 activity entries with colored dots and timestamps
-- Resume Tailoring Activity — bar chart (mock data, days of week)
-- Jobs Found Over Time — line chart (mock data, days of week)
-- Match Score Distribution — bar chart (mock data, score ranges 50-60%, 60-70%, 70-80%, 80-90%, 90-100%)
-- Incomplete profile banner at top if profile not complete
-
----
-
-### 15 Stats Bar — Real Data
-
-Wire four stat cards to real InsForge DB data for current user.
-
-**Logic:**
-
-- Total Jobs Found — COUNT of jobs where user_id = current user
-- Avg. Match Rate — AVG of match_score across all user jobs
-- Companies Researched — COUNT of jobs where company_research IS NOT NULL and user_id = current user
-- Jobs This Week — COUNT of jobs found in last 7 days
-
----
-
-### 16 Recent Activity — Real Data
-
-Wire recent activity list to real InsForge DB data for current user.
-
-**Logic:**
-
-- Query agent_runs table — most recent runs for current user
-- Query jobs table — most recent company research entries for current user
-- Merge and sort all by created_at descending — take last 5-10 entries
-- Format each into human readable string:
-  - agent_run completed → "Found X jobs for [jobTitle] — [time ago]"
-  - company_research populated → "Researched [company] — [time ago]"
-- Color coded dot per entry type — info blue, success green
-
----
-
-### 17 Analytics Charts — PostHog Data
-
-Wire three dashboard charts to real PostHog event data for current user.
-
-**Logic:**
-
-- Jobs Found Over Time — query PostHog for job_found events where distinctId = current userId, last 30 days, group by day
-- Match Score Distribution — query PostHog for job_found events, extract matchScore property, group into ranges: 50-60, 60-70, 70-80, 80-90, 90-100
-- Company Research Activity — query PostHog for company_researched events where distinctId = current userId, last 7 days, group by day
-- All three charts rendered with recharts
-- Empty state shown for each chart when no data exists yet
-
----
-
-## Feature Count
-
-| Phase                 | Features |
-| --------------------- | -------- |
-| Phase 1 — Foundation  | 4        |
-| Phase 2 — Profile     | 4        |
-| Phase 3 — Find Jobs   | 3        |
-| Phase 4 — Job Details | 2        |
-| Phase 5 — Dashboard   | 4        |
-| **Total**             | **17**   |
+Save listing to DB: Server Action converts raw GPS to PostGIS Point ST_SetSRID(ST_MakePoint(lon, lat), 4326).
+
+Run server-side ST_Distance geocoder sanity check against the manual text address provided by the user.
+
+#### 07 AI Document Verification (Gemini 1.5 Pro)
+
+Automate title and business verification via multimodal AI.
+
+#### Logic:
+
+Upload document PDF/Image to compliance-docs bucket.
+
+Trigger Next.js Server Action api/verify/document-upload.
+
+Send file buffer to Google Gemini 1.5 Pro via the SDK.
+
+System Prompt: Instruct Gemini to act as a forensic document auditor. Analyze EXIF data, layer consistency, font structures, and textual anomalies for signs of digital manipulation.
+
+Parse strictly structured JSON response: { "authentic": boolean, "confidence": number, "findings": string[] }.
+
+Update DB: Set document_verification_status to verified or flag for manual admin review.
+
+#### 08 Listing Modification UI & Logic
+
+Allow price and metadata updates while strictly locking physical attributes.
+
+#### UI:
+
+Edit form pre-filled with current listing data (price, description, amenities).
+
+Visual padlock icons heavily layered over the Map/Location and Video sections indicating they are strictly immutable.
+
+#### Logic:
+
+Server Action validates updates specifically to base_rent_amount and asset_metadata.
+
+Constraint Enforcement: The API route explicitly strips any payload attempting to alter hardware_coordinates or video_raw.mp4. If physical traits change, the user is prompted to create a brand-new listing, preventing spatial bait-and-switch fraud.
+
+## Phase 3 — Discovery & Multi-Year Booking Engine
+
+#### 09 Discovery Feed — Full UI
+
+Build the vertical video scrolling discovery experience.
+
+#### UI:
+
+Video Feed: Full-screen vertical scrolling player (TikTok/Reels style) auto-playing mock Mux streams.
+
+Overlays: Glassmorphic cards displaying Price, Asset Type, and Trust Badges (AI Verified, Geolocation Locked).
+
+Interactions: "Like" heart button, "Share to Chat" icon, and a primary "Book Inspection / Rent Now" bottom sheet trigger.
+
+## 10 Feed Logic & Spatial Querying
+
+Wire the feed to the active PostGIS listings and user telemetry.
+
+#### Logic:
+
+Fetch active listings from Supabase via TanStack Query, applying infinite server-side pagination.
+
+Only load records where listing_status = 'active'.
+
+Calculate localized distance client-side based on user's current rough location vs. address_coordinates. Raw hardware_coordinates are never exposed to the client here.
+
+Dispatch PostHog event feed_listing_viewed with metadata (category, price range) for B2B analytics.
+
+## 11 Multi-Year Escrow Setup UI
+
+Build the checkout flow allowing flexible lease durations.
+
+#### UI:
+
+Duration Configurator: Slider or number input for "Lease Duration" (e.g., 1 Year, 3 Years, 5 Years).
+
+Dynamic Pricing Engine: Real-time calculation multiplying base_rent_amount by duration, adding platform fees, and displaying the Grand Total.
+
+Virtual Account Display: OPay branded checkout screen showing a dedicated account number, bank name, and a 30-minute countdown timer.
+
+#### 12 Escrow Settlement Logic (OPay)
+
+Wire financial routing into the corporate master ledger.
+
+#### Logic:
+
+Initiate OPay API request to generate a dynamic Virtual Account tied strictly to the specific transaction_id.
+
+Listen for inbound webhook on /api/webhooks/opay.
+
+Upon success, update transactions table status to holding_deposit.
+
+Set the specific lease_duration_years in the transaction record based on user input.
+
+Generate the highly encrypted escrow_otp_hash and save to DB.
+
+Notify Seeker and Lister that the inspection phase is unlocked.
+
+Dispatch PostHog event multi_year_escrow_locked.
+
+### Phase 4 — Physical Handshake & Settlement
+
+## 13 Proximity Handshake UI
+
+Build the physical meeting interface with mock validation states.
+
+## UI:
+
+Lister View: Displays the property's unique 6-digit OTP token or QR code.
+
+Seeker View: OTP input pad and a pulsing "Verifying GPS Location" radar animation.
+
+Success (Confetti/Green check) and Failure (Red warning) state modals.
+
+## 14 PostGIS Validation & Payout Logic
+
+Execute the core spatial trust mechanism.
+
+#### Logic:
+
+Seeker inputs OTP on-site. The Next.js client aggressively fetches the Seeker's exact navigator.geolocation.
+
+Server Action executes ST_DWithin, mathematically comparing the Seeker's live location against the Listing's hardware_coordinates using a strict 20-meter radius.
+
+If True:
+
+Execute OPay Payout API to send the bulk funds to the Lister's bank account (minus Rentral's fee).
+
+Update listing status to rented.
+
+Calculate exact lease_expiration_date (Current Date + lease_duration_years from transaction).
+
+Dispatch PostHog event spatial_handshake_success.
+
+If False: Abort transfer, flag transaction, prompt UI warning regarding distance mismatch.
+
+### 15 Real-Time Negotiations (Chat)
+
+Enable Lister/Seeker communication without leaving the platform.
+
+## UI:
+
+Thread List: Inbox showing active negotiations with unread badges.
+
+Chat Canvas: Message bubbles, unread indicators, and embedded dynamic listing cards.
+
+## Logic:
+
+Wire Supabase Realtime (WebSockets) to a messages table.
+
+Implement Zustand to handle typing indicators and optimistic UI updates for a zero-latency, native-app feel.
+
+Restrict message attachments to strictly prevent off-platform direct payments.
+
+## Phase 5 — Continuous Lifecycle & Analytics
+
+## 16 Continuous Lease Renewal Trust Routing (Year 2+)
+
+Handle continuous tenancy verification for 1, 3, 5+ year leases without active escrow.
+
+## UI:
+
+Dashboard alert banner: "Your lease expires in 30 days. Verify renewal to boost Trust Score."
+
+Input form requesting the Open Banking Hash of the direct payment made to the landlord.
+
+## Logic:
+
+Deno CRON Edge Function (trigger-lease-renewals) scans DB daily.
+
+Exactly 1 month before any specific lease_expiration_date (regardless of the initial multi-year term length), dispatch alert.
+
+Tenant submits payment hash. Server Action hits Paystack/OPay Open Banking API.
+
+Verify the recipient account of the hash matches the Lister's registered account_number.
+
+If verified: Increment Tenant's reputation_score, add the newly paid duration to lease_expiration_date (pushing it into the future), and update listing to directly_managed.
+
+### 17 Lease Termination & Unfreezing
+
+Return inventory to the marketplace upon tenant exit.
+
+#### UI:
+
+"End Tenancy / Vacate" button in the Lister/Tenant dashboard.
+
+File upload UI strictly requesting a "Mutual Vacation Deed" or formal "Exit Clearance."
+
+#### Logic:
+
+Send uploaded document to Gemini 1.5 Pro via /api/verify/lease-termination for multi-modal forensic analysis (checking signatures, dates, and intent).
+
+Upon positive AI verification, execute Server Action to instantly update listing status from rented back to active.
+
+Nullify the lease_expiration_date and push the asset back into the Discovery Feed for new seekers.
+
+## 18 Profile & Trust Ledger Dashboard
+
+Build the user command center and B2B analytics views.
+
+#### UI:
+
+Trust Score: Circular progress indicator displaying the user's out-of-5.00 reputation score.
+
+Asset Portfolio: Grid of owned/active listings for Landlords.
+
+Active Leases: Status cards for Tenants showing time remaining and upcoming renewal pulses.
+
+Insights Widget (B2B Mode): Clean analytical charts (Line/Bar graphs) showing local demand velocity and pricing elasticity.
+
+#### Logic:
+
+Fetch user aggregated data from profiles, listings, and transactions.
+
+Pull read-only analytical chart data securely using the PostHog Server API, aggregating anonymous regional data.
+
+## Execution Summary
+
+Phase 1 — Foundation: 4 Core Features (Homepage UI, Clerk/Smile ID, PostHog, PostGIS Schema)
+
+Phase 2 — Hardware Inventory: 4 Core Features (Capture UI, GPS/Mux Logic, Gemini Audits, Locked Editing)
+
+Phase 3 — Discovery Engine: 4 Core Features (Feed UI, Spatial Queries, Multi-Year Checkout UI, OPay Escrow)
+
+Phase 4 — Settlement: 3 Core Features (Handshake UI, ST_DWithin Logic, Realtime Chat)
+
+Phase 5 — Continuous Lifecycle: 3 Core Features (Year 2+ CRON Renewals, Gemini Move-Out Unfreezing, PostHog Dashboards)
+
+Total Architectural Milestones: 18 distinct, highly testable engineering phases.

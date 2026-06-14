@@ -1,350 +1,292 @@
-# UI Tokens
+## UI Tokens: Rentral Marketplace
 
-Design tokens for JobPilot. All colors, typography, spacing, and component values extracted from the delivered design. Use these exact values throughout the codebase — never hardcode colors or use raw Tailwind color classes in components.
-
----
+Design tokens and architectural styling guidelines for Rentral. All colors, typography, spacing, glassmorphic parameters, and component values are extracted from the core Rentral design architecture. Use these exact semantic values throughout the codebase to ensure consistency across the immersive, mobile-first, zero-trust marketplace.
 
 ## How to Use
 
-This project uses **Tailwind CSS v4**. All design tokens are defined using the `@theme` directive in `app/globals.css`. No `tailwind.config.ts` needed for colors or tokens.
+This project utilizes Tailwind CSS v4.0 alongside Shadcn UI. All custom design tokens are defined using the new @theme directive inside app/globals.css. You do not need a tailwind.config.ts file for these colors or tokens.
 
-Tailwind v4 automatically generates utility classes from `@theme` variables:
+## Tailwind v4 automatically generates utility classes from the @theme variables:
 
-- `--color-accent` → `bg-accent`, `text-accent`, `border-accent`
-- `--color-surface` → `bg-surface`, `text-surface`, `border-surface`
+--color-accent-primary → bg-accent-primary, text-accent-primary
 
-```tsx
-// Correct — uses generated utility classes
-className="bg-surface text-text-primary border-border"
+--color-glass-dark → bg-glass-dark
 
-// Also correct — references CSS variable directly
-style={{ color: 'var(--color-text-primary)' }}
+--color-trust-verified → text-trust-verified
 
-// Never — hardcoded hex values
-className="bg-[#F6F7FB] text-[#101828]"
+// Correct — uses semantic generated utility classes
+className="bg-glass-dark backdrop-blur-lg border border-glass-border-light text-text-primary"
 
-// Never — raw Tailwind color classes
-className="bg-purple-500 text-gray-600"
-```
+// Also correct — applying standard Tailwind utilities mapped to our brand guidelines
+className="bg-neutral-950 text-white rounded-[32px]"
 
----
+// Never — hardcoded arbitrary hex values in the JSX
+className="bg-[#0A0A0A] text-[#10B981]"
+
+// Never — using non-semantic generic colors for primary actions
+className="bg-blue-500 text-gray-100"
+
 
 ## globals.css — Complete Token Definition
 
-```css
 @import "tailwindcss";
 
 @theme {
-  /* Font */
-  --font-sans: "Inter", sans-serif;
+  /* Font Families */
+  --font-sans: "Inter", system-ui, sans-serif;
 
-  /* Page and surface backgrounds */
-  --color-background: #f6f7fb;
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f9fafb;
-  --color-surface-tertiary: #f2f5f7;
-  --color-surface-muted: #f4f5fb;
+  /* Base Backgrounds & Solid Surfaces */
+  --color-background-app: #0a0a0a; /* neutral-950 */
+  --color-surface-card: #171717; /* neutral-900 */
+  
+  /* Glassmorphic Surfaces (Core Rentral UI Identity) */
+  --color-glass-dark: rgba(0, 0, 0, 0.4);
+  --color-glass-light: rgba(255, 255, 255, 0.1);
+  --color-glass-light-hover: rgba(255, 255, 255, 0.2);
+  --color-glass-warning: rgba(220, 38, 38, 0.9); /* red-600/90 */
 
   /* Borders */
-  --color-border: #e7eaf3;
-  --color-border-light: #e5e7eb;
-  --color-border-muted: #dfe1e7;
+  --color-border-subtle: #262626; /* neutral-800 */
+  --color-glass-border-light: rgba(255, 255, 255, 0.1);
+  --color-glass-border-medium: rgba(255, 255, 255, 0.2);
+  --color-glass-border-success: rgba(16, 185, 129, 0.2);
+  --color-glass-border-warning: rgba(239, 68, 68, 0.5);
 
-  /* Text */
-  --color-text-primary: #101828;
-  --color-text-secondary: #6a7282;
-  --color-text-muted: #99a1af;
-  --color-text-dark: #364153;
-  --color-text-darker: #36394a;
-  --color-text-darkest: #111827;
-  --color-text-black: #131316;
-  --color-text-slate: #272835;
-  --color-text-slate-medium: #666d80;
+  /* Typography / Text */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d4d4d4; /* neutral-300 */
+  --color-text-muted: #a3a3a3; /* neutral-400 */
+  --color-text-inverse: #0a0a0a; /* neutral-950 (for primary buttons) */
 
-  /* Primary accent — purple */
-  --color-accent: #7c5cfc;
-  --color-accent-dark: #5e4cff;
-  --color-accent-light: #f3e8ff;
-  --color-accent-muted: #faf5ff;
-  --color-accent-foreground: #ffffff;
+  /* Primary Accents — Emerald / Financial Trust */
+  --color-accent-primary: #10b981; /* emerald-500 */
+  --color-accent-hover: #34d399; /* emerald-400 */
+  --color-accent-muted: rgba(16, 185, 129, 0.2);
 
-  /* Success — green */
-  --color-success: #10b981;
-  --color-success-alt: #00bc7d;
-  --color-success-dark: #007a55;
-  --color-success-darker: #009966;
-  --color-success-light: #d0fae5;
-  --color-success-lightest: #ecfdf5;
-  --color-success-foreground: #007a55;
-
-  /* Info — blue */
-  --color-info: #61a8ff;
-  --color-info-dark: #155dfc;
-  --color-info-medium: #2b7fff;
-  --color-info-light: #dbeafe;
-  --color-info-lightest: #eff6ff;
-  --color-info-foreground: #155dfc;
-  --color-info-muted: #94a2c5;
-
-  /* Warning — orange */
-  --color-warning: #ff8904;
-  --color-warning-foreground: #ffffff;
-
-  /* Error — red */
-  --color-error: #ef4444;
-  --color-error-foreground: #ffffff;
-
-  /* LinkedIn brand */
-  --color-linkedin: #0a66c2;
-  --color-linkedin-light: #dce6f1;
-  --color-linkedin-foreground: #ffffff;
-
-  /* Dark overlays */
-  --color-overlay: #111827;
-  --color-overlay-dark: #131316;
-
-  /* Border radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* Trust & Status Indicators */
+  --color-trust-verified: #22c55e; /* green-500 */
+  --color-trust-flagged: #ef4444; /* red-500 */
+  
+  /* Border Radii (Highly rounded for mobile-first feel) */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
   --radius-full: 9999px;
 }
-```
 
-Tailwind v4 generates utility classes automatically from every `--color-*` token above:
-
-- `bg-accent`, `text-accent`, `border-accent`
-- `bg-surface`, `text-surface-secondary`
-- `bg-success-light`, `text-text-muted`
-- etc.
-
----
 
 ## Color Usage Guide
 
-### Page Layout
+### Page & Layout Architecture
 
-| Element           | Token                  |
-| ----------------- | ---------------------- |
-| Page background   | `bg-background`        |
-| Card / surface    | `bg-surface`           |
-| Secondary surface | `bg-surface-secondary` |
-| Default border    | `border-border`        |
-| Light border      | `border-border-light`  |
+App Background Vault: bg-background-app (Used as the absolute base layer behind video feeds).
 
-### Typography
+Base Card Surface: bg-surface-card (Used for static forms and settings panels).
 
-| Element                | Token                           |
-| ---------------------- | ------------------------------- |
-| Headings, primary text | `text-text-primary` (#101828)   |
-| Secondary text, labels | `text-text-secondary` (#6A7282) |
-| Placeholder, muted     | `text-text-muted` (#99A1AF)     |
-| Dark labels            | `text-text-dark` (#364153)      |
+Interactive Media Overlay: bg-glass-dark (Used for the contextual information panel floating over video streams).
 
-### Accent (Primary Purple)
+Social Action Containers: bg-glass-light (Used for floating action buttons like Share, Message, Bookmark).
 
-Used for: primary buttons, active nav items, match score bars, tailored badge, focus rings
+Standard Container Border: border-border-subtle
 
-| Element                | Token                    |
-| ---------------------- | ------------------------ |
-| Button background      | `bg-accent`              |
-| Button text            | `text-accent-foreground` |
-| Light badge background | `bg-accent-light`        |
-| Subtle background      | `bg-accent-muted`        |
+Glass Panel Border: border-glass-border-light
 
-### Match Score Colors
+### Typography Colors
 
-Match score bars and indicators use gradient stops based on score range:
+Headings, Titles, Primary Data: text-text-primary (White)
 
-| Score Range | Color  | Token                                  |
-| ----------- | ------ | -------------------------------------- |
-| 90-100%     | Green  | `text-success` / `bg-success-lightest` |
-| 70-89%      | Green  | `text-success` / `bg-success-light`    |
-| 50-69%      | Orange | `text-warning`                         |
-| Below 50%   | Gray   | `text-text-muted`                      |
+Subtitles, Addresses, Secondary Info: text-text-secondary (Neutral-300)
 
-### Skills Badges
+Metadata Labels, Measurement Units (e.g., / Year): text-text-muted (Neutral-400)
 
-| Type          | Background            | Text                      |
-| ------------- | --------------------- | ------------------------- |
-| Matched skill | `bg-success-lightest` | `text-success-foreground` |
-| Missing skill | `bg-accent-muted`     | `text-accent`             |
+Primary Button Text: text-text-inverse (Neutral-950)
 
-### Source Badges
+Price Tags / High-Value Data: text-accent-hover (Emerald-400)
 
-| Source   | Background             | Text                  |
-| -------- | ---------------------- | --------------------- |
-| LinkedIn | `bg-linkedin-light`    | `text-linkedin`       |
-| URL      | `bg-surface-secondary` | `text-text-secondary` |
+### Primary Accent (Emerald / Financial Trust)
 
-### Status Badges
+Rentral uses Emerald Green as the primary interactive and financial color to reinforce trust, monetary transactions, and successful verification handshakes.
 
-| Status     | Background             | Text                      |
-| ---------- | ---------------------- | ------------------------- |
-| Tailored   | `bg-accent-light`      | `text-accent`             |
-| High Match | `bg-success-lightest`  | `text-success-foreground` |
-| Low Match  | `bg-surface-secondary` | `text-text-secondary`     |
+Primary CTA Buttons: bg-accent-primary
 
----
+CTA Button Hover State: hover:bg-accent-hover
 
-## Typography
+Trust Score Badge Background: bg-accent-muted
 
-| Element              | Size | Weight | Line height | Color token           |
-| -------------------- | ---- | ------ | ----------- | --------------------- |
-| Logo text            | 19px | 700    | 28px        | `text-text-darkest`   |
-| Stat number          | 30px | 600    | 36px        | `text-text-primary`   |
-| Section heading      | 16px | 600    | 24px        | `text-text-primary`   |
-| Nav item (active)    | 14px | 500    | 20px        | `text-accent`         |
-| Nav item (inactive)  | 14px | 500    | 20px        | `text-text-dark`      |
-| Card label           | 14px | 500    | 20px        | `text-text-secondary` |
-| Body / activity text | 14px | 500    | 20px        | `text-text-primary`   |
-| Trend badge text     | 12px | 500    | 16px        | `text-success-darker` |
-| Timestamp / muted    | 12px | 400    | 16px        | `text-text-muted`     |
-| Chart axis labels    | 12px | 400    | 15px        | `#9CA3AF`             |
-| Stat subtitle        | 12px | 400    | 16px        | `text-text-muted`     |
+Trust Score Badge Text: text-accent-hover
 
-Font family: **Inter** — import from Google Fonts or use next/font/google.
+### Status & Trust Badges
 
----
+Verified KYC / Spatial Match: Background bg-glass-light, Text text-text-primary, Border border-glass-border-light.
 
-## Spacing
+Platform Warning / Flagged User: Background bg-glass-warning, Text text-text-primary, Border border-trust-flagged.
 
-| Token       | Value      | Usage                 |
-| ----------- | ---------- | --------------------- |
-| `gap-1`     | 4px        | Tight inline gaps     |
-| `gap-2`     | 8px        | Badge and tag gaps    |
-| `gap-3`     | 12px       | Form field gaps       |
-| `gap-4`     | 16px       | Section internal gaps |
-| `gap-6`     | 24px       | Between sections      |
-| `gap-8`     | 32px       | Page section gaps     |
-| `p-4`       | 16px       | Card padding          |
-| `p-6`       | 24px       | Large card padding    |
-| `px-4 py-2` | 16px / 8px | Button padding        |
-| `px-3 py-1` | 12px / 4px | Badge padding         |
+Active Indicator (Dot): bg-trust-verified
 
----
+### Typography Guidelines
+
+Font Family: Inter (Optimize via next/font/google).
+
+Hero / Listing Title: Size 18px (text-lg), Weight 700 (font-bold), Tracking wide, Line Clamp 1. Used for main asset titles over media.
+
+Pricing Metric: Size 20px (text-xl), Weight 800 (font-extrabold), Color text-accent-hover. Used for total package or daily rent values.
+
+Pricing Denomination (e.g., / DAY): Size 10px (text-[10px]), Weight 500 (font-medium), Transform uppercase, Tracking wider.
+
+Section Heading: Size 16px (text-base), Weight 600 (font-semibold).
+
+Standard Body Text: Size 14px (text-sm), Weight 500 (font-medium), Line Height relaxed.
+
+Warning / Alert Text: Size 12px (text-xs), Weight 600 (font-semibold), Line Height relaxed.
+
+Structural Badge Text: Size 12px (text-xs), Weight 500 (font-medium).
+
+### Spacing & Layout Tokens
+
+Rentral relies on spacious, mobile-optimized padding to ensure high-fidelity touch targets and immersive video bleed.
+
+Tight Inline (Icons, dots): gap-1 (4px)
+
+Badge Groupings: gap-2 (8px)
+
+Form Field Spacing: gap-3 (12px)
+
+Social Action Column Spacing: gap-6 (24px)
+
+Glassmorphic Panel Padding: px-5 py-5
+
+Primary CTA Button Padding: px-4 py-3
+
+Structural Badge Padding: px-3 py-1
+
+Warning Banner Padding: px-4 py-3
+
+Viewport Feed Margins: my-4 mx-auto
 
 ## Component Tokens
 
-### Cards
+## The Discovery Feed Card (Immersive Media Wrapper)
 
-```
-background: bg-surface
-border: 1px solid var(--border)
-border-radius: 16px (rounded-2xl in Tailwind)
-padding: 24px (p-6)
-box-shadow: 0px 1px 3px rgba(0,0,0,0.1), 0px 1px 2px -1px rgba(0,0,0,0.1)
-```
+Aspect Ratio: aspect-[9/16] (TikTok/Reels format)
 
-### Buttons
+Maximum Width: max-w-md
 
-**Primary:**
+Background: bg-background-app (Neutral 950)
 
-```
-background: bg-accent
-text: text-accent-foreground
-border-radius: rounded-md
-padding: px-4 py-2
-font-weight: font-medium
-```
+Border Radius: border-radius-2xl (32px)
 
-**Secondary:**
+Shadow: shadow-2xl
 
-```
-background: bg-surface
-border: border border-border
-text: text-text-primary
-border-radius: rounded-md
-padding: px-4 py-2
-```
+Border: border border-border-subtle
 
-**Ghost:**
+Overflow: overflow-hidden
 
-```
-background: transparent
-text: text-text-secondary
-hover: hover:bg-surface-secondary
-border-radius: rounded-md
-```
+## Contextual Glassmorphic Panel (Lower Information Overlay)
 
-### Input Fields
+Position: Absolute, anchored to bottom (bottom-4, left-4, right-4).
 
-```
-background: bg-surface
-border: border border-border
-border-radius: rounded-md
-padding: px-3 py-2
-text: text-text-primary
-placeholder: text-text-muted
-focus: ring-1 ring-accent
-```
+Background: bg-glass-dark (Black at 40% opacity).
 
-### Badges
+Blur Filter: backdrop-blur-lg
 
-```
-border-radius: rounded-full
-padding: px-2 py-0.5
-font-size: text-xs
-font-weight: font-medium
-```
+Border Radius: border-radius-xl (24px)
 
-### Match Score Bar
+Border: border border-glass-border-light
 
-```
-background track: bg-border-light
-fill: varies by score range (see Match Score Colors above)
-height: 4px
-border-radius: rounded-full
-```
+Shadow: shadow-2xl
 
-### Trend Badges (stat cards)
+Padding: px-5 py-5
 
-```
-background: #ECFDF5 (success-lightest)
-text color: #009966 (success-darker)
-border-radius: 4px (rounded-sm)
-padding: 2px 8px
-font-size: 12px
-font-weight: 500
-```
+## Social Interaction Buttons (Floating Actions)
 
-### Activity Dots
+Shape: rounded-full
 
-Each activity type has a specific dot color:
-| Activity Type | Outer ring | Inner dot |
-|---|---|---|
-| Resume tailored | `#F3E8FF` (accent-light) | `#7C5CFC` (accent) |
-| Cover letter | `#DBEAFE` (info-light) | `#61A8FF` (info) |
-| Job found | `#D0FAE5` (success-light) | `#00BC7D` (success-alt) |
-Dot size: 8px inner, 16px outer with white border
+Background: bg-glass-light
 
-### Dashboard Chart Colors
+Hover State: hover:bg-glass-light-hover
 
-| Chart                            | Color                                                           |
-| -------------------------------- | --------------------------------------------------------------- |
-| Jobs Found Over Time (line)      | `#7C5CFC` stroke, 3px width, gradient fill rgba(124,92,252,0.2) |
-| Resume Tailoring Activity (bars) | `#61A8FF`                                                       |
-| Match Score Distribution (bars)  | `#10B981`                                                       |
-| Chart grid lines                 | `1px dashed #E7EAF3`                                            |
-| Chart axis labels                | `#9CA3AF`, 12px                                                 |
+Blur Filter: backdrop-blur-md
 
-### Logo
+Padding: p-3
 
-```
-background: linear-gradient(45deg, #7C5CFC 0%, #4A2EC5 100%)
-border-radius: 10px
-size: 36x36px
-```
+Border: border border-glass-border-medium
 
----
+Active State: active:scale-95 (Hardware accelerated click feel)
 
-## Invariants
+### Primary Operational Button ("Book Physical Verification")
 
-- Never use hex values directly in components — always use CSS variables via Tailwind tokens
-- Font is Inter — always import via next/font/google, never use a fallback system font
-- Never use raw Tailwind color classes like `bg-purple-500` or `text-gray-600` — use project tokens only
-- `--accent` (#7C5CFC) is the only purple — never use Tailwind's built-in purple scale
-- Match score bars always use color tokens based on score range — never hardcoded colors
-- LinkedIn badge always uses `--linkedin` (#0A66C2) — never generic blue
-- All borders default to `--border` (#E7EAF3) — never use `border-gray-*`
+Background: bg-accent-primary
+
+Text Color: text-text-inverse (Neutral 950)
+
+Font Weight: font-bold
+
+Text Transform: uppercase
+
+Tracking: tracking-wide
+
+Size: text-xs
+
+Padding: py-3 px-4
+
+Border Radius: rounded-xl (16px)
+
+Interaction: transition-all active:scale-98 shadow-lg hover:bg-accent-hover
+
+## Dynamic Structural Badges (Bedrooms, Engine, Vessel Type)
+
+Background: bg-glass-light
+
+Text Color: text-text-primary
+
+Padding: px-3 py-1
+
+Border Radius: rounded-full
+
+Font: text-xs font-medium
+
+Border: border border-glass-border-light
+
+## Trust Score Badge
+
+Background: bg-accent-muted (Emerald at 20% opacity)
+
+Text Color: text-accent-hover (Emerald 400)
+
+Border: border border-glass-border-success
+
+Padding: px-3 py-1
+
+Border Radius: rounded-full
+
+Font: text-xs font-semibold
+
+## Global Trust Warning Banner
+
+Position: Absolute, anchored top (top-4, left-4, right-4), high Z-index (z-20).
+
+Background: bg-glass-warning (Red 600 at 90% opacity).
+
+Blur Filter: backdrop-blur-md
+
+Padding: px-4 py-3
+
+Border Radius: rounded-2xl (16px)
+
+Border: border border-trust-flagged
+
+Shadow: shadow-lg
+
+## Technical Invariants & Guardrails
+
+Zero Hardcoding: Never use arbitrary hex codes (e.g., text-[#10b981]) in the React components. Always map strictly to the @theme semantic tokens to maintain dynamic theming capabilities and code cleanliness.
+
+Font Architecture: The application exclusively relies on Inter. Never fallback to generic system fonts directly in components; configure next/font/google at the root layout.
+
+Financial Color Semantics: Only use Emerald (--color-accent-primary) for successful verifications, pricing, trust scores, and checkout triggers. Never use standard Tailwind blue or generic primary colors for monetary actions.
+
+Opacity Handling: For glassmorphic components, prefer utilizing the RGBA variables defined in the CSS rather than stacking Tailwind opacity classes (e.g., avoid bg-black/40 if bg-glass-dark is available semantically).
+
+Animation Hardware Acceleration: Always couple hover/active scale animations (e.g., active:scale-95) with transition-all to ensure the GPU handles the frame rendering, keeping the mobile interface at a flawless 60fps.

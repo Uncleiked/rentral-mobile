@@ -1,844 +1,294 @@
-<!-- # Architecture
+## Rentral: Multi-Asset Spatial Trust Architecture
 
-## Stack
+### Stack Overview
 
-| Layer                          | Tool                     | Purpose                                          |
-| ------------------------------ | ------------------------ | ------------------------------------------------ |
-| Framework                      | Next.js 16 (App Router)  | Full stack framework                             |
-| Auth + DB + Storage + Realtime | InsForge                 | Entire backend                                   |
-| Cloud browser                  | Browserbase              | Company research — browsing company public pages |
-| AI browser control             | Stagehand                | Company page interaction and content extraction  |
-| Job Discovery                  | Adzuna API               | Job search and discovery                         |
-| AI model                       | OpenAI GPT-4o            | Matching, research synthesis, extraction         |
-| Analytics                      | PostHog                  | Event tracking and dashboard charts              |
-| PDF generation                 | @react-pdf/renderer      | Resume PDF rendering                             |
-| Styling                        | Tailwind CSS + shadcn/ui | UI components and styling                        |
-| Language                       | TypeScript strict        | Throughout                                       |
+#### Frontend & Core Framework
 
----
+Framework: Next.js 16 (App Router) & React 19 - Full stack execution, Server Actions, and incremental prefetching.
+
+Styling: Tailwind CSS v4 & Shadcn UI - Mobile-first, glassmorphic UI tokens mimicking social discovery feeds.
+
+Client State: Zustand - Persists multi-step listing captures, checkout states, and session data locally.
+
+Data Fetching: TanStack Query v5 & Axios - Optimized client-side DB caching and mutation cycles.
+
+#### Backend, Data & Spatial Infrastructure
+
+Database Engine: Supabase (Enterprise PostgreSQL) - Relational ledger with strict Row Level Security (RLS).
+
+Spatial Engine: PostGIS Extensions - Core trust mechanism; calculates hardware vs. address coordinates using mathematical invariants (ST_Distance, ST_DWithin).
+
+Media Processing: Mux Video API & HTML5 MediaDevices - In-app capture of 120s walkthroughs, transcoded into adaptive signed HLS streams.
+
+## Authentication & Verification
+
+Identity Provider: Clerk v5 - Web middleware integration, OAuth, and JWT session parsing.
+
+Regulatory KYC: Smile ID - Webhook architecture for local registry matching (NIN, BVN, Passport, CAC).
+
+AI Document Forgery Audit: Google Gemini 1.5 Pro - Multi-modal screening of Title Documents, Vacation Deeds, and CAC registrations for digital alteration.
+
+## Financial Routing & Telemetry
+
+Payment Gateways: OPay & Paystack APIs - Split-escrow routing, dynamic virtual accounts, and Open Banking verifications.
+
+Analytics & Telemetry: PostHog - Comprehensive event tracking, behavioral analytics, conversion funnels, and real-time dashboarding. This forms the absolute foundation for the B2B 'Rentral Insights' predictive engine.
 
 ## Folder Structure
 
-```
 /
-├── AGENTS.md
-├── context/
-│   ├── project-overview.md
-│   ├── architecture.md
-│   ├── ui-tokens.md
-│   ├── ui-rules.md
-│   ├── ui-registry.md
-│   ├── code-standards.md
-│   ├── library-docs.md
-│   ├── build-plan.md
-│   └── progress-tracker.md
 ├── app/
-│   ├── layout.tsx                          → Root layout, PostHog provider
-│   ├── page.tsx                            → Homepage
+│   ├── layout.tsx                              → Root layout, Providers (Clerk, QueryClient, PostHog)
+│   ├── page.tsx                                → Homepage (Value prop, category entry)
 │   ├── (auth)/
-│   │   ├── login/
-│   │   │   └── page.tsx                   → Login page
-│   │   └── callback/
-│   │       └── page.tsx                   → OAuth callback handler
-│   ├── dashboard/
-│   │   └── page.tsx                       → Main dashboard
+│   │   ├── sign-in/                            → Clerk Auth flow
+│   │   ├── sign-up/                            → Clerk Auth flow
+│   │   └── onboarding/                         → Smile ID KYC, Username selection
+│   ├── feed/
+│   │   └── page.tsx                            → Vertical-scrolling video discovery feed
+│   ├── listing/
+│   │   ├── create/                             → Mobile-first camera capture & metadata forms
+│   │   ├── edit/[id]/                          → Active listing metadata modification UI
+│   │   └── [id]/                               → Detailed asset parameters & public reviews
+│   ├── checkout/
+│   │   ├── escrow-setup/                       → Dynamic Virtual Account generator UI (Multi-year capable)
+│   │   └── handshake/                          → OTP & GPS Proximity UI for inspections
+│   ├── messages/
+│   │   └── page.tsx                            → WebSocket chat, direct share cards
 │   ├── profile/
-│   │   └── page.tsx                       → Profile form + resume management
-│   ├── find-jobs/
-│   │   ├── page.tsx                       → Find Jobs page — search controls + jobs list
-│   │   └── [id]/
-│   │       └── page.tsx                   → Individual job details page
+│   │   └── page.tsx                            → Trust Score ledger, active listings
+│   ├── admin/
+│   │   └── page.tsx                            → Force release/refund console (is_admin=true)
 │   └── api/
-│       ├── agent/
-│       │   ├── find/route.ts              → Trigger Adzuna job discovery
-│       │   └── research/route.ts          → Trigger company research agent
-│       ├── resume/
-│       │   ├── generate/route.ts          → Generate base resume PDF from profile
-│       │   └── extract/route.ts           → Extract profile data from uploaded resume PDF
-├── agent/
-│   ├── adzuna.ts                          → Adzuna API job discovery + GPT-4o scoring
-│   ├── research.ts                        → Company research — Browserbase + Stagehand + GPT-4o
-│   ├── matcher.ts                         → GPT-4o job matching logic
-│   ├── extractor.ts                       → GPT-4o job description extraction + structuring
-│   └── types.ts                           → Agent-specific TypeScript types
-├── actions/
-│   ├── profile.ts                         → Profile save + update
-│   └── jobs.ts                            → Job status updates
+│       ├── webhooks/
+│       │   ├── opay/route.ts                   → Inbound payment settlement listener
+│       │   └── smile-id/route.ts               → KYC async status updates
+│       ├── verify/
+│       │   ├── document-upload/route.ts        → Gemini AI multi-modal forgery checks (Deeds, CAC)
+│       │   └── lease-termination/route.ts      → Vacancy verification to unfreeze listings
+│       ├── billing/
+│       │   └── continuous-renewal/route.ts     → Open Banking cross-check for Year 2+ renewals
+│       ├── analytics/
+│       │   └── ingest/route.ts                 → Server-side PostHog event proxy for B2B insights
+│       └── admin/
+│           └── force-settlement/route.ts       → Emergency escrow overrides
 ├── components/
-│   ├── ui/                                → shadcn/ui components only
-│   ├── layout/
-│   │   ├── Navbar.tsx
-│   │   └── Footer.tsx
-│   ├── homepage/
-│   │   ├── Hero.tsx
-│   │   ├── HowItWorks.tsx
-│   │   └── Features.tsx
-│   ├── dashboard/
-│   │   ├── StatsBar.tsx
-│   │   ├── RecentActivity.tsx
-│   │   └── AnalyticsCharts.tsx
-│   ├── profile/
-│   │   ├── ProfileForm.tsx
-│   │   ├── ResumeUpload.tsx
-│   │   ├── ResumePreview.tsx
-│   │   └── CompletionIndicator.tsx
-│   ├── find-jobs/
-│   │   ├── SearchControls.tsx
-│   │   ├── JobsTable.tsx
-│   │   ├── JobFilters.tsx
-│   │   └── JobsPagination.tsx
-│   └── job-details/
-│       ├── JobInfo.tsx
-│       ├── MatchScore.tsx
-│       ├── JobDescription.tsx
-│       ├── CompanyResearch.tsx
-│       └── JobActions.tsx
+│   ├── ui/                                     → Shadcn primitive components
+│   ├── feed/
+│   │   ├── DiscoveryFeedCard.tsx               → MuxPlayer, glassmorphic overlays, trust badges
+│   │   └── EngagementActions.tsx               → Like, direct share, message triggers
+│   ├── listing/
+│   │   ├── VideoCaptureCanvas.tsx              → WebRTC camera stream, HTML5 Geolocation hooks
+│   │   ├── SpatialMetadataForm.tsx             → Dynamic fields (House vs Car vs Boat)
+│   │   └── ListingEditor.tsx                   → Form for updating prices/prefs without altering GPS
+│   ├── escrow/
+│   │   ├── MultiYearConfigurator.tsx           → UI for defining custom lease duration payouts
+│   │   ├── VirtualAccountDisplay.tsx           → OPay checkout renderer
+│   │   └── ProximityScanner.tsx                → OTP input & navigator.geolocation execution
+│   └── chat/
+│       ├── ThreadList.tsx                      → Active negotiations
+│       └── ChatCanvas.tsx                      → Supabase Realtime message streams
 ├── lib/
-│   ├── insforge-client.ts                 → InsForge browser client instance
-│   ├── insforge-server.ts                 → InsForge server client
-│   ├── browserbase.ts                     → Browserbase session creation + management
-│   ├── stagehand.ts                       → Stagehand initialisation with Browserbase session
-│   ├── adzuna.ts                          → Adzuna API client
-│   ├── posthog-client.ts                  → PostHog browser client
-│   ├── posthog-server.ts                  → PostHog server client
-│   └── utils.ts                           → Shared utility functions
+│   ├── supabase/
+│   │   ├── client.ts                           → Browser SSR client
+│   │   └── server.ts                           → Server-side client with admin roles
+│   ├── payment/
+│   │   ├── opay-engine.ts                      → Virtual account & automated payout fetch wrappers
+│   │   └── paystack-engine.ts                  → Pan-African fallback routing
+│   ├── spatial/
+│   │   └── math.ts                             → Client-side coordinate distance estimators
+│   ├── gemini.ts                               → AI Engine initialization
+│   ├── posthog-client.ts                       → Client-side telemetry initialization
+│   ├── posthog-server.ts                       → Server-side analytics initialization
+│   └── utils.ts                                → Tailwind merge, formatting tools
+├── store/
+│   └── useRentralStore.ts                      → Zustand: Local UI overrides, active booking context
+├── supabase/
+│   ├── migrations/                             → PostGIS DDL schemas & RLS policies
+│   └── functions/
+│       ├── handle-holding-expiration/          → Deno Edge function for 24-hour split payouts
+│       └── trigger-lease-renewals/             → Deno CRON processing dynamic multi-year alerts
 └── types/
-    └── index.ts                           → Global TypeScript types
-```
+    ├── database.ts                             → Supabase auto-generated typings
+    └── platform.ts                             → Core TS Interfaces (Profiles, Listings, Transactions)
 
----
 
 ## System Boundaries
 
-| Folder        | Owns                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------ |
-| `app/`        | Pages and API routes only. No business logic.                                                          |
-| `agent/`      | All agent logic. Adzuna discovery, company research, matching, extraction. Nothing here touches React. |
-| `actions/`    | Server Actions for UI-triggered mutations only. Profile save, profile update.                          |
-| `components/` | UI only. No data fetching logic. No direct DB calls.                                                   |
-| `lib/`        | Third party client initialisation and shared utilities only.                                           |
-| `types/`      | TypeScript types shared across the project.                                                            |
-
----
-
-## Data Flow
-
-### UI Mutations (Server Actions)
-
-```
-User interaction in component
-        ↓
-Server Action in actions/
-        ↓
-InsForge DB write
-        ↓
-Revalidate or redirect
-```
-
-### Agent Operations (API Routes)
-
-```
-User clicks Find Jobs
-        ↓
-API route in app/api/agent/find
-        ↓
-Calls agent/adzuna.ts
-        ↓
-Adzuna API returns job listings
-        ↓
-GPT-4o scores each job against user profile
-        ↓
-Agent writes results to InsForge DB
-        ↓
-Page data revalidated
-```
-
-### Company Research (API Routes)
-
-```
-User clicks Research Company on job details page
-        ↓
-API route in app/api/agent/research
-        ↓
-Calls agent/research.ts
-        ↓
-Single Browserbase session opens with Stagehand
-        ↓
-Navigates to company homepage + sub pages
-        ↓
-GPT-4o synthesizes dossier from extracted content
-        ↓
-Dossier saved to jobs.company_research
-        ↓
-Page data revalidated
-```
-
-### Resume Operations (API Routes)
-
-```
-User uploads resume or clicks Generate
-        ↓
-API route in app/api/resume/
-        ↓
-GPT-4o processes content
-        ↓
-@react-pdf/renderer renders PDF buffer
-        ↓
-New PDF uploaded to InsForge Storage
-        ↓
-URL saved to profiles table
-```
-
----
-
-## InsForge Database Schema
-
-### `profiles`
-
-| Column              | Type        | Notes                                        |
-| ------------------- | ----------- | -------------------------------------------- |
-| id                  | uuid        | References auth.users                        |
-| full_name           | text        |                                              |
-| email               | text        | Pre-filled from auth                         |
-| phone               | text        |                                              |
-| location            | text        | City, country                                |
-| current_title       | text        | Most recent job title                        |
-| experience_level    | text        | junior / mid / senior / lead                 |
-| years_experience    | integer     |                                              |
-| skills              | text[]      | Array of skill tags                          |
-| industries          | text[]      | Industries worked in                         |
-| work_experience     | jsonb       | Array of up to 3 roles                       |
-| education           | jsonb       | Degree, field, institution, year             |
-| job_titles_seeking  | text[]      | Roles they want                              |
-| remote_preference   | text        | remote / onsite / hybrid / any               |
-| preferred_locations | text[]      | Optional preferred locations                 |
-| salary_expectation  | text        | Optional                                     |
-| cover_letter_tone   | text        | formal / casual / enthusiastic               |
-| linkedin_url        | text        |                                              |
-| portfolio_url       | text        |                                              |
-| work_authorization  | text        | citizen / permanent_resident / visa_required |
-| resume_pdf_url      | text        | InsForge Storage URL of current resume       |
-| is_complete         | boolean     | True when all required fields filled         |
-| created_at          | timestamptz |                                              |
-| updated_at          | timestamptz |                                              |
-
-### `agent_runs`
-
-| Column             | Type        | Notes                        |
-| ------------------ | ----------- | ---------------------------- |
-| id                 | uuid        |                              |
-| user_id            | uuid        | References profiles          |
-| status             | text        | running / completed / failed |
-| job_title_searched | text        |                              |
-| location_searched  | text        |                              |
-| jobs_found         | integer     | Total jobs discovered        |
-| started_at         | timestamptz |                              |
-| completed_at       | timestamptz |                              |
-
-### `jobs`
-
-| Column             | Type        | Notes                                          |
-| ------------------ | ----------- | ---------------------------------------------- |
-| id                 | uuid        |                                                |
-| run_id             | uuid        | References agent_runs — null if from URL input |
-| user_id            | uuid        | References profiles                            |
-| source             | text        | search / url                                   |
-| source_url         | text        | Original job listing URL                       |
-| external_apply_url | text        | Direct company apply URL                       |
-| title              | text        |                                                |
-| company            | text        |                                                |
-| location           | text        |                                                |
-| salary             | text        | If available                                   |
-| job_type           | text        | fulltime / parttime / contract                 |
-| about_role         | text        | 2-3 sentence summary                           |
-| responsibilities   | text[]      | Bullet points                                  |
-| requirements       | text[]      | Bullet points                                  |
-| nice_to_have       | text[]      | Optional                                       |
-| benefits           | text[]      | Optional                                       |
-| about_company      | text        | Brief company description                      |
-| match_score        | integer     | 0-100 scored against main profile              |
-| match_reason       | text        | GPT-4o explanation                             |
-| matched_skills     | text[]      | Skills user has that match                     |
-| missing_skills     | text[]      | Skills user lacks                              |
-| company_research   | jsonb       | Company dossier from research agent            |
-| found_at           | timestamptz |                                                |
-
-### `agent_logs`
-
-| Column     | Type        | Notes                            |
-| ---------- | ----------- | -------------------------------- |
-| id         | uuid        |                                  |
-| run_id     | uuid        | References agent_runs            |
-| user_id    | uuid        | References profiles              |
-| message    | text        | Human readable log entry         |
-| level      | text        | info / success / warning / error |
-| job_id     | uuid        | Optional — related job           |
-| created_at | timestamptz |                                  |
-
----
-
-## InsForge Storage
-
-| Bucket  | Path                         | Contents                  |
-| ------- | ---------------------------- | ------------------------- |
-| resumes | resumes/{user_id}/resume.pdf | Current active resume PDF |
-
-Access: authenticated users only, own files only.
-
----
-
-## Authentication
-
-- Provider: InsForge Auth
-- Methods: Google OAuth, GitHub OAuth
-- Protected routes: /dashboard, /profile, /find-jobs, /find-jobs/[id]
-- Public routes: /, /login
-- Middleware in middleware.ts checks session on every protected route
-- On login → redirect to /dashboard
-
----
-
-## InsForge Client Pattern
-
-Two separate InsForge instances — never mix them:
-
-```typescript
-// lib/insforge-client.ts
-// Browser-side — used in client components for auth state
-import { createBrowserClient } from "@insforge/ssr";
-export const insforge = createBrowserClient(
-  process.env.NEXT_PUBLIC_INSFORGE_URL!,
-  process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-);
-
-// lib/insforge-server.ts
-// Server-side — used in API routes, Server Actions, agent code
-import { createServerClient } from "@insforge/ssr";
-import { cookies } from "next/headers";
-
-export const createInsforgeServer = async () => {
-  const cookieStore = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_INSFORGE_URL!,
-    process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
-};
-```
-
----
-
-## Browserbase Session Pattern
-
-```typescript
-// Company research session — single session, sequential page visits
-const session = await bb.sessions.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  timeout: 120, // 2 minute session — visits 3-4 pages max
-});
-```
-
----
-
-## Job Discovery Pattern
-
-**Adzuna API — job search**
-
-```typescript
-const response = await fetch(
-  `https://api.adzuna.com/v1/api/jobs/us/search/1?` +
-    `app_id=${process.env.ADZUNA_APP_ID}&` +
-    `app_key=${process.env.ADZUNA_APP_KEY}&` +
-    `what=${encodeURIComponent(jobTitle)}&` +
-    `where=${encodeURIComponent(location)}&` +
-    `category=it-jobs&` +
-    `results_per_page=10&` +
-    `content-type=application/json`,
-);
-const data = await response.json();
-// data.results — array of job listings
-// Each job: title, company.display_name, location.display_name,
-//           salary_min, salary_max, description, redirect_url, created
-```
-
----
-
-## Company Research Pattern
-
-```typescript
-// Single session — visits company homepage and sub pages sequentially
-const stagehand = new Stagehand({
-  env: "BROWSERBASE",
-  apiKey: process.env.BROWSERBASE_API_KEY!,
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  browserbaseSessionID: session.id,
-  modelName: "gpt-4o",
-  modelClientOptions: { apiKey: process.env.OPENAI_API_KEY! },
-});
-
-await stagehand.init();
-const page = stagehand.page;
-
-// Clean company name and construct homepage URL
-const cleanName = companyName
-  .replace(/\s*(Inc\.?|LLC|Ltd\.?|Corp\.?|Co\.?).*$/i, "")
-  .trim()
-  .toLowerCase()
-  .replace(/\s+/g, "");
-
-const homepageUrl = `https://www.${cleanName}.com`;
-
-// Navigate and extract — graceful fallback if page not found
-try {
-  await page.goto(homepageUrl);
-  await page.waitForLoadState("networkidle");
-  const content = await stagehand.extract({ instruction: "..." });
-} catch (error) {
-  // Log and continue — GPT-4o will synthesize from what was found
-  await logAgentError(jobId, error);
-}
-
-// Always close session when done
-await stagehand.close();
-```
-
----
-
-## Invariants
-
-Rules the AI agent must never violate:
-
-- API routes contain no UI logic. Components contain no DB logic.
-- Agent code in `/agent` never imports from `/components` or `/actions`.
-- Server Actions never call agent functions. Agent functions are only called from API routes.
-- All InsForge server-side writes use `createInsforgeServer()` — never the browser client.
-- No hardcoded hex values or raw Tailwind color classes in components — use CSS variables from ui-tokens.md.
-- Every Stagehand action is wrapped in try/catch. Failures are logged to agent_logs, never thrown to crash the run.
-- Company research always returns a dossier — even if browser research fails, GPT-4o synthesizes from company name and job description alone. Never return empty.
-- Browserbase sessions are always closed with stagehand.close() when done — never leave sessions open.
-- Always scope InsForge queries to the current user_id — never query without a user filter.
-- Adzuna API always includes category=it-jobs — never search without this filter.
-- jobs.source is always 'search' or 'url' — never any other value. -->
-
-
-# Architecture
-## Stack
-
-
-Layer	Tool	Purpose
-Framework	Next.js 16 (App Router)	Full-stack architecture for Rentral (React 19, Turbopack compilation engine)
-Authentication	Clerk Auth (v5)	Session propagation across devices (Mobile capture to Desktop continuation)
-Database Engine	Supabase PostgreSQL	Transactional storage layer with native support for PostGIS geography extensions
-Geospatial Engine	PostGIS Extension	Spatial coordinate indexing, 100m variance verification, and radius-bounded lookups
-State Management	Zustand	Multi-device step-wizard tracking, filter configurations, and transient data syncing
-UI Component Kit	shadcn/ui	Accessible interface primitives built using Radix UI and Tailwind CSS v4.0
-Video Delivery Network	Mux Video API	Direct-from-camera mobile HLS stream ingestion, processing, and delivery
-Local Settlement	Paystack API	Escrow collection, automated booking locks, and intra-African banking payouts
-Global Settlement	Stripe API	Processing international diaspora capital, cross-border memberships, and currencies
-Identity Compliance	Smile ID API	Instant individual NIN/BVN checks and automated corporate CAC lookups
-Observability	PostHog	Funnel monitoring, telemetry tracking, and spatial validation drops
-Styling Framework	Tailwind CSS v4.0	Utility-first component styling using the modern CSS-native configuration engine
-Language	TypeScript Strict	Structural compilation safety across API routes, stores, and components
-
-## Folder Structure/
-
-├── CONTEXT.md
-├── context/
-│   ├── project-overview.md     → Strategic goals and value proposition for Rentral
-│   ├── architecture.md         → This comprehensive system architecture specification
-│   ├── ui-tokens.md            → Tailwind theme variables, colors, and layout tokens
-│   ├── ui-rules.md             → Layout composition and interaction rules
-│   ├── code-standards.md       → Component abstraction rules and strict TypeScript guides
-│   ├── build-plan.md           → Phased execution sequencing roadmap
-│   └── progress-tracker.md     → Development milestone tracking ledger
-├── app/
-│   ├── layout.tsx              → Root layout injecting PostHog, Clerk, and shadcn themes
-│   ├── page.tsx                → Public marketing landing page and high-level discovery core
-│   ├── (auth)/                 
-│   │   ├── sign-in/page.tsx    → Clerk authentication customized interface shell
-│   │   └── sign-up/page.tsx    → Multi-tenant onboarding registration pipeline
-│   ├── dashboard/              
-│   │   ├── layout.tsx          → Role-based router layout intercepting profile types via JWT claims
-│   │   ├── regular-user/       → Saved listings, active applications, and flat-sharing matching views
-│   │   ├── landlord/           → Property assets portfolio, booking grids, and settlement logs
-│   │   ├── agent/              → Commission ledgers, client listings, and active verification trays
-│   │   └── organization/       → Corporate fleet access management, staff assignments, and analytics
-│   ├── listings/               
-│   │   ├── page.tsx            → Advanced Parametric Search (Multi-intent Rent / Buy / Squat engine)
-│   │   ├── [id]/page.tsx       → Dynamic asset layout rendering interactive HLS Mux video streams
-│   │   └── create/              
-│   │       ├── page.tsx        → Cross-device creation gateway (Detects mobile vs desktop layouts)
-│   │       ├── mobile-capture/ → Mobile in-app video recorder with hardware geolocation tagging
-│   │       └── desktop-resume/ → Desktop document wizard and parametric text specification layout
-│   ├── squat-mates/            
-│   │   ├── page.tsx            → Dedicated co-living directory for tenants seeking squat companions
-│   │   └── preferences/page.tsx→ Structural configuration layout for budget, habits, and locations
-│   └── api/                    
-│       ├── listings/           
-│       │   ├── search/route.ts → Executes highly indexed multi-attribute parametric search queries
-│       │   ├── drafts/route.ts → Handles geolocation-isolated draft pooling and timestamp tracking
-│       │   ├── create/route.ts → Validates manual user forms and finalizes spatial checks to publish
-│       │   └── verify/route.ts → Stores uploaded ownership titles (C of O, Deeds of Assignment)
-│       ├── video/              
-│       │   ├── upload/route.ts → Generates signed, authenticated direct-ingest targets for Mux
-│       │   └── webhook/route.ts→ Monitors real-time video transcoding and asset readiness states
-│       └── compliance/route.ts → Catches asynchronous KYC / KYB updates from SmileID endpoints
-├── core/                       
-│   ├── search-engine.ts        → PostGIS-backed combined attribute and geographical filtering compiler
-│   ├── spatial-validator.ts    → Validates hardware capture coordinates against geocoded input points
-│   ├── video-processor.ts      → Verifies unique file hashes and runs duration enforcement algorithms
-│   ├── ledger-manager.ts       → Controls cross-border automated split payouts and escrow locking
-│   └── types.ts                → Strict framework-independent contract definitions
-├── actions/                    
-│   ├── drafts.ts               → Server action processing intermediate field persistence mutations
-│   ├── profile.ts              → Saves role configurations, lifestyle data, and verification values
-│   └── bookings.ts             → Manages reservation lock-ins and processes on-site QR checking validations
-├── store/                      
-│   ├── useSearchStore.ts       → Zustand global store managing advanced filter values and map canvas boundaries
-│   └── useWizardStore.ts       → Zustand local state engine synchronizing user inputs through shadcn forms
-├── components/                 
-│   ├── ui/                     → shadcn/ui components (Dialog, Select, Input, Slider, Button, Dropdown)
-│   ├── layout/                 
-│   │   ├── Navbar.tsx          → Adaptive navigation header syncing context to active user type
-│   │   └── Footer.tsx          
-│   ├── search/                 
-│   │   ├── ParametricFilters.tsx→ Advanced filter side-bar handling specific structural asset filters
-│   │   └── MapCanvas.tsx       → Vector map layer visualizing coordinate outputs from PostGIS queries
-│   ├── listings/               
-│   │   ├── MobileRecorder.tsx  → HTML5 MediaRecorder interface mapping live hardware geolocation
-│   │   ├── ParametricInputs.tsx→ Input selection controls for numeric counts (beds, baths, kitchens)
-│   │   ├── DocumentDropzone.tsx→ Secure file drop interface processing C of O and Deed PDF arrays
-│   │   └── VerificationBadge.tsx→ Visual representation displaying listing security and backing states
-│   └── checkout/               
-│       ├── PaystackWidget.tsx  → Inline local currency transaction collection component
-│       └── StripeButton.tsx    → Outbound cross-border settlement gateway trigger
-├── lib/                        
-│   ├── supabase-client.ts      → Browser-side serverless database connection instance
-│   ├── supabase-server.ts      → Server-side database wrapper with automated cookie preservation hooks
-│   ├── posthog-client.ts       → Frontend operational interaction telemetry interface
-│   └── utils.ts                → Custom layout utility scripts (e.g., shadcn/ui cn class mergers)
-└── types/                      
-    └── index.ts                → Standard unified types shared directly with the future Expo target app
-    
-
-# Detailed Data Flows & Cross-Device Synchronization1. 
-## Mobile Geolocation Capture & Draft Isolation Flow
-
-Agent opens Rentral on Mobile at Property site → Clicks "Record Walkthrough"
-                                        ↓
-  Browser requests active hardware geolocation coordinates via navigator.geolocation API
-                                        ↓
-     Web interface requests direct-upload tokens from app/api/video/upload
-                                        ↓
-Agent streams video via camera bucket → Bytes write straight to Mux secure servers
-                                        ↓
-     POST request targets app/api/listings/drafts sending captured Lat/Lng metrics
-                                        ↓
-                     System evaluates spatial index map:
-  → IF coordinates sit outside an existing draft circle (radius > 50m): Create a NEW unique Draft ID
-  → IF coordinates sit within an existing draft circle (radius ≤ 50m): Link to that Draft Group,
-    differentiating the item via an exact creation timestamp payload
-
-# 2. Desktop Continuation & Parametric Data Entry Flow
-
-Agent logs into Desktop interface → Navigates to "My Drafts Tray"
-                                        ↓
-  Zustand store pulls outstanding draft data grouped by location strings and timestamp logs
-                                        ↓
-Agent selects target draft → Video preview loads via Mux alongside input screens
-                                        ↓
-Agent interacts with shadcn/ui selection widgets to specify numeric asset parameters
-  (Clicks [Bedrooms] → Inputs '3' | Clicks [Bathrooms] → Inputs '2' | Selects State → 'Lagos')
-                                        ↓
-Agent uploads property titles (C of O / Deed of Assignment) into DocumentDropzone
-                                        ↓
-Agent enters textual street address and clicks "Publish Listing" → Dispatches payload
-
-# 3. Automated Spatial Validation Check Sequence
-
-            Final Listing Payload arrives at app/api/listings/create
-                                        ↓
-System pushes textual Address + State fields to internal Geocoding service to resolve coordinates
-                                        ↓
-   App executes core/spatial-validator.ts against the chosen listing record
-                                        ↓
-  PostGIS calculates exact distance between resolved text coordinates and the immutable
-  hardware latitude/longitude points stamped on the media file by the phone camera
-                                        ↓
-                 Validation threshold test evaluation:
-  → IF distance calculated is less than or equal to 100 meters: Status updates to 'pending_document_review'
-  → IF distance calculated is greater than 100 meters: Request dropped, transaction blocked, log to PostHog
-
-# Supabase Database Schema
+app/: Contains Next.js App Router definitions, server-side data fetching for initial loads, and secure API endpoints. No heavy client-side state manipulation here.
+
+components/: Pure UI layer. Subscribes to Zustand stores and TanStack Query. Contains no direct database connection logic; uses Server Actions or API routes for mutations.
+
+lib/: SDK initializers, shared utilities, and third-party wrappers (OPay, Clerk, Gemini, PostHog).
+
+store/: Global client state (Zustand). Manages non-persisted transactional flows like the multi-step listing wizard before database submission.
+
+supabase/functions/: Deno-based edge compute. Owns time-delayed operations (24-hour holding lock expiration, multi-year lease expiration CRON jobs) and secure backend-to-backend API calls (OPay split settlement) outside the Next.js runtime.
+
+## Data Flow Workflows
+
+1. Hardware-Locked Listing Creation & Modification
+
+Creation: User activates VideoCaptureCanvas natively requesting navigator.geolocation. User completes 120s walkthrough, inputs metadata, and pays ₦1,000 listing fee via OPay. Server validates payment, checks ST_Distance geocoder sanity, and activates listing.
+
+Modification (Edit Mode): Listers can edit dynamic variables (rent amount, agent fees, structural descriptions, and tenant preferences) via app/listing/edit/[id]. Architectural Constraint: The core hardware_coordinates and video_raw.mp4 cannot be edited. If the physical asset changes or is misrepresented, the user must create a brand-new listing, preventing bait-and-switch spatial fraud.
+
+2. Multi-Year Lease Settlement & GPS Handshake
+
+Inspection: Seeker books inspection (₦3,000 escrow), meets Lister on-site, and scans OTP. PostGIS ST_DWithin verifies 20m radius. If True, inspection fee drops to Lister.
+
+Multi-Year Upfront Payment: When moving to full settlement, the Seeker uses the MultiYearConfigurator. Even if the base listing is 1 year, the Seeker can input a custom duration (e.g., 5 years). The system multiplies the total, generating an OPay Virtual Account for the bulk sum.
+
+Handshake & Execution: Upon final key handover (OTP scan), funds are disbursed. The database logs the transaction with lease_duration_years = 5, and calculates the exact lease_expiration_date.
+
+3. Continuous Lease Renewal Trust Routing (Year 2+)
+
+Dynamic Pulse: A backend CRON job (trigger-lease-renewals) evaluates the lease_expiration_date. Exactly 1 month before expiration (whether it's Year 1, Year 3, or Year 5), it sends a renewal pulse.
+
+Hash Cross-Check: Tenant inputs their Open Banking Hash and selects who they paid (Original Agent vs. Landlord).
+
+Validation: Next.js requests hash validation from OPay/Paystack API. If it matches the Landlord's account_number, the listing updates to directly_managed.
+
+Continuous Loop: The Tenant's reputation_score increments, and the lease_expiration_date is pushed forward by the newly paid duration, keeping the data alive infinitely until move-out.
+
+4. Lease Termination & Inventory Unfreezing
+
+When a tenant vacates a property at any point, the listing must re-enter the active marketplace.
+
+The Landlord or Tenant uploads a formal Move-Out Document (e.g., Mutual Vacation Deed or exit clearance).
+
+The file is sent to api/verify/lease-termination where Google Gemini 1.5 Pro performs a multi-modal analysis to verify signatures, context, and lack of digital alteration.
+
+Upon Gemini approval, the database state of the listing instantly switches from rented to active, unfreezing the asset and pushing it back into the discovery feed.
+
+5. Telemetry & B2B Analytics Pipeline (PostHog)
+
+Ingestion: PostHog tracks high-intent interactions asynchronously. Events captured include listing_hardware_locked, spatial_handshake_success, checkout_abandoned, and multi_year_lease_locked.
+
+Privacy: Personally Identifiable Information (PII) is stripped. Coordinates are abstracted to neighborhood grids (e.g., "Yaba Zone B") before ingestion.
+
+Monetization (Rentral Insights): This continuous stream of factual market behavior feeds the B2B portal, allowing developers to query exact price elasticity, average multi-year cash commitments, and specific typology demand heatmaps.
+
+## Database Schema (PostGIS & PostgreSQL)
+
 ## profiles
 
-Column,Type,Notes
-id,uuid,PRIMARY KEY. References Clerk authentication user record.
-email,text,Unique contact address.
-user_role,varchar(30),"Constraints: regular_user, landlord, agent, organization."
-verification_tier,varchar(20),"Security status: unverified, individual_kyc, corporate_kyb."
-squat_preferences,jsonb,"Stores lifestyle alignment rules (budgets, habits, location arrays)."
-compliance_payload,jsonb,Encrypted container for verified individual NIN/BVN and corporate CAC data.
-created_at,timestamptz,Immutable registration creation timestamp marker.
+id (text, PK): References Clerk userId.
+username (text, unique): Public-facing handle.
+full_name (text): Legal name from KYC.
+kyc_status (enum): 'unverified', 'pending', 'verified', 'flagged'.
+id_type / id_number (text): NIN, BVN, Passport references.
+is_admin (boolean): System override capability (default: false).
+bank_code / account_number (text): Destination for programmatic payouts.
+reputation_score (numeric 3,2): 0.00 to 5.00 trust index.
+is_business_verified (boolean): Tied to CAC document validation.
 
-# listings
+## listings
 
-Column,Type,Notes
-id,uuid,PRIMARY KEY. Shared interface asset token identifier.
-provider_id,uuid,Foreign Key referencing property manager in profiles. Protected via RLS.
-asset_type,varchar(20),"High-level index splitter: real_estate, car, yacht."
-intent_type,varchar(20),"Search category switch: rent, buy, squat."
-status,varchar(30),"State machine: draft, pending_document_review, live, flagged, archived."
-title,text,Descriptive search header text.
-description,text,Main marketing copy block.
-state_province,varchar(50),"State key used for fast regional parametric lookups (e.g., 'Lagos')."
-address_text,text,Manual text description input indicating property location.
-text_geo_location,"geography(Point, 4326)",PostGIS point mapped from manual textual geocoding translation.
-hardware_capture_location,"geography(Point, 4326)",Immutable PostGIS coordinates stamped by mobile phone GPS during camera recording.
-bedrooms_count,integer,Highly indexed parametric column for advanced query filtering.
-bathrooms_count,integer,Highly indexed parametric column for advanced query filtering.
-kitchens_count,integer,Standard parametric attribute column tracking asset facilities.
-custom_specifications,jsonb,"Schemaless attribute matrix tracking special sub-assets (e.g., car mileage)."
-price_per_period,numeric,Operational financial charge value tracking base cost.
-verification_status,varchar(30),"Title safety verification state: unverified, pending_review, verified, rejected."
-document_payload,jsonb,Array containing secure Supabase storage URLs pointing to C of O or Title Deeds.
-is_sponsored,boolean,Triggers priority promotion inside user discovery search result arrays.
-created_at,timestamptz,Initial mobile draft generation creation date.
-updated_at,timestamptz,Last change validation timestamp log.
+id (uuid, PK): Primary record ID.
+lister_id (text, FK): References profiles.id.
+category (enum): 'house', 'car', 'boat'.
+text_address (text): Human-readable location.
+hardware_coordinates (geography(Point, 4326)): Raw device GPS captured during recording.
+address_coordinates (geography(Point, 4326)): Geocoded text mapping.
+physically_verified (boolean): True if PostGIS distance math passes.
+admin_bypass_verification (boolean): Developer sandbox flag.
+base_rent_amount (numeric): Cost per fundamental unit (year/day).
+total_package_price (numeric): Comprehensive checkout sum for 1 unit.
+asset_metadata (jsonb): Flexible payload (bedrooms, engine_type, vessel_capacity, management_type).
+listing_status (enum): 'pending_payment', 'active', 'on_hold', 'rented'.
+lease_expiration_date (timestamptz): Dynamically calculated end date for current occupancy.
 
-# Zustand Store Architectures
-## 1. Market Advanced Filter State Engine 
+## transactions
 
-```TypeScript
-// store/useSearchStore.ts
-import { create } from "zustand";
+id (uuid, PK): Internal ledger ID.
+listing_id (uuid, FK): References listings.id.
+seeker_id (text, FK): References profiles.id.
+amount (numeric): Total value processed.
+payment_processor_fee (numeric): Gateway cut stripped before settlement.
+type (enum): 'listing_fee', 'inspection_fee', 'holding_deposit', 'total_package'.
+status (enum): 'pending', 'successful', 'refunded', 'payout_settled'.
+lease_duration_years (integer): Custom duration defined at checkout (e.g., 1, 3, 5).
+escrow_otp_hash (text): Encrypted physical handshake token.
+payment_gateway_ref (text, unique): OPay/Paystack reference ID.
 
-interface SearchFilters {
-  assetType: 'real_estate' | 'car' | 'yacht';
-  intentType: 'rent' | 'buy' | 'squat';
-  stateProvince: string | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  priceRange: [number, number];
-  mapBounds: number[][] | null;
-}
+## Storage Architecture
 
-interface SearchActions {
-  setIntent: (intent: 'rent' | 'buy' | 'squat') => void;
-  setParametricFilter: (key: 'bedrooms' | 'bathrooms', value: number | null) => void;
-  updateFilters: (filters: Partial<SearchFilters>) => void;
-  resetFilters: () => void;
-}
+- Bucket: listings-media
+Path: listings/{listing_id}/video_raw.mp4
+Purpose: Temporary staging buffer before Mux transcode streaming.
 
-export const useSearchStore = create<SearchFilters & SearchActions>((set) => ({
-  assetType: 'real_estate',
-  intentType: 'rent',
-  stateProvince: null,
-  bedrooms: null,
-  bathrooms: null,
-  priceRange: [0, 100000000],
-  mapBounds: null,
+- Bucket: compliance-docs
+Path: compliance/{user_id}/{doc_type}_{timestamp}.pdf
+Purpose: Secure holding for CAC docs, Deeds of Assignment, and vehicle logbooks.
+Access: RLS restricted to the uploader and service_role (for Gemini API extraction).
 
-  setIntent: (intentType) => set({ intentType }),
-  setParametricFilter: (key, value) => set({ [key]: value }),
-  updateFilters: (filters) => set((state) => ({ ...state, ...filters })),
-  resetFilters: () => set({ assetType: 'real_estate', intentType: 'rent', stateProvince: null, bedrooms: null, bathrooms: null, priceRange: [0, 100000000], mapBounds: null })
-}));
+- Bucket: termination-docs
+Path: terminations/{listing_id}/{timestamp}.pdf
+Purpose: Holds Mutual Vacation Deeds used to officially unfreeze a property.
 
-#  2. Multi-Device Step Listing Wizard StoreTypeScript
-# // store/useWizardStore.ts
+## Authentication & Verification Architecture
 
+- Primary Auth: Clerk Next.js Middleware. Handles Google, Apple, and Email OTP authentication natively at the edge.
 
- import { create } from "zustand";
+- Session Injection: Clerk middleware injects custom claims into the JWT, syncing the user's userId with the Supabase profiles.id.
 
-interface WizardDraftState {
-  draftId: string | null;
-  hardwareLat: number | null;
-  hardwareLng: number | null;
-  muxPlaybackId: string | null;
-  // Parametric form properties fields
-  stateProvince: string;
-  addressText: string;
-  bedrooms: number;
-  bathrooms: number;
-  kitchens: number;
-  uploadedDocPaths: string[];
-}
+- Identity Resolution (Smile ID): Upon onboarding, biometric and NIN/BVN inputs are fired to Smile ID APIs. Smile ID processes the government registry check and fires a secure webhook back to Rentral's backend, flipping the kyc_status from pending to verified and unlocking listing creation capabilities.
 
-interface WizardActions {
-  initializeMobileDraft: (id: string, lat: number, lng: number, videoToken: string) => void;
-  setParametricData: (fields: Partial<Omit<WizardDraftState, 'initializeMobileDraft'>>) => void;
-  clearWizard: () => void;
-}
+## Technical Patterns
 
-export const useWizardStore = create<WizardDraftState & WizardActions>((set) => ({
-  draftId: null,
-  hardwareLat: null,
-  hardwareLng: null,
-  muxPlaybackId: null,
-  stateProvince: "",
-  addressText: "",
-  bedrooms: 0,
-  bathrooms: 0,
-  kitchens: 0,
-  uploadedDocPaths: [],
+1. Spatial Proximity Validation Pattern (PostGIS)
+Rentral relies on database-level mathematics, not client-side JavaScript, to confirm physical presence.
 
-  initializeMobileDraft: (id, lat, lng, videoToken) => set({
-    draftId: id,
-    hardwareLat: lat,
-    hardwareLng: lng,
-    muxPlaybackId: videoToken
-  }),
-  setParametricData: (fields) => set((state) => ({ ...state, ...fields })),
-  clearWizard: () => set({ draftId: null, hardwareLat: null, hardwareLng: null, muxPlaybackId: null, stateProvince: "", addressText: "", bedrooms: 0, bathrooms: 0, kitchens: 0, uploadedDocPaths: [] })
-}));
+The raw GPS coordinates from navigator.geolocation are stored as SRID 4326 geographic points.
 
+Handshake verification executes ST_DWithin:
+ST_DWithin(seeker_coordinates, target_hardware_coordinates, 20)
 
-# Technical ImplementationsPostGIS Multi-Intent Parametric Filtering Query CompilerTypeScript
-# // core/search-engine.ts
+This ensures the seeker is strictly within 20 meters of the asset's verified origin before unlocking the escrow vault.
 
-import { createServerInstance } from "@/lib/supabase-server";
+2. Dynamic Multi-Year Lease Lifecycles & Move-Outs
 
-interface AdvancedSearchCriteria {
-  assetType: 'real_estate' | 'car' | 'yacht';
-  intentType: 'rent' | 'buy' | 'squat';
-  stateProvince?: string;
-  bedrooms?: number;
-  bathrooms?: number;
-  minPrice?: number;
-  maxPrice?: number;
-}
+The architecture completely detaches the physical asset from rigid timeframes, enabling flexible realities of the African market.
 
-export async function executeParametricSearch(criteria: AdvancedSearchCriteria) {
-  const supabase = await createServerInstance();
+A Tenant can override the default 1-year contract and pay for 5 years upfront.
 
-  // Primary structural selection query optimization
-  let query = supabase
-    .from('listings')
-    .select(`
-      id, 
-      title, 
-      price_per_period, 
-      intent_type, 
-      state_province, 
-      bedrooms_count, 
-      bathrooms_count, 
-      verification_status,
-      document_payload
-    `)
-    .eq('asset_type', criteria.assetType)
-    .eq('intent_type', criteria.intentType)
-    .eq('status', 'live'); // Only expose verified, operational published listings
+The backend parses lease_duration_years and dynamically writes a future lease_expiration_date into the listings table.
 
-  // Chain highly indexed column filters if passed by search store
-  if (criteria.stateProvince) {
-    query = query.eq('state_province', criteria.stateProvince);
-  }
-  if (criteria.bedrooms !== undefined && criteria.bedrooms !== null) {
-    query = query.eq('bedrooms_count', criteria.bedrooms);
-  }
-  if (criteria.bathrooms !== undefined && criteria.bathrooms !== null) {
-    query = query.eq('bathrooms_count', criteria.bathrooms);
-  }
-  if (criteria.minPrice) {
-    query = query.gte('price_per_period', criteria.minPrice);
-  }
-  if (criteria.maxPrice) {
-    query = query.lte('price_per_period', criteria.maxPrice);
-  }
+The continuous renewal CRON job ignores the standard 12-month loop, waiting silently until Month 59 to trigger the Year 6 renewal pulse.
 
-  const { data, error } = await query.order('is_sponsored', { ascending: false });
-  
-  if (error) {
-    throw new Error(`Advanced query execution failed: ${error.message}`);
-  }
+Should the tenant leave prematurely, the Gemini-audited move-out document breaks the loop and immediately unfreezes the inventory.
 
-  return data;
-}
+3. Zero-Friction Settlement Pattern (OPay/Paystack)
 
+Asset owners are insulated from platform complexity.
 
-# Hardware Video vs Geocoded Input Validation CheckTypeScript
-# // core/spatial-validator.ts
+Inbound: When a user initiates a booking, Rentral generates a Dynamic Virtual Account mapped to Rentral's Corporate Ledger. The user transfers funds via their local banking app.
 
-import { createServerInstance } from "@/lib/supabase-server";
+Outbound: Upon physical handshake success or Holding Lock default, the backend immediately executes the Payout API (/api/v1/international/transfer).
 
-interface SpatialValidationInput {
-  listingId: string;
-  resolvedLat: number; // Extracted via address field geocoding parsing translation
-  resolvedLng: number;
-}
+Result: Rentral automatically subtracts its 30% cut, and the net payout lands in the Landlord's standard commercial bank account (GTBank, Zenith, etc.) instantly via NIP (Nigeria Inter-Bank Settlement System).
 
-export async function verifyListingSpatialIntegrity({ listingId, resolvedLat, resolvedLng }: SpatialValidationInput): Promise<boolean> {
-  const supabase = await createServerInstance();
+4. Server vs. Browser Client Architecture
 
-  // Call PostgreSQL RPC function to calculate physical distance using PostGIS geography models
-  const { data: spatialMatch, error } = await supabase.rpc('verify_hardware_to_address_proximity', {
-    target_listing_id: listingId,
-    input_lat: resolvedLat,
-    input_lng: resolvedLng,
-    allowed_variance_meters: 100 // System strict threshold boundary rule
-  });
+Strict separation of Supabase instances to prevent security leaks:
 
-  if (error) {
-    throw new Error(`Spatial verification failure: ${error.message}`);
-  }
+Browser Client (@supabase/ssr createBrowserClient): Used in React components strictly for fetching public feed data or listening to real-time WebSocket chat channels.
 
-  return !!spatialMatch;
-}
+Server Client (@supabase/ssr createServerClient): Utilized exclusively in Next.js Server Actions and API Webhooks. Configured with the SUPABASE_SERVICE_ROLE_KEY to bypass RLS when executing automated escrow payouts, recording holding lock splits, updating KYC trust scores, or unfreezing assets.
 
-SQL
--- Associated Database RPC function created inside Supabase instance engine
+## Architectural Invariants (Strict Rules)
 
-CREATE OR REPLACE FUNCTION verify_hardware_to_address_proximity(
-  target_listing_id UUID,
-  input_lat NUMERIC,
-  input_lng NUMERIC,
-  allowed_variance_meters INT
-) RETURNS BOOLEAN AS $$
-DECLARE
-  hardware_geo GEOGRAPHY;
-  input_geo GEOGRAPHY;
-  calculated_distance_meters FLOAT;
-BEGIN
-  -- Grab immutable hardware coordinate stamped during raw mobile video capture
-  SELECT hardware_capture_location INTO hardware_geo
-  FROM listings
-  WHERE id = target_listing_id;
+No Unverified Inventory: The application MUST reject any listing creation attempt that does not contain raw HTML5 geolocation coordinates fetched simultaneously with the WebRTC video stream.
 
-  IF hardware_geo IS NULL THEN
-    RETURN FALSE;
-  END IF;
+Immutability of Spatial State: While users can edit listing pricing and descriptions, the hardware_coordinates and original video artifact MUST NEVER be editable. Physical changes demand a new, verified listing.
 
-  -- Build geography instance point wrapper from geocoded address numeric params
-  input_geo := ST_SetSRID(ST_MakePoint(input_lng, input_lat), 4326)::geography;
+No Direct P2P Escrow Transfers: Funds MUST ALWAYS route through the Rentral Corporate Master Ledger first. Peer-to-peer direct transfers circumvent the platform fee architecture and nullify the transaction trust trace.
 
-  -- Calculate exact distance expression metric using native PostGIS mechanics
-  calculated_distance_meters := ST_Distance(hardware_geo, input_geo);
+UI Boundary Strictness: Next.js API routes (app/api/) MUST NOT contain React UI logic. React components (components/) MUST NOT contain direct database execution logic. All mutations MUST pass through defined Server Actions.
 
-  -- Return validation assertion comparison response flag
-  RETURN calculated_distance_meters <= allowed_variance_meters;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
+AI Auditing Mandate: The Gemini document audit pipeline (for Titles and Move-Out Deeds) MUST always return a structured JSON object. It must gracefully fail to a "Manual Review Required" state if the AI cannot determine authenticity—never default to "Approved."
 
-# Invariants
-# Rules the Rentral system architecture and automated processes must never break:
+Admin Sandboxing: Development bypass variables (admin_bypass_verification, is_admin_override) MUST be guarded by the profiles.is_admin = true check at the database level to prevent production manipulation.
 
-Isolated View Architecture: Components must remain view-only. No UI layout files are allowed to build or execute database update expressions or process payment actions.
-Biometric Security Gates: Providers cannot toggle listings to a live state if their compliance level (verification_tier) reads as unverified. Individual verification requires an automated SmileID biometric confirmation match.
-Geospatial Variance Boundaries: Real estate, vehicle, and marine listings will be blocked from live presentation across directories if the geographical variance check between the recorded coordinates and address text exceeds 100 meters.
-Unique File Integrity Constraints: Every media payload processed by background ingestion tasks must compute an exact cryptographic hash. Duplicate uploads of existing recordings are rejected immediately.
-Strict Legal Verification: Any asset explicitly flagged under the buy or rent transaction category parameters must upload valid proof of registry files (C of O, verified titles) before being approved into public directories.
-State Partitioning Boundaries: Do not use Zustand to write or cache data metrics that require database persistent lifecycle synchronization. Use Zustand exclusively to orchestrate local interaction structures and step values.
-Zero Metadata Exposure: PostHog telemetry hooks must filter or drop private client parameters (e.g., identity cards, BVN keys, billing tokens) before compiling telemetry summaries.
-Immutable Context Boundaries: All active database adjustments tracking internal listings or reservation profiles must include explicit tenant or host conditions matched against verified identity profiles.
-Dynamic Video Cut-Off: Upload pipelines must discard media uploads whose playtime values exceed 120 seconds.
+Absolute Privacy: Raw hardware_coordinates MUST NEVER be exposed via public APIs. The frontend only receives the distance_meters offset and an obfuscated text_address until the inspection escrow is secured.
