@@ -188,7 +188,7 @@ is_business_verified (boolean): Tied to CAC document validation.
 id (uuid, PK): Primary record ID.
 lister_id (text, FK): References profiles.id.
 category (enum): 'house', 'car', 'boat'.
-text_address (text): Human-readable location.
+text_address (text): Human-readable location.console.log();
 hardware_coordinates (geography(Point, 4326)): Raw device GPS captured during recording.
 address_coordinates (geography(Point, 4326)): Geocoded text mapping.
 physically_verified (boolean): True if PostGIS distance math passes.

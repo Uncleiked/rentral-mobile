@@ -19,7 +19,7 @@ Read in this exact order before any implementation:
 7. context/library-docs.md
 8. context/build-plan.md
 9. context/progress-tracker.md
-
+ 
 ## Rules That Never Change
 
 - Never use hardcoded hex values or raw Tailwind color classes
