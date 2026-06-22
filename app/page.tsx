@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import clsx from "clsx";
 
@@ -47,7 +48,11 @@ const trustSteps = [
   "Title deeds, CAC certificates, and vehicle documents are audited by Gemini AI for digital forgery before high-value listings go live.",
 ];
 
-const navLinks = [
+const navLinks: Array<{
+  label: string
+  href: string
+  hasDropdown?: boolean
+}> = [
   { label: "Home", href: "/" },
   { label: "About", href: "#about" },
   { label: "Projects", href: "#theproject" },
@@ -86,16 +91,18 @@ export default function Home() {
         {/* ── NAVBAR ── */}
         <nav className={clsx('relative', 'z-20', 'flex', 'items-center', 'justify-between', 'gap-4')}>
           {/* Logo — always visible */}
-          <a href="/" className={clsx('flex', 'items-center', 'gap-2')} aria-label="Rentral home">
-            <img
+          <Link href="/" className={clsx('flex', 'items-center', 'gap-2')} aria-label="Rentral home">
+            <Image
               src="/Rentral.svg"
               alt="Rentral Logo"
+              width={32}
+              height={32}
               className={clsx('h-8', 'w-8', 'object-contain', 'brightness-0', 'invert')}
             />
             <span className={clsx('text-base', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-text-primary')}>
               Rentral
             </span>
-          </a>
+          </Link>
 
           {/* Desktop pill nav */}
           <div className={clsx('hidden', 'lg:flex', 'items-center', 'gap-1', 'rounded-full', 'border', 'border-glass-border-medium', 'bg-glass-dark', 'p-1.5', 'text-[11px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-text-secondary', 'backdrop-blur-lg')}>
@@ -592,9 +599,11 @@ export default function Home() {
         <div className={clsx('mx-auto', 'max-w-7xl', 'flex', 'flex-col', 'items-center', 'text-center')}>
           {/* Logo */}
           <div className={clsx('flex', 'items-center', 'gap-2', 'mb-6')}>
-            <img
+            <Image
               src="/Rentral.svg"
               alt="Rentral Logo"
+              width={32}
+              height={32}
               className={clsx('h-8', 'w-8', 'object-contain', 'brightness-0', 'invert')}
             />
             <span className={clsx('text-base', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-text-primary')}>
@@ -635,12 +644,21 @@ export default function Home() {
           <div className={clsx('flex', 'flex-wrap', 'items-center', 'justify-center', 'gap-x-2', 'gap-y-2')}>
             {footerLinks.map((link, i) => (
               <div key={link} className={clsx('flex', 'items-center')}>
-                <a
-                  href={link === "Home" ? "/" : `#${link.toLowerCase()}`}
-                  className={clsx('glass-link', 'px-5', 'py-2', 'text-xs', 'font-bold', 'uppercase', 'tracking-widest', 'text-text-secondary', 'transition-all', 'hover:text-text-primary')}
-                >
-                  {link}
-                </a>
+                {link === "Home" ? (
+                  <Link
+                    href="/"
+                    className={clsx('glass-link', 'px-5', 'py-2', 'text-xs', 'font-bold', 'uppercase', 'tracking-widest', 'text-text-secondary', 'transition-all', 'hover:text-text-primary')}
+                  >
+                    {link}
+                  </Link>
+                ) : (
+                  <a
+                    href={`#${link.toLowerCase()}`}
+                    className={clsx('glass-link', 'px-5', 'py-2', 'text-xs', 'font-bold', 'uppercase', 'tracking-widest', 'text-text-secondary', 'transition-all', 'hover:text-text-primary')}
+                  >
+                    {link}
+                  </a>
+                )}
                 {i < footerLinks.length - 1 && (
                   <span className={clsx('h-4', 'w-px', 'bg-glass-border-light', 'mx-2')} />
                 )}
@@ -659,10 +677,16 @@ export default function Home() {
       />
       <div className={`mobile-nav-drawer ${mobileMenuOpen ? "open" : ""}`}>
         <div className={clsx('flex', 'items-center', 'justify-between', 'p-6', 'border-b', 'border-border-subtle')}>
-          <a href="/" className={clsx('flex', 'items-center', 'gap-2')}>
-            <img src="/Rentral.svg" alt="" className={clsx('h-7', 'w-7', 'object-contain', 'brightness-0', 'invert')} />
+          <Link href="/" className={clsx('flex', 'items-center', 'gap-2')}>
+            <Image
+              src="/Rentral.svg"
+              alt=""
+              width={28}
+              height={28}
+              className={clsx('h-7', 'w-7', 'object-contain', 'brightness-0', 'invert')}
+            />
             <span className={clsx('text-sm', 'font-bold', 'uppercase', 'tracking-[0.2em]')}>Rentral</span>
-          </a>
+          </Link>
           <button
             type="button"
             className={clsx('flex', 'h-9', 'w-9', 'items-center', 'justify-center', 'rounded-full', 'border', 'border-glass-border-medium', 'bg-glass-light', 'cursor-pointer')}

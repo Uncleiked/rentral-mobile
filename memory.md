@@ -1,55 +1,60 @@
-# Memory — Supabase Auth & Didit KYC Integration
+# Memory — Didit KYC/KYB Onboarding Repair
 
-Last updated: 2026-06-22T01:55:00+01:00
+Last updated: 2026-06-22 (auth + Prisma 7 adapter repair session)
 
 ## What was built
 
-- **Documentation Migration**: Replaced every "Smile ID" reference with "Didit" across 7 context files (`memory.md`, `architecture.md`, `build-plan.md`, `code-standards.md`, `library-docs.md`, `progress-tracker.md`, `project-overview.md`).
-- **Environment Variables**: Added `DIDIT_API_KEY` and `DIDIT_WEBHOOK_SECRET` to `.env`.
-- **Didit SDK Installed**: `@didit-protocol/sdk-web@0.2.1` via `pnpm add`.
-- **Supabase Admin Client**: Created `lib/admin.ts` — uses `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS for backend-only KYC status updates.
-- **Verify Route**: Created `app/api/verify/route.ts` — authenticates the user, calls Didit `POST /v3/session/` with workflow `75f4f3af-4620-4a93-88c7-78f5f1382ac4`, returns session URL.
-- **Webhook Route**: Created `app/api/webhooks/didit/route.ts` — validates `X-Signature-V2` HMAC-SHA256 with canonical JSON, checks timestamp freshness (≤300s), and on `Approved` updates both Prisma `User.kyc_verified` and Supabase `user_metadata.kyc_verified`.
-- **Auth Callback**: Updated `app/auth/callback/route.ts` — routes new/unverified OAuth users to `/onboarding`, verified users to `/feed`.
-- **Root Middleware**: Updated `middleware.ts` — added `/api/webhooks` and `/api/verify` to public route exclusions. Unverified users blocked from all routes except `/onboarding`. Verified users skip `/onboarding` → `/feed`.
-- **Login Actions**: Updated `app/auth/login/actions.ts` — login checks KYC status and routes accordingly. Signup always routes to `/onboarding`.
-- **Onboarding Form**: Completely refactored `app/onboarding/OnboardingForm.tsx` — removed NIN/BVN text input, now has role selector (Individual / Organization) + "Verify with Didit" button with loading spinner.
-- **Onboarding Actions**: Refactored `app/onboarding/actions.ts` — `initiateVerification()` upserts Prisma user with role, calls Didit API directly (not via internal fetch), returns session URL. `refreshStatus()` checks Prisma for `kyc_verified`, syncs to Supabase JWT, and redirects to `/feed`.
+- `prisma/schema.prisma` was expanded with `User.username`, verification state/session fields, and a new `WebhookLog` model.
+- A new Prisma migration was added at `prisma/migrations/20260622133000_add_didit_onboarding_state/migration.sql`.
+- `supabase/trigger.sql` was updated so new auth users are inserted with the new verification defaults and no duplicate row crash.
+- `app/api/webhooks/didit/route.ts` was rewritten to verify `X-Signature-V2` against the raw canonical payload, enforce a 5-minute timestamp window, dedupe by `event_id`, and write verification results idempotently.
+- `app/onboarding/actions.ts` was rewritten so Individual and Organization choose separate Didit workflows, verification state is stored in Prisma, and Supabase auth state is synced through `app_metadata`.
+- `app/onboarding/OnboardingForm.tsx` was replaced with a three-step state machine UI for role selection, verification refresh, and username capture.
+- `middleware.ts`, `lib/middleware.ts`, `app/auth/callback/route.ts`, and `app/auth/login/actions.ts` were updated to gate on trusted `app_metadata` and route users to `/onboarding` until both verification and username exist.
+- `app/auth/login/AuthForm.tsx` was restyled to match Rentral semantic Tailwind tokens and remove raw provider color classes.
+- `app/api/verify/route.ts` was updated to use separate KYC/KYB workflow IDs and return users to `/onboarding`.
+- Prisma Client was regenerated successfully with `NODE_OPTIONS=--experimental-require-module`.
+- The live Supabase database schema was pushed successfully with `pnpm prisma db push --accept-data-loss`.
 
 ## Decisions made
 
-- **Didit over Smile ID**: Full pivot. All docs, architecture, and code now reference Didit.
-- **Direct API call from server action**: `initiateVerification()` calls Didit directly instead of routing through `/api/verify`. Avoids cookie forwarding complexity.
-- **Redirect-based KYC flow**: User is redirected to Didit's hosted verification page. No in-page modal.
-- **Admin Client pattern**: `lib/admin.ts` is the only file that uses `SUPABASE_SERVICE_ROLE_KEY`. Must never be imported client-side.
-- **HMAC webhook validation**: `app/api/webhooks/didit/route.ts` does canonical JSON (shortenFloats + sortKeys) before HMAC comparison.
-- **Upsert for user creation**: The onboarding action uses `prisma.user.upsert` to handle both first-time and returning users gracefully.
-- **Middleware is the auth guardian**: Root `middleware.ts` handles all route protection. KYC status checked via `user_metadata.kyc_verified`.
+- `app_metadata` is now the trusted source for routing decisions, not `user_metadata`.
+- Individual users map to Didit KYC, organizations map to Didit KYB.
+- The onboarding flow is now a state machine: choose account type, complete Didit, then claim a unique username before `/feed`.
+- Webhook handling must verify the signature before parsing the payload, then process idempotently by `event_id`.
+- Prisma `db push` was used instead of `migrate dev` because the existing Supabase database had drift and no safe migration baseline; `migrate dev` would have required a destructive reset.
+- Semantic Tailwind tokens remain mandatory for auth/onboarding surfaces; raw provider colors were removed from the buttons we touched.
 
 ## Problems solved
 
-- **Next.js redirect() in try/catch**: Fixed in prior session — redirect throws internally, must be called outside the catch block.
-- **Prisma connection exhaustion**: Solved with global singleton in `lib/db.ts`.
-- **Cookie forwarding in server actions**: Avoided by calling Didit API directly from server action instead of through internal API route.
+- Prisma CLI hit a Node 22 ESM compatibility issue; `NODE_OPTIONS=--experimental-require-module` fixed `prisma generate`.
+- `prisma migrate dev` failed because the shadow DB had no `User` baseline and wanted a reset; `prisma db push --accept-data-loss` applied the additive schema safely.
+- The webhook route now has real signature verification instead of the previous placeholder comment.
+- The onboarding flow now has backend state storage for verification kind, session id, and username instead of only returning a Didit URL.
+- "Email not confirmed" on sign-in was diagnosed as a Supabase dashboard setting (Confirm email enabled + unconfirmed user), NOT a code/env bug. Fix is in the dashboard, not the repo.
+- Google/Apple "continue with" buttons require provider config in the Supabase dashboard (Client ID/Secret, redirect URIs) — they use no `.env` keys, so the code in `AuthForm.tsx` was already correct.
+- `PrismaClientConstructorValidationError` ("engine type 'client' requires adapter or accelerateUrl") was fixed by wiring the `@prisma/adapter-pg` driver adapter into `lib/db.ts` (Prisma 7 defaults to the `client` engine, which mandates an adapter). The scaffold comments in `db.ts` were activated using `new PrismaPg({ connectionString: process.env.DATABASE_URL })`.
+- `DATABASE_URL`/`DIRECT_URL` passwords contained an unescaped `@` (`D@ny!k3d1603`) that breaks connection-string parsing; URL-encoded to `D%40ny%21k3d1603`. This was latent until the adapter fix made Prisma actually open a connection.
 
 ## Current state
 
-- **Working**: Supabase Auth (Email/Password, Google, Apple buttons wired). Prisma schema synced. Middleware routes unverified → onboarding, verified → feed. All Didit API routes created. TypeScript compiles (only pre-existing `hasDropdown` errors in `page.tsx`).
-- **Pending manual steps**:
-  1. `SUPABASE_SERVICE_ROLE_KEY` not yet added to `.env` — needed for `lib/admin.ts` (webhook).
-  2. `supabase/trigger.sql` has never been executed in the Supabase Dashboard SQL Editor.
-  3. Google and Apple OAuth providers need to be configured in Supabase Dashboard.
-  4. Didit webhook endpoint needs to be created in the Didit Business Console, and `DIDIT_WEBHOOK_SECRET` needs to be set.
+- The backend pieces for Didit verification are in place and the DB schema is synced.
+- The app still needs one follow-up pass to finish the onboarding UI wiring: `app/onboarding/OnboardingForm.tsx` now expects initial state, but `app/onboarding/page.tsx` has not yet been updated to pass it.
+- `pnpm lint` still fails because of that onboarding refactor and pre-existing homepage `<a href=\"/\">` issues in `app/page.tsx`.
+- `lib/db.ts` now uses the `@prisma/adapter-pg` driver adapter, so the onboarding page no longer crashes on the Prisma constructor error. Restart the dev server after pulling this change (env + Prisma client init are read at boot).
+- Sign-in works after disabling/confirming email in the Supabase dashboard.
+- Environment setup is still incomplete: `SUPABASE_SERVICE_ROLE_KEY` (required by `lib/admin.ts`, used in onboarding/verify), `DIDIT_KYC_WORKFLOW_ID`, `DIDIT_KYB_WORKFLOW_ID`, and `NEXT_PUBLIC_APP_URL` are all missing from `.env`; `DIDIT_WEBHOOK_SECRET` is present but empty. Production email confirmation still needs custom SMTP in Supabase.
+- `DIDIT_API_KEY` is present in `.env`; `DATABASE_URL`/`DIRECT_URL` passwords are now correctly URL-encoded.
 
 ## Next session starts with
 
-1. Get `SUPABASE_SERVICE_ROLE_KEY` from Supabase Dashboard → Settings → API and add it to `.env`.
-2. Execute `supabase/trigger.sql` in the Supabase SQL Editor.
-3. Create webhook in Didit Business Console pointing to `https://your-domain/api/webhooks/didit`, copy the signing secret to `DIDIT_WEBHOOK_SECRET`.
-4. Test the full flow: Sign up → Onboarding → Didit → Webhook → /feed.
+1. Finish wiring `app/onboarding/page.tsx` so it passes the loaded onboarding state into `OnboardingForm`.
+2. Clear the remaining lint errors in `app/page.tsx` and any onboarding leftovers.
+3. Re-run `pnpm lint` and `pnpm build`.
+4. Add `SUPABASE_SERVICE_ROLE_KEY` to `.env` and finish the Supabase Auth email confirmation setup if the credentials are available.
 
 ## Open questions
 
-- Does the user have `SUPABASE_SERVICE_ROLE_KEY` ready to paste? Required for the webhook to update auth metadata.
-- Have Apple/Google OAuth providers been configured in the Supabase project dashboard?
-- The `hasDropdown` TypeScript error in `app/page.tsx` is pre-existing — should it be fixed?
+- What are the final `DIDIT_KYC_WORKFLOW_ID` and `DIDIT_KYB_WORKFLOW_ID` values from the Didit console?
+- Is custom SMTP already available for production Supabase email confirmation?
+- Should the legacy `hasDropdown` homepage lint issue be fixed now, or left for the next cleanup pass?

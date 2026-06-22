@@ -4,13 +4,21 @@
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public."User" (id, email, kyc_verified, "updatedAt")
+  insert into public."User" (
+    id,
+    email,
+    kyc_verified,
+    verification_status,
+    "updatedAt"
+  )
   values (
     new.id, 
     new.email, 
     false, -- Everyone starts as unverified
+    'unverified',
     now()
-  );
+  )
+  on conflict (id) do nothing;
   return new;
 end;
 $$ language plpgsql security definer;

@@ -9,9 +9,26 @@ datasource db {
 model User {
   id               String   @id @default(uuid())
   email            String   @unique
+  username         String?  @unique
   kyc_verified     Boolean  @default(false)
   account_type     String? // 'individual' or 'organization'
+  verification_status String @default("unverified")
+  verification_kind   String? // 'kyc' or 'kyb'
+  didit_session_id    String?
+  didit_workflow_id   String?
+  didit_decision      Json?
   verifiedDocument String? // Stores NIN, BVN, or CAC
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model WebhookLog {
+  id           String   @id @default(uuid())
+  event_id     String   @unique
+  webhook_type String
+  status       String?
+  session_id   String?
+  raw_body     String
+  processed_at DateTime?
+  created_at   DateTime @default(now())
 }

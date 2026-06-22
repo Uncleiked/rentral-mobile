@@ -15,16 +15,17 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Check if user has completed KYC
       const { data: { user } } = await supabase.auth.getUser()
-      const kycVerified = user?.user_metadata?.kyc_verified === true
+      const onboardingComplete =
+        user?.app_metadata?.kyc_verified === true &&
+        typeof user.app_metadata?.username === 'string' &&
+        user.app_metadata.username.length > 0
 
-      if (kycVerified) {
+      if (onboardingComplete) {
         return NextResponse.redirect(`${origin}${next}`)
-      } else {
-        // New or unverified user — route to onboarding
-        return NextResponse.redirect(`${origin}/onboarding`)
       }
+
+      return NextResponse.redirect(`${origin}/onboarding`)
     }
   }
 

@@ -50,18 +50,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // User is authenticated — check KYC status
   const kycVerified = (claims as Record<string, unknown>)?.kyc_verified === true
+  const username = (claims as Record<string, unknown>)?.username
+  const hasUsername = typeof username === 'string' && username.length > 0
+  const isOnboarding = pathname.startsWith('/onboarding')
 
-  // If KYC is NOT verified and the user is trying to access anything besides /onboarding, block them
-  if (!kycVerified && !pathname.startsWith('/onboarding') && !pathname.startsWith('/api/verify')) {
+  if ((!kycVerified || !hasUsername) && !isOnboarding && !pathname.startsWith('/api/verify')) {
     const url = request.nextUrl.clone()
     url.pathname = '/onboarding'
     return NextResponse.redirect(url)
   }
 
-  // If KYC IS verified and the user is hitting /onboarding, skip them to /feed
-  if (kycVerified && pathname.startsWith('/onboarding')) {
+  if (kycVerified && hasUsername && isOnboarding) {
     const url = request.nextUrl.clone()
     url.pathname = '/feed'
     return NextResponse.redirect(url)

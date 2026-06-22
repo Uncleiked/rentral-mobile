@@ -1,16 +1,9 @@
 import { PrismaClient } from '@prisma/client'
-// 1. Uncomment these if you are using the Prisma Postgres Adapter
-// import { Pool } from 'pg'
-// import { PrismaPg } from '@prisma/adapter-pg'
-
-// 2. Uncomment these to initialize the pool
-// const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-// const adapter = new PrismaPg(pool)
+import { PrismaPg } from '@prisma/adapter-pg'
 
 const prismaClientSingleton = () => {
-  return new PrismaClient({
-    // adapter, // 3. Uncomment this if using the adapter
-  })
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+  return new PrismaClient({ adapter })
 }
 
 // Ensure the global instance is strongly typed

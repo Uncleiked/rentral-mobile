@@ -2,42 +2,57 @@
 
 import { createClient } from '@/lib/server'
 
-export async function login(formData: FormData) {
-  const supabase = await createClient()
-  
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
+type AuthResult =
+  | { success: true; redirectTo: string; message?: string }
+  | { success?: never; redirectTo?: never; message?: never; error: string }
 
-  const { error } = await supabase.auth.signInWithPassword(data)
+function onboardingComplete(user: { app_metadata?: Record<string, unknown> } | null): boolean {
+  return (
+    user?.app_metadata?.kyc_verified === true &&
+    typeof user.app_metadata.username === 'string' &&
+    user.app_metadata.username.length > 0
+  )
+}
+
+export async function login(formData: FormData): Promise<AuthResult> {
+  const supabase = await createClient()
+
+  const email = String(formData.get('email') ?? '')
+  const password = String(formData.get('password') ?? '')
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
     return { error: error.message }
   }
 
-  // Check if user has completed KYC
-  const { data: { user } } = await supabase.auth.getUser()
-  const kycVerified = user?.user_metadata?.kyc_verified === true
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  return { success: true, redirectTo: kycVerified ? '/feed' : '/onboarding' }
+  return { success: true, redirectTo: onboardingComplete(user) ? '/feed' : '/onboarding' }
 }
 
-export async function signup(formData: FormData) {
+export async function signup(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient()
-  
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
+
+  const email = String(formData.get('email') ?? '')
+  const password = String(formData.get('password') ?? '')
+
+  const { data, error } = await supabase.auth.signUp({ email, password })
+
+  if (error) {
+    console.error('[auth/login/actions] Supabase signup failed:', error.message)
+    return { error: 'Could not create user. Please try again.' }
   }
 
-const { error } = await supabase.auth.signUp(data)
+  if (!data.session) {
+    return {
+      success: true,
+      redirectTo: '/auth/login',
+      message: 'Check your email to confirm your account, then sign in.',
+    }
+  }
 
-if (error) {
-  console.log("SUPABASE SIGNUP ERROR:", error.message)
-  redirect('/auth/login?error=Could not create user')
-}
-
-  // New users always go to onboarding
   return { success: true, redirectTo: '/onboarding' }
 }
