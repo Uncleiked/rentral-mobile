@@ -1,6 +1,14 @@
 # Memory — Didit KYC/KYB Onboarding Repair
 
-Last updated: 2026-06-22 (auth + Prisma 7 adapter repair session)
+Last updated: 2026-06-22 (migration baseline + RLS hardening session)
+
+## Session 2026-06-22 — Migration errors fixed + RLS hardening
+
+- ROOT CAUSE of the "migration throwing errors": the schema was applied with `prisma db push`, which never creates the `_prisma_migrations` history table. So `prisma/migrations/20260622133000_add_didit_onboarding_state` was orphaned — present on disk but unrecorded — and `prisma migrate dev` wanted to RESET (data loss) to reconcile. The raw SQL is fine and idempotent (`IF NOT EXISTS`); running it only emits NOTICE "already exists, skipping", not errors.
+- FIX: baselined the existing DB with `prisma migrate resolve --applied 20260622133000_add_didit_onboarding_state` (records it as applied without re-running). `prisma migrate status` is now clean. The project is now on the migrations workflow, not `db push` — use `prisma migrate dev`/`deploy` going forward, NOT `db push`.
+- SECURITY FIX (Supabase skill checklist): `WebhookLog` had RLS OFF with full anon/authenticated grants (public Data API could read raw webhook bodies / forge dedup rows); `User` had RLS on but broad grants. Added migration `20260622140000_harden_rls_on_app_tables`: `ENABLE ROW LEVEL SECURITY` on both + `REVOKE ALL ... FROM anon, authenticated`. App unaffected — Prisma uses the `postgres` role (bypasses RLS) and the signup trigger is SECURITY DEFINER.
+- All prisma CLI commands still need `NODE_OPTIONS=--experimental-require-module` (Node 22 ESM issue).
+
 
 ## What was built
 
@@ -43,15 +51,17 @@ Last updated: 2026-06-22 (auth + Prisma 7 adapter repair session)
 - `pnpm lint` still fails because of that onboarding refactor and pre-existing homepage `<a href=\"/\">` issues in `app/page.tsx`.
 - `lib/db.ts` now uses the `@prisma/adapter-pg` driver adapter, so the onboarding page no longer crashes on the Prisma constructor error. Restart the dev server after pulling this change (env + Prisma client init are read at boot).
 - Sign-in works after disabling/confirming email in the Supabase dashboard.
-- Environment setup is still incomplete: `SUPABASE_SERVICE_ROLE_KEY` (required by `lib/admin.ts`, used in onboarding/verify), `DIDIT_KYC_WORKFLOW_ID`, `DIDIT_KYB_WORKFLOW_ID`, and `NEXT_PUBLIC_APP_URL` are all missing from `.env`; `DIDIT_WEBHOOK_SECRET` is present but empty. Production email confirmation still needs custom SMTP in Supabase.
+- `.env` now contains placeholder entries for all required vars: `SUPABASE_SERVICE_ROLE_KEY=` (empty), `DIDIT_KYC_WORKFLOW_ID=` (empty), `DIDIT_KYB_WORKFLOW_ID=` (empty), `DIDIT_WEBHOOK_SECRET=` (empty), and `NEXT_PUBLIC_APP_URL=http://localhost:3000` (set for local dev). The user still needs to paste real values for the four empty ones.
+- `.env` is confirmed gitignored, so secrets are safe to store there.
 - `DIDIT_API_KEY` is present in `.env`; `DATABASE_URL`/`DIRECT_URL` passwords are now correctly URL-encoded.
+- Where to get the missing values: `SUPABASE_SERVICE_ROLE_KEY` = Supabase dashboard → Project Settings → API Keys → service_role/secret key. `DIDIT_KYC_WORKFLOW_ID`/`DIDIT_KYB_WORKFLOW_ID` = Didit Business Console (business.didit.me) → Workflows → create one identity (KYC) + one business (KYB) workflow, copy each UUID. `DIDIT_WEBHOOK_SECRET` = Didit console → Webhooks → add endpoint `/api/webhooks/didit` (use ngrok tunnel for local), copy the signing secret.
 
 ## Next session starts with
 
 1. Finish wiring `app/onboarding/page.tsx` so it passes the loaded onboarding state into `OnboardingForm`.
 2. Clear the remaining lint errors in `app/page.tsx` and any onboarding leftovers.
 3. Re-run `pnpm lint` and `pnpm build`.
-4. Add `SUPABASE_SERVICE_ROLE_KEY` to `.env` and finish the Supabase Auth email confirmation setup if the credentials are available.
+4. Paste real values into the empty `.env` placeholders (`SUPABASE_SERVICE_ROLE_KEY`, `DIDIT_KYC_WORKFLOW_ID`, `DIDIT_KYB_WORKFLOW_ID`, `DIDIT_WEBHOOK_SECRET`) and restart the dev server. Then finish the Supabase Auth email confirmation setup if credentials are available.
 
 ## Open questions
 
