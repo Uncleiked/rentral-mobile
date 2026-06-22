@@ -22,9 +22,9 @@ Media Processing: Mux Video API & HTML5 MediaDevices - In-app capture of 120s wa
 
 ## Authentication & Verification
 
-Identity Provider: Clerk v5 - Web middleware integration, OAuth, and JWT session parsing.
+Identity Provider: Supabase Auth - Web middleware integration, OAuth, and JWT session parsing.
 
-Regulatory KYC: Smile ID - Webhook architecture for local registry matching (NIN, BVN, Passport, CAC).
+Regulatory KYC: Didit - Webhook architecture for local registry matching (NIN, BVN, Passport, CAC).
 
 AI Document Forgery Audit: Google Gemini 1.5 Pro - Multi-modal screening of Title Documents, Vacation Deeds, and CAC registrations for digital alteration.
 
@@ -38,12 +38,12 @@ Analytics & Telemetry: PostHog - Comprehensive event tracking, behavioral analyt
 
 /
 ├── app/
-│   ├── layout.tsx                              → Root layout, Providers (Clerk, QueryClient, PostHog)
+│   ├── layout.tsx                              → Root layout, Providers (Supabase Auth, QueryClient, PostHog)
 │   ├── page.tsx                                → Homepage (Value prop, category entry)
 │   ├── (auth)/
-│   │   ├── sign-in/                            → Clerk Auth flow
-│   │   ├── sign-up/                            → Clerk Auth flow
-│   │   └── onboarding/                         → Smile ID KYC, Username selection
+│   │   ├── sign-in/                            → Supabase Auth flow
+│   │   ├── sign-up/                            → Supabase Auth flow
+│   │   └── onboarding/                         → Didit KYC, Username selection
 │   ├── feed/
 │   │   └── page.tsx                            → Vertical-scrolling video discovery feed
 │   ├── listing/
@@ -62,7 +62,7 @@ Analytics & Telemetry: PostHog - Comprehensive event tracking, behavioral analyt
 │   └── api/
 │       ├── webhooks/
 │       │   ├── opay/route.ts                   → Inbound payment settlement listener
-│       │   └── smile-id/route.ts               → KYC async status updates
+│       │   └── didit/route.ts                  → KYC async status updates
 │       ├── verify/
 │       │   ├── document-upload/route.ts        → Gemini AI multi-modal forgery checks (Deeds, CAC)
 │       │   └── lease-termination/route.ts      → Vacancy verification to unfreeze listings
@@ -119,7 +119,7 @@ app/: Contains Next.js App Router definitions, server-side data fetching for ini
 
 components/: Pure UI layer. Subscribes to Zustand stores and TanStack Query. Contains no direct database connection logic; uses Server Actions or API routes for mutations.
 
-lib/: SDK initializers, shared utilities, and third-party wrappers (OPay, Clerk, Gemini, PostHog).
+lib/: SDK initializers, shared utilities, and third-party wrappers (OPay, Supabase Auth, Gemini, PostHog).
 
 store/: Global client state (Zustand). Manages non-persisted transactional flows like the multi-step listing wizard before database submission.
 
@@ -173,7 +173,7 @@ Monetization (Rentral Insights): This continuous stream of factual market behavi
 
 ## profiles
 
-id (text, PK): References Clerk userId.
+id (text, PK): References Supabase Auth userId.
 username (text, unique): Public-facing handle.
 full_name (text): Legal name from KYC.
 kyc_status (enum): 'unverified', 'pending', 'verified', 'flagged'.
@@ -229,11 +229,10 @@ Purpose: Holds Mutual Vacation Deeds used to officially unfreeze a property.
 
 ## Authentication & Verification Architecture
 
-- Primary Auth: Clerk Next.js Middleware. Handles Google, Apple, and Email OTP authentication natively at the edge.
+- Primary Auth: Supabase Auth Middleware. Handles Google, Apple, and Email OTP authentication natively at the edge.
+- Session Injection: Supabase Auth middleware verifies the session, syncing the user's userId with the Supabase profiles.id.
 
-- Session Injection: Clerk middleware injects custom claims into the JWT, syncing the user's userId with the Supabase profiles.id.
-
-- Identity Resolution (Smile ID): Upon onboarding, biometric and NIN/BVN inputs are fired to Smile ID APIs. Smile ID processes the government registry check and fires a secure webhook back to Rentral's backend, flipping the kyc_status from pending to verified and unlocking listing creation capabilities.
+- Identity Resolution (Didit): Upon onboarding, biometric and NIN/BVN inputs are fired to Didit APIs. Didit processes the government registry check and fires a secure webhook back to Rentral's backend, flipping the kyc_status from pending to verified and unlocking listing creation capabilities.
 
 ## Technical Patterns
 

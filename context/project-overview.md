@@ -4,7 +4,7 @@
 
 Rentral is a unified, multi-asset rental marketplace and spatial trust infrastructure designed specifically for the African digital economy, starting in Lagos, Nigeria. The platform connects asset seekers with verified houses/apartments, rental vehicles (SUVs, sedans), and marine vessels (boats, speedboats, yachts) under a single trusted identity and transactional framework.
 Rentral replaces passive classified directories with an active verification engine. By binding physical asset presence to native device hardware telemetry through advanced PostGIS spatial indexing, and automating payouts through split-escrow payment gateway APIs (OPay and Paystack), Rentral programmatically eliminates lease scams, ghost listings, and double-allocation fraud.
-Furthermore, Rentral captures the transactional footprint of informal payments, transforming peer-to-peer asset interactions into a proprietary Rentral Trust Score for consumer credit scoring. The aggregated, anonymized behavioral data from searches, filters, checkout dropouts, and geographic matching rates is monetized via Rentral Insights—a premium B2B analytics portal built for institutional real estate developers and corporate investors.
+Furthermore, Rentral captures the transactional footprint of informal payments, transforming peer-to-peer asset interactions into a proprietary Rentral Trust Score for consumer credit scoring. The aggregated, anonymized behavioral data from searches, filters, checkout dropouts, and geographic matching rates is monetized via Rentral Insights a premium B2B analytics portal built for institutional real estate developers and corporate investors.
 
 ## The Problem It Solves
 
@@ -35,11 +35,11 @@ Landing page featuring the consumer value proposition, how the spatial trust loo
 
 ### Authentication (/login)
 
-Secure entry gate handled by Clerk, facilitating Google, Apple, and email/password sign-in.
+Secure entry gate handled by superbase auth, facilitating Google, Apple, and email/password sign-in.
 
 ### Onboarding (/onboarding)
 
-A multi-step onboarding journey collecting personal details and initiating Tier-1 identity verification (NIN/BVN/Passport) via Smile ID. Once verified, the user reserves a unique username.
+A multi-step onboarding journey collecting personal details and initiating Tier-1 identity verification (NIN/BVN/Passport) via Didit. Once verified, the user reserves a unique username.
 
 ### Discovery Feed (/feed)
 
@@ -73,9 +73,9 @@ The header layout remains consistent, ensuring fluid, zero-latency transitions o
 
 ## 1. Verification and Onboarding
 
-The user signs in via Google or Apple OAuth handled by Clerk.
+The user signs in via Google or Apple OAuth handled by superbase auth.
 The system intercepts the session at Next.js edge middleware, routing unverified profiles to the /onboarding screen.
-The user submits their NIN, BVN, or passport parameters, which are validated instantly against official registries via Smile ID.
+The user submits their NIN, BVN, or passport parameters, which are validated instantly against official registries via Didit.
 Once approved, the user registers their unique username. Licensed agents and organizations can upload professional operating documents, routing files directly to the Gemini AI pipeline for authenticity auditing.
 
 ## 2. Mobile-First Walkthrough Listing
@@ -119,7 +119,7 @@ To ensure speed and support high-volume geospatial telemetry queries, Rentral re
 
 ## Profiles Table (profiles)
 
-Standard ID reference pointing to Clerk UID
+Standard ID reference pointing to Supabase Auth UID
 Personal details (full name, username, KYC metrics)
 Computed lister reputation score (0.00 to 5.00)
 Traditional banking parameters (bank code, account number) used for programmatic payout routing
@@ -145,7 +145,7 @@ Thread mapping captures active chat relationships, automatically grouping intera
 
 ## Features In Scope
 
-Unified onboarding and verification via Smile ID integration (NIN, BVN, Passport parsing).
+Unified onboarding and verification via Didit integration (NIN, BVN, Passport parsing).
 Responsive, vertical-scrolling discovery feed styled in Tailwind CSS v4 featuring glassmorphism overlays and real-time trust alerts.
 Browser-based camera recording framework with device telemetry capture.
 Spatial verification check using PostGIS geography coordinate functions.
@@ -164,7 +164,7 @@ Comprehensive PostHog events integration for search trends, default records, and
 Automatic filling of physical rental lease forms or vehicle booking contracts outside the platform.
 Live streaming feeds of video recording uploads or active webcam sessions.
 In-app digital wallet creation or fiat-to-cryptocurrency conversions.
-Background checks or security clearances beyond national database registry verification via Smile ID.
+Background checks or security clearances beyond national database registry verification via Didit.
 Cover letter or tenant matching pitch templates for tenants.
 Multi-tenant shared account ledgers for groups of friends.
 Integration of Google Maps visual route optimization inside the list view (pure distance vectors only).
@@ -173,7 +173,7 @@ Automatic listing syndication to legacy classified websites.
 ## PostHog Events
 
 Rentral tracks all high-intent operations to feed the B2B insights dataset and optimize client experience:
-onboarding_kyc_completed: Fired when a user successfully passes Smile ID registry matching.
+onboarding_kyc_completed: Fired when a user successfully passes Didit registry matching.
 listing_hardware_locked: Tracks when a lister submits high-accuracy hardware coordinates with walkthrough media.
 inspection_escrow_deposited: Triggered when an inspection fee is locked in Rentral's master wallet.
 spatial_handshake_success: Captures when two devices successfully complete proximity OTP validation at listing coordinates.

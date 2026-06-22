@@ -50,13 +50,13 @@ Browser APIs (navigator.geolocation for spatial locks, window for Mux streaming)
 
 Event listeners (onClick, onChange).
 
-Client-only wrappers (PostHog provider, Clerk hooks).
+Client-only wrappers (PostHog provider, Supabase hooks).
 
 Layout Immutability — Never add "use client" to root layout files.
 
 Data Fetching — Read data in Server Components via @supabase/ssr. Never execute direct database fetches inside Client Components.
 
-Route Handlers — Live in app/api/. These are reserved for webhooks (OPay, Smile ID) and AI orchestration (Gemini). Do not put complex business logic inline; extract it to utility functions.
+Route Handlers — Live in app/api/. These are reserved for webhooks (OPay, Didit) and AI orchestration (Gemini). Do not put complex business logic inline; extract it to utility functions.
 
 Server Actions — Live in app/actions/. Use these strictly for UI-triggered mutations (e.g., saving a listing, initiating an escrow setup).
 
@@ -84,7 +84,7 @@ Every React component must follow this exact structural hierarchy:
 
 // 1. External imports
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { createClient } from "@/utils/supabase/client";
 
 // 2. Internal imports
 import { useRentralStore } from "@/store/useRentralStore";
@@ -205,7 +205,7 @@ Rentral relies on factual behavioral data to power the B2B 'Rentral Insights' pl
 
 onboarding_kyc_completed
 
-When: User successfully passes Smile ID verification.
+When: User successfully passes Didit verification.
 
 Properties: userId, idType (NIN/BVN).
 
@@ -255,7 +255,7 @@ NEXT_PUBLIC_SUPABASE_URL — Database routing.
 
 NEXT_PUBLIC_SUPABASE_ANON_KEY — Client-side DB requests.
 
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY — Authentication UI.
+NEXT_PUBLIC_SUPABASE_ANON_KEY — Authentication UI.
 
 NEXT_PUBLIC_POSTHOG_KEY — Browser telemetry.
 
@@ -265,7 +265,7 @@ NEXT_PUBLIC_POSTHOG_HOST — Telemetry routing.
 
 SUPABASE_SERVICE_ROLE_KEY — Admin DB overrides (Webhooks/CRONs).
 
-CLERK_SECRET_KEY — Server-side auth validation.
+SUPABASE_SERVICE_ROLE_KEY — Server-side auth validation.
 
 OPAY_SECRET_KEY — Virtual Account and Transfer APIs.
 
@@ -302,7 +302,7 @@ export const PLATFORM_SPLIT_PERCENTAGE = 0.30; // 30% to Rentral on default
 
 Do not install new packages without architectural review. Rely on native Next.js solutions or the Shadcn UI library first.
 
-Authentication & Identity: @clerk/nextjs, @smile_identity/web-sdk
+Authentication & Identity: @supabase/ssr, @smile_identity/web-sdk
 
 Database & State: @supabase/ssr, @supabase/supabase-js, zustand, @tanstack/react-query
 

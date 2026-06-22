@@ -24,27 +24,27 @@ Footer: Standard secondary routing, legal links, and social proofs.
 
 #### Logic:
 
-"Get Started" triggers Clerk authentication modal/redirect.
+"Get Started" triggers Supabase Auth modal/redirect.
 
 Unauthenticated users can view the homepage but clicking any "Book Inspection" or "Create Listing" CTA routes them strictly to the Auth flow (/sign-in).
 
 ### 02 Authentication & KYC Onboarding
 
-Establish identity verification using Clerk and Smile ID.
+Establish identity verification using Supabase Auth and Didit.
 
 #### UI:
 
-Auth Canvas: Minimalist Clerk login/signup page supporting Google OAuth, Apple ID, and Email OTP.
+Auth Canvas: Minimalist Supabase login/signup page supporting Google OAuth, Apple ID, and Email OTP.
 
 KYC Onboarding: Post-login multi-step form requesting Legal Name, Username, and Document Type (NIN, BVN, Passport). Include a "Processing" state with a pulsing trust badge and progress indicator.
 
 #### Logic:
 
-Integrate Clerk Next.js Middleware to protect /listing/create, /checkout, /messages, and /profile.
+Integrate Supabase Auth Middleware to protect /listing/create, /checkout, /messages, and /profile.
 
-Identity Resolution: On onboarding submission, fire payload to Smile ID API.
+Identity Resolution: On onboarding submission, fire payload to Didit API.
 
-Listen for Smile ID async webhooks in /api/webhooks/smile-id.
+Listen for Didit async webhooks in /api/webhooks/didit.
 
 Update Supabase profiles table kyc_status from pending to verified.
 
@@ -62,7 +62,7 @@ Create lib/posthog-server.ts — initialize PostHog server client with flushAt: 
 
 Wrap the Next.js App Layout in the PostHog Provider.
 
-Call posthog.identify() upon Clerk login success with the user ID.
+Call posthog.identify() upon Supabase Auth login success with the user ID.
 
 Configure abstract grid mapping (strip exact PII/GPS) before ingestion to comply with data privacy laws while enabling real estate B2B data monetization.
 
@@ -330,7 +330,7 @@ Pull read-only analytical chart data securely using the PostHog Server API, aggr
 
 ## Execution Summary
 
-Phase 1 — Foundation: 4 Core Features (Homepage UI, Clerk/Smile ID, PostHog, PostGIS Schema)
+Phase 1 — Foundation: 4 Core Features (Homepage UI, superbase auth, Didit, PostHog, PostGIS Schema)
 
 Phase 2 — Hardware Inventory: 4 Core Features (Capture UI, GPS/Mux Logic, Gemini Audits, Locked Editing)
 

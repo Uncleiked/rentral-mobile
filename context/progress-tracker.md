@@ -69,18 +69,18 @@ Update this file after every completed feature. Any AI agent reading this should
 ## Current Status
 
 Phase: Phase 1 — Foundation, Auth, & Core Infrastructure
-Last completed: Project Initialization & Architecture Design
-Next: 01 Homepage & Navigation UI
+Last completed: 01 Homepage & Navigation UI (Polished with mobile responsiveness, hero hover bounds, brand green footer, Quality section, Testimonials, and CTA sections)
+Next: 02 Authentication & Middleware Protection (Supabase Auth Integration)
 
 ## Progress
 
 ### Phase 1 — Foundation, Auth, & Core Infrastructure
 
-[ ] 01 Homepage & Navigation — Full UI (Hero, Value Prop, Trust Loop)
+[x] 01 Homepage & Navigation — Full UI (Hero, Value Prop, Trust Loop)
 
-[ ] 02 Authentication & Middleware Protection (Clerk Integration)
+[ ] 02 Authentication & Middleware Protection (Supabase Auth Integration)
 
-[ ] 03 KYC & Identity Resolution (Smile ID NIN/BVN/Passport Webhook)
+[ ] 03 KYC & Identity Resolution (Didit NIN/BVN/Passport Webhook)
 
 [ ] 04 Database Schema & PostGIS Extensions Setup (Supabase)
 
