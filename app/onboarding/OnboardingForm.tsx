@@ -84,7 +84,7 @@ export default function OnboardingForm({ initialState, initialError }: Onboardin
     const result = await initiateVerification(formData)
 
     if ('error' in result) {
-      setError(result.error)
+      setError(result.error ?? null)
       setIsLoading(false)
       await loadState()
       return
