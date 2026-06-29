@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { getOnboardingState, initiateVerification, refreshStatus, saveUsername } from './actions'
+import { ProfileForm } from '@/components/onboarding/ProfileForm'
 
 type Role = 'individual' | 'organization'
 
@@ -11,6 +12,7 @@ export type OnboardingState = {
   kycVerified: boolean
   username: string | null
   diditSessionId: string | null
+  profileCompleted: boolean
 }
 
 const roleOptions: Array<{
@@ -122,7 +124,8 @@ export default function OnboardingForm({ initialState, initialError }: Onboardin
 
   const verificationStatus = state?.verificationStatus ?? 'unverified'
   const isVerified = state?.kycVerified === true
-  const needsUsername = isVerified && !state?.username
+  const needsProfile = isVerified && !state?.profileCompleted
+  const needsUsername = isVerified && state?.profileCompleted && !state?.username
   const isPending =
     verificationStatus === 'in_progress' ||
     verificationStatus === 'pending_review' ||
@@ -136,10 +139,12 @@ export default function OnboardingForm({ initialState, initialError }: Onboardin
           {verificationStatus === 'verified' ? 'Verified' : 'Identity Gate'}
         </div>
         <h1 className="mb-2 text-2xl font-bold tracking-wide text-text-primary">
-          {needsUsername ? 'Reserve Your Username' : 'Verify Your Identity'}
+          {needsProfile ? 'Complete Your Profile' : needsUsername ? 'Reserve Your Username' : 'Verify Your Identity'}
         </h1>
         <p className="text-sm leading-relaxed text-text-secondary">
-          {needsUsername
+          {needsProfile 
+            ? 'We just need a few more details before you can continue.'
+            : needsUsername
             ? 'Choose the public handle people will see across Rentral.'
             : statusLabel(verificationStatus)}
         </p>
@@ -181,6 +186,8 @@ export default function OnboardingForm({ initialState, initialError }: Onboardin
             {isSavingUsername ? 'Saving Username...' : 'Enter Marketplace'}
           </button>
         </form>
+      ) : needsProfile ? (
+        <ProfileForm accountType={state?.accountType ?? 'individual'} />
       ) : (
         <>
           <form onSubmit={handleStartVerification} className="flex flex-col gap-6">

@@ -13,6 +13,7 @@ type OnboardingState = {
   kycVerified: boolean
   username: string | null
   diditSessionId: string | null
+  profileCompleted: boolean
 }
 
 type ActionResult =
@@ -76,7 +77,13 @@ export async function getOnboardingState(): Promise<OnboardingState | { error: s
         id: user.id,
         email: user.email ?? '',
       },
+      include: {
+        individualProfile: true,
+        organizationProfile: true,
+      }
     })
+
+    const profileCompleted = !!(dbUser.individualProfile || dbUser.organizationProfile)
 
     return {
       accountType:
@@ -87,6 +94,7 @@ export async function getOnboardingState(): Promise<OnboardingState | { error: s
       kycVerified: dbUser.kyc_verified,
       username: dbUser.username,
       diditSessionId: dbUser.didit_session_id,
+      profileCompleted,
     }
   } catch (error) {
     console.error('[onboarding/actions] getOnboardingState failed:', error)
@@ -233,7 +241,7 @@ export async function refreshStatus(): Promise<{ error: string } | void> {
   }
 
   if (shouldRedirect) {
-    redirect('/feed')
+    redirect('/onboarding')
   }
 }
 
@@ -289,5 +297,5 @@ export async function saveUsername(formData: FormData): Promise<{ error: string 
     return { error: 'Could not save username. Please try again.' }
   }
 
-  redirect('/feed')
+  redirect('/onboarding')
 }

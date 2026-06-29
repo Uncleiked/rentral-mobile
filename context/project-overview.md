@@ -41,7 +41,7 @@ Secure entry gate handled by superbase auth, facilitating Google, Apple, and ema
 
 A multi-step onboarding journey collecting personal details and initiating Tier-1 identity verification (NIN/BVN/Passport) via Didit. Once verified, the user reserves a unique username.
 
-### Discovery Feed (/feed)
+### Discovery Feed (/marketplace)
 
 The primary interactive marketplace interface. It functions as a mobile-first, vertical-scrolling stream of looping walkthrough videos with glassmorphic overlay panels and engagement triggers, matching an Instagram Reel experience.
 
@@ -92,7 +92,7 @@ To activate the listing, the lister pays a small micro-payment (e.g., ₦1,000) 
 
 ## 3. Seekers: Interactive Discovery & Proximity Inspection
 
-The seeker discovers the listing on the vertical-scrolling /feed.
+The seeker discovers the listing on the vertical-scrolling /marketplace.
 The seeker commits an inspection fee (e.g., ₦3,000) directly into Rentral's master OPay escrow wallet, locking a viewing block. The system issues an encrypted one-time password (OTP) token.
 On-site, the lister presents their check-in screen. The seeker scans the token.
 The platform immediately calls browser geolocation APIs on both devices. A database PostGIS query verifies that both users are physically standing within a 20-meter radius of the property coordinates:

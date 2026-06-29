@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import clsx from "clsx";
+import { HeroBackground } from "@/components/ui/HeroBackground";
 
 /* ─── Image URLs ─── */
 const heroImage =
@@ -81,12 +82,9 @@ export default function Home() {
       {/* ═══════════════════════════════════════════
           HERO SECTION
       ═══════════════════════════════════════════ */}
-      <section
-        className={clsx('hero-section', 'relative', 'isolate', 'overflow-hidden', 'bg-brand-vault', 'px-6', 'pb-20', 'pt-6', 'sm:px-10', 'lg:px-16', 'lg:pb-24')}
-
+      <HeroBackground
+        className={clsx('hero-section', 'px-6', 'pb-20', 'pt-6', 'sm:px-10', 'lg:px-16', 'lg:pb-24')}
       >
-        <div className="hero-line-field" />
-        <div className="hero-hover-scrim" />
 
         {/* ── NAVBAR ── */}
         <nav className={clsx('relative', 'z-20', 'flex', 'items-center', 'justify-between', 'gap-4')}>
@@ -178,7 +176,7 @@ export default function Home() {
             {/* CTAs */}
             <div className={clsx('mt-10', 'flex', 'flex-col', 'gap-3', 'sm:flex-row', 'sm:flex-wrap', 'sm:items-center', 'sm:gap-4')}>
               <a
-                href="/feed"
+                href="/marketplace"
                 className={clsx('glass-btn', 'inline-flex', 'items-center', 'justify-center', 'rounded-xl', 'bg-accent-primary', 'px-6', 'py-4', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'text-text-inverse', 'shadow-lg')}
               >
                 Enter marketplace
@@ -226,7 +224,7 @@ export default function Home() {
               </div>
               {/* Mobile orange arrow overlapping the image capsule */}
               <a
-                href="/feed"
+                href="/marketplace"
                 className={clsx('hero-arrow-button', 'absolute', 'z-20', 'flex', 'h-14', 'w-14', 'items-center', 'justify-center', 'rounded-full', 'bg-accent-warm', 'text-text-inverse', 'shadow-2xl')}
                 style={{ bottom: "0px", right: "12%" }}
                 aria-label="Open Rentral marketplace"
@@ -257,7 +255,7 @@ export default function Home() {
           </div>
           {/* Orange Arrow — overlaps image on desktop */}
           <a
-            href="/feed"
+            href="/marketplace"
             className={clsx('hero-arrow-button', 'absolute', 'z-30', 'flex', 'h-20', 'w-20', 'items-center', 'justify-center', 'rounded-full', 'bg-accent-warm', 'text-text-inverse', 'shadow-2xl', 'xl:h-24', 'xl:w-24')}
             aria-label="Open Rentral marketplace"
             style={{ top: "60px", left: "-40px" }}
@@ -267,7 +265,7 @@ export default function Home() {
             </svg>
           </a>
         </div>
-      </section>
+      </HeroBackground>
 
       {/* ═══════════════════════════════════════════
           ABOUT US SECTION
@@ -467,6 +465,7 @@ export default function Home() {
                 src={projectImage}
                 alt="Faded secondary view"
                 fill
+                sizes="(min-width: 640px) 40vw, 0px"
                 className="object-cover"
               />
             </div>
@@ -482,7 +481,7 @@ export default function Home() {
             </div>
             {/* Arrow overlay centered overlapping the bottom of the main circle */}
             <a
-              href="/feed"
+              href="/marketplace"
               className={clsx('hero-arrow-button', 'absolute', 'bottom-0', 'left-1/2', '-translate-x-1/2', 'translate-y-1/2', 'z-20', 'flex', 'h-16', 'w-16', 'items-center', 'justify-center', 'rounded-full', 'bg-accent-warm', 'text-text-inverse', 'shadow-2xl', 'sm:h-20', 'sm:w-20')}
               aria-label="Explore quality listings"
             >
@@ -516,7 +515,7 @@ export default function Home() {
           </div>
           {/* Arrow overlay overlapping the right edge */}
           <a
-            href="/feed"
+            href="/marketplace"
             className={clsx('hero-arrow-button', 'absolute', 'top-1/2', 'right-4', 'sm:right-0', 'translate-x-0', 'sm:translate-x-1/2', '-translate-y-1/2', 'z-10', 'flex', 'h-14', 'w-14', 'items-center', 'justify-center', 'rounded-full', 'bg-accent-warm', 'text-text-inverse', 'shadow-2xl', 'sm:h-16', 'sm:w-16')}
             aria-label="Combine strengths"
           >

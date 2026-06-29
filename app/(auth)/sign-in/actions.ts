@@ -30,7 +30,7 @@ export async function login(formData: FormData): Promise<AuthResult> {
     data: { user },
   } = await supabase.auth.getUser()
 
-  return { success: true, redirectTo: onboardingComplete(user) ? '/feed' : '/onboarding' }
+  return { success: true, redirectTo: onboardingComplete(user) ? '/marketplace' : '/onboarding' }
 }
 
 export async function signup(formData: FormData): Promise<AuthResult> {

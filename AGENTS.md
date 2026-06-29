@@ -28,6 +28,7 @@ Read in this exact order before any implementation:
   then read `context/library-docs.md` for project-specific rules
 - If the same problem persists after one corrective prompt —
   stop immediately and run /recover
+- This project uses `pnpm`. ALWAYS use `pnpm` instead of `npm`, `yarn`, or `bun` for managing dependencies and running scripts.
 
 ## Available Skills
 

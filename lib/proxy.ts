@@ -31,10 +31,10 @@ export async function updateSession(request: NextRequest) {
   )
 
   // Do not run code between createServerClient and
-  // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
+  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
-  const { data } = await supabase.auth.getClaims()
-  const claims = data?.claims
+  const { data: { user } } = await supabase.auth.getUser()
+  const claims = user?.app_metadata || user?.user_metadata
   const pathname = request.nextUrl.pathname
 
   // Allow public routes through without auth checks
@@ -53,17 +53,18 @@ export async function updateSession(request: NextRequest) {
   const kycVerified = (claims as Record<string, unknown>)?.kyc_verified === true
   const username = (claims as Record<string, unknown>)?.username
   const hasUsername = typeof username === 'string' && username.length > 0
+  const profileCompleted = (claims as Record<string, unknown>)?.profile_completed === true
   const isOnboarding = pathname.startsWith('/onboarding')
 
-  if ((!kycVerified || !hasUsername) && !isOnboarding && !pathname.startsWith('/api/verify')) {
+  if ((!kycVerified || !hasUsername || !profileCompleted) && !isOnboarding && !pathname.startsWith('/api/verify')) {
     const url = request.nextUrl.clone()
     url.pathname = '/onboarding'
     return NextResponse.redirect(url)
   }
 
-  if (kycVerified && hasUsername && isOnboarding) {
+  if (kycVerified && hasUsername && profileCompleted && isOnboarding) {
     const url = request.nextUrl.clone()
-    url.pathname = '/feed'
+    url.pathname = '/marketplace'
     return NextResponse.redirect(url)
   }
 

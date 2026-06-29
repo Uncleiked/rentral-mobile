@@ -62,3 +62,17 @@ After building any component — update this file with the component name, file 
 - **Glossy Button (`.glass-btn`)**: Uses `::before` diagonal gradient mask that shifts `translateX(100%)` to `-100%` on hover for a sliding shine reflection.
 - **Glossy Card (`.glass-card`)**: Uses `::before` absolute diagonal gradient overlay anim-shifted from left to right on hover.
 - **Glossy Link (`.glass-link`)**: Nav links with a custom underline expansion (`scale-x-0` to `scale-x-100` centering transition) and subtle brightness reflection.
+
+### Marketplace Feed (Reels UI)
+
+- **File Paths**: [app/marketplace/page.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/app/marketplace/page.tsx), [components/feed/MarketplaceHeader.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/components/feed/MarketplaceHeader.tsx), [components/feed/MarketplaceFeedCard.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/components/feed/MarketplaceFeedCard.tsx)
+- **Container / Scroll Snap**: `h-full w-full overflow-y-scroll snap-y snap-mandatory scrollbar-hide bg-black max-w-md mx-auto`
+- **Sticky Header**: `fixed top-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-md p-4 flex items-center gap-3`
+- **Search Bar**: `block w-full pl-10 pr-3 py-3 bg-glass-dark backdrop-blur-md border border-glass-border-medium rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-primary focus:border-accent-primary transition-all`
+- **Feed Card (Isolate)**: `h-[100dvh] w-full snap-start snap-always relative isolate bg-background-app`
+- **Video Background Scrim**: `absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none`
+- **Info Overlay (Bottom Left)**: `absolute bottom-6 left-4 right-20 z-20 flex flex-col gap-3`
+- **Action Overlay (Bottom Right)**: `absolute bottom-16 right-4 z-30 flex flex-col items-center gap-5`
+- **Action Button (e.g. Like/Message)**: `flex h-12 w-12 items-center justify-center rounded-full border border-glass-border-medium bg-glass-light backdrop-blur-md transition-all active:scale-95`
+- **Primary CTA / Book Button**: `mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent-primary text-text-inverse shadow-2xl active:scale-95 transition-all animate-pulse`
+- **Trust Badges**: `rounded-full border border-glass-border-light bg-glass-light px-3 py-1 text-xs font-medium text-text-primary backdrop-blur-sm`
