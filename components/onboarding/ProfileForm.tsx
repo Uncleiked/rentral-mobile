@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { individualProfileSchema, organizationProfileSchema, submitProfile } from '@/app/actions/profile'
+import { submitProfile } from '@/app/actions/profile'
+import { individualProfileSchema, organizationProfileSchema } from '@/lib/schemas'
 
 // Phone prefix mapping
 const COUNTRY_CODES: Record<string, string> = {
@@ -21,8 +22,8 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
   
   const schema = accountType === 'individual' ? individualProfileSchema : organizationProfileSchema
   
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
-    resolver: zodResolver(schema),
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<any>({
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       country: '',
       state: '',

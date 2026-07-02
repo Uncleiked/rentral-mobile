@@ -7,22 +7,7 @@ import { createAdminClient } from '@/lib/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-// Strict regex validations to prevent script injection
-const phoneRegex = /^\+?[0-9]+$/
-const lettersOnlyRegex = /^[a-zA-Z\s]+$/
-
-export const individualProfileSchema = z.object({
-  country: z.string().min(2, "Country is required"),
-  state: z.string().min(2, "State is required"),
-  address: z.string().min(5, "Address is required"),
-  phone_number: z.string().regex(phoneRegex, "Phone number must contain only numbers and an optional + prefix"),
-})
-
-export const organizationProfileSchema = z.object({
-  country: z.string().min(2, "Country is required"),
-  address: z.string().min(5, "Address is required"),
-  phone_number: z.string().regex(phoneRegex, "Phone number must contain only numbers and an optional + prefix"),
-})
+import { individualProfileSchema, organizationProfileSchema } from '@/lib/schemas'
 
 export async function submitProfile(data: z.infer<typeof individualProfileSchema> | z.infer<typeof organizationProfileSchema>) {
   const supabase = await createClient()
