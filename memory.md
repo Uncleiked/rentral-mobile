@@ -1,31 +1,45 @@
-# Memory — KYC Auth Check & Middleware Fix
+# Memory — Onboarding Pipeline Bug Fixes
 
-Last updated: 2026-06-27
+Last updated: 2026-07-04 00:42
 
 ## What was built
 
-- Transitioned the app from the deprecated Next.js `middleware.ts` convention to the new `proxy.ts` standard for Edge route interception.
-- Renamed the internal helper `lib/middleware.ts` to `lib/proxy.ts` and created a root `proxy.ts` that properly intercepts and proxies requests.
-- Secured the `/marketplace` route by enforcing the `kyc_verified` claim check on all incoming requests.
+- Fixed all 3 onboarding pipeline bugs across 6 files:
+  - `lib/proxy.ts` — replaced stale `/auth/login` → `/sign-in`, removed unsafe `user_metadata` fallback (Supabase security best practice)
+  - `app/auth/callback/route.ts` — replaced `/auth/login` → `/sign-in`, added `profile_completed` to completeness check
+  - `app/(auth)/sign-in/actions.ts` — replaced `/auth/login` → `/sign-in`, added `profile_completed` to `onboardingComplete()`
+  - `app/onboarding/actions.ts` — added KYC guard to `initiateVerification` (prevents re-verification state wipe), included `profile_completed` in all `syncUserAppMetadata` calls, queries now include profile relations
+  - `app/api/webhooks/didit/route.ts` — added `profileCompleted` to `syncAppMetadata` function signature and all calls, queries include profile relations
+  - `app/actions/profile.ts` — full metadata sync when setting `profile_completed: true` (includes all existing fields, not just the one key)
 
 ## Decisions made
 
-- Fully adopted the `proxy.ts` convention mandated by Next.js 16.2.7+ instead of attempting workarounds, ensuring clean builds without warnings.
+- `user_metadata` removed from proxy claims fallback — per Supabase skill, it's user-editable and unsafe for authorization decisions. Strictly `app_metadata` only.
+- Server-side guard on `initiateVerification` — the action rejects re-verification even if the UI renders the button. Security boundary lives at the server, not the UI.
+- `profile_completed` is now part of every completeness check and every metadata sync across the entire codebase — proxy, callback, sign-in actions, onboarding actions, webhook, and profile submission.
 
 ## Problems solved
 
-- Fixed a critical vulnerability where un-KYC'd users could access `/marketplace` because the old middleware file was misplaced (in `/lib`) and using an invalid Supabase SDK method.
-- Replaced the failing `supabase.auth.getClaims()` call with the correct `await supabase.auth.getUser()` to safely read identity and `app_metadata` during Edge execution.
+- **404 on login:** All `/auth/login` references replaced with `/sign-in` — the actual sign-in page route.
+- **Onboarding always resetting:** `onboardingComplete` checks in callback and sign-in actions now require `profile_completed === true`. Users with KYC + username but no profile are correctly routed to the ProfileForm step instead of `/marketplace` (which proxy would bounce back to `/onboarding`).
+- **Re-verification state wipe:** `initiateVerification` now checks `dbUser.kyc_verified` first and rejects if already verified. No more accidental state reset.
+- **Metadata sync inconsistency:** Every metadata sync now includes `profile_completed`, computed from actual Prisma profile relations. No more sparse updates that could leave metadata incomplete.
 
 ## Current state
 
-- The Edge runtime authentication check is fully active. Unverified users are now securely redirected to `/onboarding` before they can view the marketplace. 
-- The project successfully compiles with `next build`.
+- Build passes cleanly (`pnpm build` — no TypeScript errors)
+- All onboarding flows should now work correctly:
+  - New users: account type → KYC → profile form → username → marketplace
+  - Existing users (KYC + username, no profile): should land directly on ProfileForm
+  - Fully completed users: should go straight to `/marketplace`
+- Progress tracker updated: Phases 01–04 marked complete
 
 ## Next session starts with
 
-- Building out the next requested feature, testing the complete Didit KYC verification flow, or hooking up dynamic data fetching for the marketplace feed.
+- Test the fix manually: sign in with the existing account (KYC verified + username set) and confirm the ProfileForm renders instead of the account-type step.
+- After profile submission, confirm redirect to `/marketplace` works end-to-end.
+- Then proceed to Phase 1 item 05: Telemetry & PostHog Initialization.
 
 ## Open questions
 
-- Now that the `/marketplace` route is locked down, do we need to implement any specific bypass routes for admin testing, or do all admins also go through Didit KYC?
+- None remaining from this fix. All architectural decisions are resolved.

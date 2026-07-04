@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Routes that don't require authentication at all
-const PUBLIC_ROUTES = ['/auth/login', '/auth/callback', '/api/webhooks']
+const PUBLIC_ROUTES = ['/sign-in', '/auth/callback', '/api/webhooks']
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
   const { data: { user } } = await supabase.auth.getUser()
-  const claims = user?.app_metadata || user?.user_metadata
+  const claims = user?.app_metadata
   const pathname = request.nextUrl.pathname
 
   // Allow public routes through without auth checks
@@ -46,7 +46,7 @@ export async function updateSession(request: NextRequest) {
   // No user — redirect to login
   if (!claims) {
     const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
+    url.pathname = '/sign-in'
     return NextResponse.redirect(url)
   }
 

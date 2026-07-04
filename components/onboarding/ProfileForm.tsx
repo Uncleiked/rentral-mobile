@@ -23,8 +23,10 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
   const schema = accountType === 'individual' ? individualProfileSchema : organizationProfileSchema
   
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<any>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema as any) as any,
     defaultValues: {
+      full_name: '',
+      date_of_birth: '',
       country: '',
       state: '',
       address: '',
@@ -56,19 +58,54 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-md mx-auto p-6 sm:p-8 bg-surface-card border border-border-subtle rounded-2xl shadow-2xl">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-md mx-auto">
       <div className="mb-8 text-center">
-        <h2 className="text-2xl font-bold tracking-wide text-text-primary mb-2">Complete your profile</h2>
-        <p className="text-sm leading-relaxed text-text-secondary">Please provide your contact details to continue.</p>
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
+          {accountType === 'individual' ? 'Personal Details' : 'Company Details'}
+        </h2>
+        <p className="text-sm text-text-secondary">
+          Please provide your accurate information.
+        </p>
       </div>
 
       {error && (
-        <div className="mb-6 rounded-lg border border-trust-flagged bg-glass-warning px-4 py-3 text-xs font-semibold leading-relaxed text-text-primary backdrop-blur-md">
+        <div className="p-3 bg-glass-warning border border-trust-flagged text-text-primary text-xs font-semibold rounded-lg">
           {error}
         </div>
       )}
 
-      <div className="space-y-4">
+      {accountType === 'individual' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
+              Full Name
+            </label>
+            <input
+              {...register('full_name')}
+              className="bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all"
+              placeholder="Legal name"
+            />
+            {errors.full_name && (
+              <span className="text-xs text-trust-flagged">{errors.full_name.message as string}</span>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
+              Date of Birth
+            </label>
+            <input
+              type="date"
+              {...register('date_of_birth')}
+              className="bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all"
+            />
+            {errors.date_of_birth && (
+              <span className="text-xs text-trust-flagged">{errors.date_of_birth.message as string}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium uppercase tracking-wider text-text-muted">Country of Residence</label>
           <select 

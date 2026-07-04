@@ -10,7 +10,8 @@ function onboardingComplete(user: { app_metadata?: Record<string, unknown> } | n
   return (
     user?.app_metadata?.kyc_verified === true &&
     typeof user.app_metadata.username === 'string' &&
-    user.app_metadata.username.length > 0
+    user.app_metadata.username.length > 0 &&
+    user?.app_metadata?.profile_completed === true
   )
 }
 
@@ -43,13 +44,13 @@ export async function signup(formData: FormData): Promise<AuthResult> {
 
   if (error) {
     console.error('[auth/login/actions] Supabase signup failed:', error.message)
-    return { error: 'Could not create user. Please try again.' }
+    return { error: error.message }
   }
 
   if (!data.session) {
     return {
       success: true,
-      redirectTo: '/auth/login',
+      redirectTo: '/sign-in',
       message: 'Check your email to confirm your account, then sign in.',
     }
   }

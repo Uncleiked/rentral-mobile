@@ -83,8 +83,17 @@ function isFreshTimestamp(timestamp: string | null): boolean {
     return false
   }
 
-  const parsedTimestamp = Number(timestamp)
-  return Number.isFinite(parsedTimestamp) && Math.abs(Date.now() / 1000 - parsedTimestamp) <= 300
+  let parsedTimestamp = Number(timestamp)
+  if (!Number.isFinite(parsedTimestamp)) {
+    return false
+  }
+
+  // If timestamp is suspiciously large, it's likely in milliseconds. Convert to seconds.
+  if (parsedTimestamp > 1e11) {
+    parsedTimestamp = Math.floor(parsedTimestamp / 1000)
+  }
+
+  return Math.abs(Date.now() / 1000 - parsedTimestamp) <= 300
 }
 
 function verifySignature(canonical: string, signature: string | null): boolean {
@@ -138,6 +147,7 @@ async function syncAppMetadata(userId: string, data: {
   verificationStatus: string
   kycVerified: boolean
   username: string | null
+  profileCompleted: boolean
 }): Promise<void> {
   const adminClient = createAdminClient()
   const { error } = await adminClient.auth.admin.updateUserById(userId, {
@@ -147,6 +157,7 @@ async function syncAppMetadata(userId: string, data: {
       verification_status: data.verificationStatus,
       kyc_verified: data.kycVerified,
       username: data.username,
+      profile_completed: data.profileCompleted,
     },
   })
 
@@ -161,16 +172,18 @@ export async function POST(request: Request): Promise<Response> {
   const signature = request.headers.get('x-signature-v2')
 
   if (!isFreshTimestamp(timestamp)) {
+    console.warn(`[api/webhooks/didit] Stale or missing timestamp. Received: ${timestamp}`)
     return new Response('stale webhook', { status: 401 })
   }
 
   const canonicalized = canonicalizePayload(rawBody)
   if (!canonicalized) {
+    console.warn('[api/webhooks/didit] Failed to canonicalize payload. Invalid JSON.')
     return new Response('invalid payload', { status: 400 })
   }
 
   if (!verifySignature(canonicalized.canonical, signature)) {
-    console.warn('[api/webhooks/didit] rejected webhook with invalid signature')
+    console.warn(`[api/webhooks/didit] Signature mismatch. Received signature: ${signature}`)
     return new Response('bad signature', { status: 401 })
   }
 
@@ -224,7 +237,10 @@ export async function POST(request: Request): Promise<Response> {
           didit_workflow_id: readString(payload.workflow_id),
           didit_decision: toJsonInput(payload.decision),
         },
+        include: { individualProfile: true, organizationProfile: true },
       })
+
+      const profileCompleted = !!(updatedUser.individualProfile || updatedUser.organizationProfile)
 
       await syncAppMetadata(vendorDataUserId, {
         accountType: updatedUser.account_type,
@@ -232,6 +248,7 @@ export async function POST(request: Request): Promise<Response> {
         verificationStatus,
         kycVerified,
         username: updatedUser.username,
+        profileCompleted,
       })
     }
 

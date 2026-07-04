@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const errorMsg = searchParams.get('error_description') || searchParams.get('error')
 
   if (errorMsg) {
-    return NextResponse.redirect(`${origin}/auth/login?error=${encodeURIComponent(errorMsg)}`)
+    return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent(errorMsg)}`)
   }
 
   if (code) {
@@ -19,9 +19,10 @@ export async function GET(request: Request) {
       const onboardingComplete =
         user?.app_metadata?.kyc_verified === true &&
         typeof user.app_metadata?.username === 'string' &&
-        user.app_metadata.username.length > 0
+        user.app_metadata.username.length > 0 &&
+        user?.app_metadata?.profile_completed === true
 
-      if (onboardingComplete) {
+      if (onboardingComplete || next.startsWith('/reset-password')) {
         return NextResponse.redirect(`${origin}${next}`)
       }
 
@@ -30,5 +31,5 @@ export async function GET(request: Request) {
   }
 
   // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/login?error=${encodeURIComponent('Authentication failed. No code provided.')}`)
+  return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed. No code provided.')}`)
 }

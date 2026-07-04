@@ -75,9 +75,14 @@ export default function AuthForm() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="password">
-            Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="password">
+              Password
+            </label>
+            <a href="/forgot-password" className="text-xs font-medium text-text-muted hover:text-accent-primary transition-colors tracking-wide">
+              Forgot Password?
+            </a>
+          </div>
           <div className="relative w-full">
             <input
               className="w-full bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all pr-12"

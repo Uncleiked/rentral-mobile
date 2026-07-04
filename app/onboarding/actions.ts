@@ -85,13 +85,40 @@ export async function getOnboardingState(): Promise<OnboardingState | { error: s
 
     const profileCompleted = !!(dbUser.individualProfile || dbUser.organizationProfile)
 
+    let isKycVerified = dbUser.kyc_verified
+    let verificationStatus = dbUser.verification_status
+
+    // Auto-recovery: If they have a username, they must have completed KYC.
+    // The previous initiateVerification bug could have wiped this.
+    if (dbUser.username && !isKycVerified) {
+      isKycVerified = true
+      verificationStatus = 'approved'
+      
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          kyc_verified: true,
+          verification_status: 'approved'
+        }
+      })
+      
+      await syncUserAppMetadata(user.id, {
+        kyc_verified: true,
+        account_type: dbUser.account_type,
+        verification_status: 'approved',
+        verification_kind: dbUser.verification_kind,
+        username: dbUser.username,
+        profile_completed: profileCompleted
+      })
+    }
+
     return {
       accountType:
         dbUser.account_type === 'individual' || dbUser.account_type === 'organization'
           ? dbUser.account_type
           : null,
-      verificationStatus: dbUser.verification_status,
-      kycVerified: dbUser.kyc_verified,
+      verificationStatus,
+      kycVerified: isKycVerified,
       username: dbUser.username,
       diditSessionId: dbUser.didit_session_id,
       profileCompleted,
@@ -110,6 +137,16 @@ export async function initiateVerification(formData: FormData): Promise<ActionRe
 
   if (!user) {
     return { error: 'Not authenticated' }
+  }
+
+  // Guard: prevent re-verification for already verified users
+  const existingUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { individualProfile: true, organizationProfile: true },
+  })
+
+  if (existingUser?.kyc_verified) {
+    return { error: 'Your identity is already verified. You cannot restart verification.' }
   }
 
   const accountType = normalizeAccountType(formData.get('role'))
@@ -220,11 +257,14 @@ export async function refreshStatus(): Promise<{ error: string } | void> {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
+      include: { individualProfile: true, organizationProfile: true },
     })
 
     if (!dbUser?.kyc_verified) {
       return { error: 'Your verification is not approved yet. Complete Didit and try again.' }
     }
+
+    const profileCompleted = !!(dbUser.individualProfile || dbUser.organizationProfile)
 
     await syncUserAppMetadata(user.id, {
       kyc_verified: true,
@@ -232,6 +272,7 @@ export async function refreshStatus(): Promise<{ error: string } | void> {
       verification_status: dbUser.verification_status,
       verification_kind: dbUser.verification_kind,
       username: dbUser.username,
+      profile_completed: profileCompleted,
     })
 
     shouldRedirect = Boolean(dbUser.username)
@@ -265,11 +306,14 @@ export async function saveUsername(formData: FormData): Promise<{ error: string 
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
+      include: { individualProfile: true, organizationProfile: true },
     })
 
     if (!dbUser?.kyc_verified) {
       return { error: 'Complete verification before choosing a username.' }
     }
+
+    const profileCompleted = !!(dbUser.individualProfile || dbUser.organizationProfile)
 
     await prisma.user.update({
       where: { id: user.id },
@@ -282,6 +326,7 @@ export async function saveUsername(formData: FormData): Promise<{ error: string 
       verification_status: dbUser.verification_status,
       verification_kind: dbUser.verification_kind,
       username,
+      profile_completed: profileCompleted,
     })
   } catch (error: unknown) {
     if (

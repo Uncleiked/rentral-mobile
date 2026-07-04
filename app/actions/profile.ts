@@ -28,20 +28,20 @@ export async function submitProfile(data: z.infer<typeof individualProfileSchema
   if (dbUser.account_type === 'individual' || !dbUser.account_type) {
     const parsed = individualProfileSchema.parse(data)
     
-    // Extract verified name and DOB from Didit payload
-    // Note: Assuming Didit payload stores these under decision payload.
-    // In a production app, we map this exactly to Didit's response schema.
-    const diditPayload = (dbUser.didit_decision as any) || {}
-    const verifiedName = diditPayload.firstName && diditPayload.lastName 
-      ? `${diditPayload.firstName} ${diditPayload.lastName}` 
-      : (diditPayload.name || 'Verified Individual')
-    const verifiedDob = diditPayload.dateOfBirth || '1970-01-01'
-
-    await prisma.individualProfile.create({
-      data: {
+    await prisma.individualProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        full_name: parsed.full_name,
+        date_of_birth: parsed.date_of_birth,
+        country: parsed.country,
+        state: (parsed as any).state || '',
+        address: parsed.address,
+        phone_number: parsed.phone_number,
+      },
+      create: {
         userId: user.id,
-        full_name: verifiedName,
-        date_of_birth: verifiedDob,
+        full_name: parsed.full_name,
+        date_of_birth: parsed.date_of_birth,
         country: parsed.country,
         state: (parsed as any).state || '',
         address: parsed.address,
@@ -54,8 +54,15 @@ export async function submitProfile(data: z.infer<typeof individualProfileSchema
     const diditPayload = (dbUser.didit_decision as any) || {}
     const verifiedOrgName = diditPayload.companyName || diditPayload.name || 'Verified Organization'
 
-    await prisma.organizationProfile.create({
-      data: {
+    await prisma.organizationProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        organization_name: verifiedOrgName,
+        country: parsed.country,
+        address: parsed.address,
+        phone_number: parsed.phone_number,
+      },
+      create: {
         userId: user.id,
         organization_name: verifiedOrgName,
         country: parsed.country,
@@ -65,14 +72,23 @@ export async function submitProfile(data: z.infer<typeof individualProfileSchema
     })
   }
 
-  // Update Supabase Auth metadata using Admin client to unlock the proxy check
+  // Sync full app_metadata using Admin client — include all fields for consistency
   const adminClient = createAdminClient()
+  const updatedDbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+  })
+
   await adminClient.auth.admin.updateUserById(user.id, {
     app_metadata: {
-      profile_completed: true
+      kyc_verified: updatedDbUser?.kyc_verified ?? false,
+      account_type: updatedDbUser?.account_type,
+      verification_status: updatedDbUser?.verification_status,
+      verification_kind: updatedDbUser?.verification_kind,
+      username: updatedDbUser?.username,
+      profile_completed: true,
     }
   })
 
   revalidatePath('/onboarding')
-  redirect('/marketplace')
+  return { success: true }
 }

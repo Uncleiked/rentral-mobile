@@ -69,8 +69,8 @@ Update this file after every completed feature. Any AI agent reading this should
 ## Current Status
 
 Phase: Phase 1 — Foundation, Auth, & Core Infrastructure
-Last completed: 01 Homepage & Navigation UI (Polished with mobile responsiveness, hero hover bounds, brand green footer, Quality section, Testimonials, and CTA sections)
-Next: 02 Authentication & Middleware Protection (Supabase Auth Integration)
+Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed)
+Next: 05 Telemetry & PostHog Initialization
 
 ## Progress
 
@@ -78,11 +78,11 @@ Next: 02 Authentication & Middleware Protection (Supabase Auth Integration)
 
 [x] 01 Homepage & Navigation — Full UI (Hero, Value Prop, Trust Loop)
 
-[ ] 02 Authentication & Middleware Protection (Supabase Auth Integration)
+[x] 02 Authentication & Middleware Protection (Supabase Auth, proxy.ts Edge interception, sign-in/sign-up flows, OAuth callback)
 
-[ ] 03 KYC & Identity Resolution (Didit NIN/BVN/Passport Webhook)
+[x] 03 KYC & Identity Resolution (Didit NIN/BVN/Passport Webhook, multi-step onboarding: account type → KYC → profile form → username → marketplace)
 
-[ ] 04 Database Schema & PostGIS Extensions Setup (Supabase)
+[x] 04 Database Schema & Prisma Setup (User, IndividualProfile, OrganizationProfile, WebhookLog models)
 
 [ ] 05 Telemetry & PostHog Initialization (Client & Server-side flush setup)
 
