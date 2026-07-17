@@ -68,8 +68,8 @@ Update this file after every completed feature. Any AI agent reading this should
 
 ## Current Status
 
-Phase: Phase 1 — Foundation, Auth, & Core Infrastructure
-Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed)
+Phase: Phase 1 — Foundation, Auth, & Core Infrastructure (with Profile UI pulled forward from Phase 7)
+Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed). Also: Marketplace Profile Page — Owner + Visitor UI (`/marketplace/profile`, `/marketplace/profile/[username]`), built ahead of schedule with real identity data (username/name/verification/account type from Prisma) and mock stats/listings/escrow/lease until the listings/transactions tables exist. Profile is now editable end-to-end: bio + avatar_url added to `User`, a public `profile-avatars` Storage bucket with owner-scoped RLS, live username-availability checking, Supabase secure (double-confirm) email change synced back to Prisma via `app/auth/callback/route.ts`, real Sign Out, and a Copy Link/WhatsApp/X/Facebook share menu.
 Next: 05 Telemetry & PostHog Initialization
 
 ## Progress

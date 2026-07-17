@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import Image from "next/image";
+import Link from "next/link";
 
 const suggestions = [
   { id: 1, username: "lux_rentals", description: "Suggested for you", avatar: "https://i.pravatar.cc/150?u=a04258" },
@@ -19,7 +20,7 @@ export function MarketplaceSuggestions() {
     )}>
       {/* Current User */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+        <Link href="/marketplace/profile" className="flex items-center gap-3">
           <div className="relative h-11 w-11 rounded-full overflow-hidden border border-glass-border-medium">
             <Image src="https://i.pravatar.cc/150?u=current_user" alt="Me" fill className="object-cover" />
           </div>
@@ -27,7 +28,7 @@ export function MarketplaceSuggestions() {
             <span className="text-sm font-bold text-text-primary">david_ikediashi</span>
             <span className="text-sm text-text-muted">David Ikediashi</span>
           </div>
-        </div>
+        </Link>
         <button className="text-xs font-bold text-[#0095f6] hover:text-white transition-colors">Switch</button>
       </div>
 
@@ -39,7 +40,7 @@ export function MarketplaceSuggestions() {
       <div className="flex flex-col gap-4">
         {suggestions.map(user => (
           <div key={user.id} className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <Link href={`/marketplace/profile/${user.username}`} className="flex items-center gap-3">
               <div className="relative h-11 w-11 rounded-full overflow-hidden border border-glass-border-medium">
                 <Image src={user.avatar} alt={user.username} fill className="object-cover" />
               </div>
@@ -47,7 +48,7 @@ export function MarketplaceSuggestions() {
                 <span className="text-sm font-bold text-text-primary">{user.username}</span>
                 <span className="text-xs text-text-muted">{user.description}</span>
               </div>
-            </div>
+            </Link>
             <button className="text-xs font-bold text-[#0095f6] hover:text-white transition-colors">Follow</button>
           </div>
         ))}

@@ -158,11 +158,10 @@
   /* Desktop: image zone is positioned absolute. On hover it expands to fill the section as full background. */
   @media (min-width: 1024px) {
     .hero-image-zone {
-      position: absolute;
-      top: 80px;
-      right: 4%;
-      width: 540px;
-      height: 540px;
+      position: relative;
+      width: 100%;
+      max-width: 620px;
+      margin-inline: auto;
       z-index: 10;
       cursor: pointer;
       transition: all 900ms cubic-bezier(0.25, 1, 0.5, 1);
@@ -170,17 +169,13 @@
 
     .hero-media-shell {
       position: relative;
-      top: auto;
-      right: auto;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      border: 2px solid var(--color-glass-border-light);
+      border: none;
       border-radius: 50%;
-      transform: rotate(0deg);
-      box-shadow:
-        0 34px 70px color-mix(in oklch, var(--color-background-app) 74%, transparent),
-        0 0 0 6px color-mix(in oklch, var(--color-glass-border-light) 40%, transparent);
+      transform: none;
+      box-shadow: none;
       transition: all 900ms cubic-bezier(0.25, 1, 0.5, 1);
     }
 
@@ -199,17 +194,23 @@
 
   /* Mobile: relative flow, image ABOVE the hero text */
   @media (max-width: 1023px) {
+    .hero-image-zone {
+      width: 100%;
+      max-width: 420px;
+      margin-inline: auto;
+    }
+
     .hero-media-shell {
       position: relative;
       z-index: 0;
-      width: 85%;
-      max-width: 340px;
+      width: 100%;
+      max-width: 420px;
       aspect-ratio: 1;
       margin: 0 auto;
       overflow: hidden;
-      border: 1px solid var(--color-glass-border-light);
+      border: none;
       border-radius: 50%;
-      box-shadow: 0 24px 50px color-mix(in oklch, var(--color-background-app) 74%, transparent);
+      box-shadow: none;
     }
   }
 

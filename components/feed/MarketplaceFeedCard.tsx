@@ -1,5 +1,8 @@
+"use client";
+
 import clsx from "clsx";
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from "lucide-react";
 
@@ -40,12 +43,12 @@ export function MarketplaceFeedCard({
         {/* Header */}
         <div className="flex items-center justify-between px-4 md:px-0 py-3">
           <div className="flex items-center gap-3">
-            <div className="relative h-9 w-9 rounded-full overflow-hidden border border-glass-border-medium">
+            <Link href={`/marketplace/profile/${username}`} className="relative h-9 w-9 rounded-full overflow-hidden border border-glass-border-medium flex-shrink-0">
               <Image src={avatarUrl} alt={username} fill className="object-cover" />
-            </div>
+            </Link>
             <div className="flex flex-col">
               <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold text-text-primary">{username}</span>
+                <Link href={`/marketplace/profile/${username}`} className="text-sm font-semibold text-text-primary hover:underline">{username}</Link>
                 {isVerified && (
                   <div className="h-3.5 w-3.5 rounded-full bg-trust-verified flex items-center justify-center">
                     <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
@@ -147,11 +150,11 @@ export function MarketplaceFeedCard({
           <div className="hidden sm:flex flex-col w-[350px] bg-background-app border-l border-border-subtle h-full">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <div className="flex items-center gap-3">
-                <div className="relative h-10 w-10 rounded-full overflow-hidden border border-glass-border-medium">
+                <Link href={`/marketplace/profile/${username}`} className="relative h-10 w-10 rounded-full overflow-hidden border border-glass-border-medium flex-shrink-0">
                   <Image src={avatarUrl} alt={username} fill className="object-cover" />
-                </div>
+                </Link>
                 <div className="flex items-center gap-1">
-                  <span className="text-sm font-semibold text-text-primary">{username}</span>
+                  <Link href={`/marketplace/profile/${username}`} className="text-sm font-semibold text-text-primary hover:underline">{username}</Link>
                   {isVerified && (
                     <div className="h-3.5 w-3.5 rounded-full bg-trust-verified flex items-center justify-center">
                       <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>

@@ -1,27 +1,32 @@
+"use client";
+
 import clsx from "clsx";
 import Link from "next/link";
 import Image from "next/image";
-import { 
-  Home, 
-  Compass, 
-  MessageCircle, 
-  Search, 
-  Bell, 
-  PlusSquare, 
-  BarChart2, 
+import { usePathname } from "next/navigation";
+import {
+  Home,
+  Compass,
+  MessageCircle,
+  Search,
+  Bell,
+  PlusSquare,
+  BarChart2,
   User,
   Menu
 } from "lucide-react";
 
 export function MarketplaceSidebar() {
+  const pathname = usePathname();
+
   const navItems = [
-    { icon: Home, label: "Home", href: "/marketplace", active: true },
+    { icon: Home, label: "Home", href: "/marketplace" },
     { icon: Search, label: "Search", href: "#" },
     { icon: MessageCircle, label: "Inbox", href: "#" },
     { icon: Bell, label: "Alerts", href: "#" },
     { icon: PlusSquare, label: "Listing", href: "#" },
     { icon: BarChart2, label: "Dashboard", href: "#" },
-    { icon: User, label: "Profile", href: "#" },
+    { icon: User, label: "Profile", href: "/marketplace/profile" },
   ];
 
   return (
@@ -49,25 +54,31 @@ export function MarketplaceSidebar() {
       </div>
 
       <nav className="flex-1 flex flex-col gap-2">
-        {navItems.map((item) => (
-          <Link 
-            key={item.label}
-            href={item.href}
-            className={clsx(
-              'flex items-center gap-4 px-3 py-3 rounded-lg transition-all',
-              'hover:bg-[#1a1a1a] active:scale-95',
-              item.active ? 'font-bold' : 'font-medium'
-            )}
-          >
-            <item.icon className={clsx(
-              'h-6 w-6',
-              item.active ? 'stroke-[2.5px] text-text-primary' : 'stroke-[1.5px] text-text-primary'
-            )} />
-            <span className={clsx('text-[15px]', item.active ? 'text-text-primary' : 'text-text-primary')}>
-              {item.label}
-            </span>
-          </Link>
-        ))}
+        {navItems.map((item) => {
+          const isActive =
+            item.href !== "#" &&
+            (pathname === item.href || (item.href !== "/marketplace" && pathname.startsWith(`${item.href}/`)));
+
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={clsx(
+                'flex items-center gap-4 px-3 py-3 rounded-lg transition-all',
+                'hover:bg-[#1a1a1a] active:scale-95',
+                isActive ? 'font-bold' : 'font-medium'
+              )}
+            >
+              <item.icon className={clsx(
+                'h-6 w-6 text-text-primary',
+                isActive ? 'stroke-[2.5px]' : 'stroke-[1.5px]'
+              )} />
+              <span className="text-[15px] text-text-primary">
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="mt-auto">

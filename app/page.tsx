@@ -103,7 +103,7 @@ export default function Home() {
           </Link>
 
           {/* Desktop pill nav */}
-          <div className={clsx('hidden', 'lg:flex', 'items-center', 'gap-1', 'rounded-full', 'border', 'border-glass-border-medium', 'bg-glass-dark', 'p-1.5', 'text-[11px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-text-secondary', 'backdrop-blur-lg')}>
+          <div className={clsx('hidden', 'lg:flex', 'items-center', 'gap-1', 'rounded-full', 'border', 'border-glass-border-medium', 'bg-glass-dark', 'p-2', 'text-[11px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-text-secondary', 'backdrop-blur-lg')}>
             {navLinks.map((link) => (
               <a
                 key={link.label}
@@ -155,9 +155,8 @@ export default function Home() {
         </nav>
 
         {/* ── HERO CONTENT ── */}
-        <div className={clsx('relative', 'z-10', 'mt-10', 'lg:mt-16')}>
-          {/* Text content */}
-          <div className={clsx('relative', 'z-10', 'max-w-5xl')}>
+        <div className={clsx('relative', 'z-10', 'mt-10', 'lg:mt-16', 'grid', 'gap-10', 'lg:gap-16', 'lg:grid-cols-2', 'items-center')}>
+          <div className={clsx('relative', 'z-10', 'max-w-3xl', 'lg:max-w-xl', 'xl:max-w-2xl')}>
             <p className={clsx('mb-6', 'inline-flex', 'rounded-full', 'border', 'border-glass-border-success', 'bg-accent-muted', 'px-4', 'py-1.5', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-accent-hover', 'backdrop-blur-md')}>
               Lagos spatial trust marketplace
             </p>
@@ -173,7 +172,6 @@ export default function Home() {
               that pay only when people are physically present.
             </p>
 
-            {/* CTAs */}
             <div className={clsx('mt-10', 'flex', 'flex-col', 'gap-3', 'sm:flex-row', 'sm:flex-wrap', 'sm:items-center', 'sm:gap-4')}>
               <a
                 href="/marketplace"
@@ -188,7 +186,6 @@ export default function Home() {
                 Create listing
               </a>
 
-              {/* Rotating badge — hidden on small screens */}
               <div className={clsx('relative', 'flex', 'h-20', 'w-20', 'items-center', 'justify-center', 'hidden', 'sm:flex', 'sm:ml-4', 'lg:ml-8')}>
                 <svg viewBox="0 0 100 100" className={clsx('absolute', 'inset-0', 'h-full', 'w-full', 'animate-spin-slow')}>
                   <path
@@ -209,61 +206,49 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Mobile image — shows only < lg, rendered below the text content */}
-            <div className={clsx('relative', 'flex', 'justify-center', 'lg:hidden', 'my-12')}>
-              <div className={clsx('hero-media-shell', 'relative')}>
-                <Image
-                  src={heroImage}
-                  alt="Luxury verified home interior"
-                  fill
-                  priority
-                  sizes="85vw"
-                  className="object-cover"
-                />
-              </div>
-              {/* Mobile orange arrow overlapping the image capsule */}
-              <a
-                href="/marketplace"
-                className={clsx('hero-arrow-button', 'absolute', 'z-20', 'flex', 'h-14', 'w-14', 'items-center', 'justify-center', 'rounded-full', 'bg-accent-warm', 'text-text-inverse', 'shadow-2xl')}
-                style={{ bottom: "0px", right: "12%" }}
-                aria-label="Open Rentral marketplace"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24" className={clsx('h-7', 'w-7')} fill="none">
-                  <path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-                </svg>
-              </a>
+          <div className={clsx('hero-image-zone', 'relative', 'w-full', 'overflow-hidden', 'bg-transparent')}>
+            <div className={clsx('hero-media-shell', 'relative', 'aspect-square', 'min-h-[320px]', 'w-full')}>
+              <Image
+                src={heroImage}
+                alt="Verified Lagos home interior captured with hardware-locked walkthrough"
+                fill
+                priority
+                sizes="(min-width: 1024px) 50vw, 90vw"
+                className="object-cover"
+              />
             </div>
-          </div>
-        </div>
 
-        {/* Desktop image zone — circle that expands to cover entire hero on hover */}
-        <div
-          className={clsx('hero-image-zone', 'hidden', 'lg:block')}
-        >
-          <div className={clsx('hero-media-shell', 'relative')}>
-            <Image
-              src={heroImage}
-              alt="Verified Lagos home interior captured with hardware-locked walkthrough"
-              fill
-              priority
-              sizes="(min-width: 1024px) 540px, 0px"
-              className="object-cover"
-            />
-            {/* Dark overlay that fades in when circle expands to full background */}
-            <div className="hero-expand-overlay" />
+            <a
+              href="/marketplace"
+              className={clsx(
+                'hero-arrow-button',
+                'absolute',
+                'z-20',
+                'flex',
+                'h-14',
+                'w-14',
+                'items-center',
+                'justify-center',
+                'rounded-full',
+                'bg-accent-warm',
+                'text-text-inverse',
+                'shadow-2xl',
+                'sm:h-16',
+                'sm:w-16',
+                'right-4',
+                'bottom-4',
+                'lg:right-6',
+                'lg:bottom-6'
+              )}
+              aria-label="Open Rentral marketplace"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className={clsx('h-7', 'w-7', 'sm:h-9', 'sm:w-9')} fill="none">
+                <path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+              </svg>
+            </a>
           </div>
-          {/* Orange Arrow — overlaps image on desktop */}
-          <a
-            href="/marketplace"
-            className={clsx('hero-arrow-button', 'absolute', 'z-30', 'flex', 'h-20', 'w-20', 'items-center', 'justify-center', 'rounded-full', 'bg-accent-warm', 'text-text-inverse', 'shadow-2xl', 'xl:h-24', 'xl:w-24')}
-            aria-label="Open Rentral marketplace"
-            style={{ top: "60px", left: "-40px" }}
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" className={clsx('h-9', 'w-9')} fill="none">
-              <path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-            </svg>
-          </a>
         </div>
       </HeroBackground>
 

@@ -18,6 +18,8 @@ model User {
   didit_workflow_id   String?
   didit_decision      Json?
   verifiedDocument String? // Stores NIN, BVN, or CAC
+  bio              String?
+  avatar_url       String?
   individualProfile   IndividualProfile?
   organizationProfile OrganizationProfile?
   createdAt        DateTime @default(now())
