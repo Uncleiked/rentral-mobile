@@ -11,7 +11,7 @@ export function MarketplaceBottomNav() {
   const navItems = [
     { icon: Home, label: "Home", href: "/marketplace" },
     { icon: Search, label: "Search", href: "#" },
-    { icon: PlusSquare, label: "Listing", href: "#" },
+    { icon: PlusSquare, label: "Listing", href: "/marketplace/listing" },
     { icon: MessageCircle, label: "Inbox", href: "#" },
     { icon: User, label: "Profile", href: "/marketplace/profile" },
   ];

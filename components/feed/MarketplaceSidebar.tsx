@@ -24,7 +24,7 @@ export function MarketplaceSidebar() {
     { icon: Search, label: "Search", href: "#" },
     { icon: MessageCircle, label: "Inbox", href: "#" },
     { icon: Bell, label: "Alerts", href: "#" },
-    { icon: PlusSquare, label: "Listing", href: "#" },
+    { icon: PlusSquare, label: "Listing", href: "/marketplace/listing" },
     { icon: BarChart2, label: "Dashboard", href: "#" },
     { icon: User, label: "Profile", href: "/marketplace/profile" },
   ];

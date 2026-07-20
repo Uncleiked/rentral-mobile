@@ -321,64 +321,53 @@ PostHog is the backbone of our B2B 'Rentral Insights' portal, tracking geospatia
 
 ## 7.1 Client-Side Initialization
 
-// lib/posthog-client.ts
+// instrumentation-client.ts (Next.js App Router convention — not lib/posthog-client.ts)
 import posthog from "posthog-js";
 
-export function initPostHog() {
-  if (typeof window !== "undefined") {
-    posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST!,
-      capture_pageview: false, // We trigger this manually in Next.js App Router
-    });
-  }
-}
+posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN!, {
+  api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  defaults: "2026-05-30", // bundles autocapture, pageview/pageleave, session recording
+  capture_exceptions: true,
+});
+
+Note: the `defaults` bundle autocaptures pageviews out of the box. There is no manual pageview trigger in this project — if page-level funnels need to exclude noise later, override with `capture_pageview: false` and call `posthog.capture('$pageview')` manually at that point.
 
 
 ## 7.2 Serverless Environment Tracking (CRITICAL)
 
-In Server Actions, API routes, or Supabase Edge Functions, you must use flushAt: 1 and await posthog.shutdown().
+In Server Actions, API routes, or Supabase Edge Functions, use flushAt: 1 and flush() per call — not a per-call factory + shutdown(). `shutdown()` permanently closes the client, which breaks every subsequent call on a reused instance, so this project uses one module-level singleton for the life of the server process and flushes after every capture instead.
 
-// lib/posthog-server.ts
+```ts
+// lib/posthog.ts
 import { PostHog } from "posthog-node";
 
-export const createPostHogServer = () =>
-  new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-    host: process.env.NEXT_PUBLIC_POSTHOG_HOST!,
-    flushAt: 1, // MANDATORY: Next.js functions spin down instantly
-    flushInterval: 0,
-  });
+const posthogServerClient = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN!, {
+  host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  flushAt: 1, // MANDATORY: Next.js functions spin down instantly
+  flushInterval: 0,
+});
+
+export async function captureServerEvent(
+  distinctId: string,
+  event: string,
+  properties?: Record<string, unknown>
+): Promise<void> {
+  try {
+    posthogServerClient.capture({ distinctId, event, properties });
+    await posthogServerClient.flush(); // Forces event queue dispatch before lambda death
+  } catch (error) {
+    console.error(`[posthog] Failed to capture "${event}":`, error);
+  }
+}
 
 // Usage inside an action:
-const posthog = createPostHogServer();
-posthog.capture({
-  distinctId: seekerId,
-  event: "multi_year_escrow_locked",
-  properties: { 
-    listingId: listingId, 
-    durationYears: selectedYears,
-    totalValue: calculatedTotal 
-  },
-});
-await posthog.shutdown(); // MANDATORY: Forces event queue dispatch before lambda death
+await captureServerEvent(userId, "profile_updated", { field: "identity" });
+```
 
 
 ## Required PostHog Events:
 
-onboarding_kyc_completed
-
-listing_hardware_locked
-
-inspection_escrow_deposited
-
-spatial_handshake_success
-
-multi_year_escrow_locked
-
-holding_lock_expired
-
-year2_route_updated
-
-lease_termination_verified
+See `code-standards.md` → "PostHog Telemetry Events" for the current list, split into Phase 1 (implemented) and Phase 2+ (future — no backing system yet).
 
 ## 8. Client State Management (zustand)
 

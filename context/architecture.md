@@ -88,6 +88,7 @@ Analytics & Telemetry: PostHog - Comprehensive event tracking, behavioral analyt
 │   └── chat/
 │       ├── ThreadList.tsx                      → Active negotiations
 │       └── ChatCanvas.tsx                      → Supabase Realtime message streams
+├── instrumentation-client.ts                   → Client-side PostHog init (Next.js App Router convention, not lib/)
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts                           → Browser SSR client
@@ -98,8 +99,7 @@ Analytics & Telemetry: PostHog - Comprehensive event tracking, behavioral analyt
 │   ├── spatial/
 │   │   └── math.ts                             → Client-side coordinate distance estimators
 │   ├── gemini.ts                               → AI Engine initialization
-│   ├── posthog-client.ts                       → Client-side telemetry initialization
-│   ├── posthog-server.ts                       → Server-side analytics initialization
+│   ├── posthog.ts                              → Server-side telemetry singleton + captureServerEvent() helper
 │   └── utils.ts                                → Tailwind merge, formatting tools
 ├── store/
 │   └── useRentralStore.ts                      → Zustand: Local UI overrides, active booking context

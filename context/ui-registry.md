@@ -76,3 +76,28 @@ After building any component — update this file with the component name, file 
 - **Action Button (e.g. Like/Message)**: `flex h-12 w-12 items-center justify-center rounded-full border border-glass-border-medium bg-glass-light backdrop-blur-md transition-all active:scale-95`
 - **Primary CTA / Book Button**: `mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent-primary text-text-inverse shadow-2xl active:scale-95 transition-all animate-pulse`
 - **Trust Badges**: `rounded-full border border-glass-border-light bg-glass-light px-3 py-1 text-xs font-medium text-text-primary backdrop-blur-sm`
+
+### Listing Capture Wizard
+
+- **File Paths**: [app/marketplace/listing/create/page.tsx](app/marketplace/listing/create/page.tsx), [components/listing/CategorySelector.tsx](components/listing/CategorySelector.tsx), [components/listing/CaptureCanvas.tsx](components/listing/CaptureCanvas.tsx), [components/listing/MetadataForm.tsx](components/listing/MetadataForm.tsx), [components/listing/DocumentUploadZone.tsx](components/listing/DocumentUploadZone.tsx), [components/listing/CheckoutPrompt.tsx](components/listing/CheckoutPrompt.tsx)
+- **Route note**: nested under `/marketplace/listing/create` (not top-level `/listing/create`) to match the `/marketplace/profile` convention. Reached via the "Create Listing" CTA on the Listing Hub below, not directly from nav.
+- **Page Shell**: `min-h-screen bg-background-app px-4 py-10 sm:px-6`
+- **Wizard Stepper**: numbered circle `flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold` — active/passed `bg-accent-primary text-text-inverse`, upcoming `bg-glass-light text-text-muted`; connector line `h-px flex-1` — passed `bg-accent-primary`, upcoming `bg-border-subtle`
+- **Selectable List Item (Category Card)**: `flex items-center gap-4 rounded-xl border px-5 py-5 text-left transition-all active:scale-98` — selected `border-accent-primary bg-accent-muted`, unselected `border-border-subtle bg-surface-card`; leading icon in `flex h-12 w-12 items-center justify-center rounded-full border border-glass-border-light bg-glass-light`
+- **Full-Screen Capture Canvas**: `relative isolate aspect-[9/16] w-full overflow-hidden rounded-2xl border border-border-subtle bg-background-app shadow-2xl`; top/bottom overlays use the standard Contextual Glassmorphic Panel treatment (`bg-glass-dark backdrop-blur-lg border border-glass-border-light`)
+- **Status Pill (GPS lock / REC)**: `flex items-center gap-2 rounded-full border bg-glass-dark px-3 py-1.5 backdrop-blur-lg`, dot `h-2 w-2 rounded-full` colored `bg-trust-verified`/`bg-trust-flagged`
+- **Form Input** (matches `components/onboarding/ProfileForm.tsx`): `rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary transition-all`; label `text-xs font-medium uppercase tracking-wider text-text-muted`; field error `text-xs text-trust-flagged`
+- **Drag-and-Drop Upload Zone**: `flex flex-col items-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center transition-all` — dragging `border-accent-primary bg-accent-muted`, idle `border-border-subtle bg-surface-card`
+- **Wizard Nav Buttons**: primary `flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg hover:bg-accent-hover active:scale-98 disabled:opacity-40`; secondary/back `flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary active:scale-98`
+
+**Pattern notes:** Wizard steps reuse the Base Card Surface (`bg-surface-card`/`border-border-subtle`) for static forms and the Contextual Glassmorphic Panel for anything overlaying the live camera feed — never mix the two for the same element. Emerald (`accent-primary`/`accent-muted`) marks the selected/active/passed state everywhere in the wizard (category card, stepper dot, upload zone while dragging); red (`trust-flagged`) is reserved for the GPS-not-yet-locked dot, never for form validation chrome beyond the existing `text-trust-flagged` error-text convention.
+
+### Listing Hub (My Listings)
+
+- **File Path**: [app/marketplace/listing/page.tsx](app/marketplace/listing/page.tsx)
+- **Page Shell**: identical to `/marketplace/profile` — `bg-background-app min-h-[100dvh] w-full flex`, content column `flex-1 flex justify-center md:ml-64 lg:ml-[244px] pb-16 md:pb-0`, inner `w-full max-w-5xl px-4 py-6 md:px-8 md:py-10`
+- **Section Header**: title `text-xl font-bold text-text-primary tracking-wide`, subtitle `text-sm text-text-secondary mt-1`, laid out `flex items-center justify-between gap-4 mb-8`
+- **Primary CTA ("Create Listing")**: `inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg hover:bg-accent-hover active:scale-98` — shown top-right on desktop, repeated full-width below the grid on mobile (`sm:hidden`)
+- **Listings Grid / Empty State**: reuses `components/profile/ListingsGrid.tsx` + `components/profile/ListingCard.tsx` verbatim — do not fork these for the hub; both profile (visitor view) and this hub must stay visually identical since they render the same data shape (`ListingSummary[]`)
+
+**Pattern notes:** This is the first place `ListingsGrid` renders for the *owner's own* listings (previously only used on visitor profile views) — its empty state intentionally has no built-in CTA, so every page embedding it must supply its own "Create Listing" / routing action per `ui-rules.md`'s Empty States rule. Sidebar and bottom-nav both route their "Listing" item here, never straight to the wizard.

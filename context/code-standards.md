@@ -203,6 +203,34 @@ Spatial Privacy — In error logs, never output exact raw latitude/longitude coo
 
 Rentral relies on factual behavioral data to power the B2B 'Rentral Insights' platform. All PostHog events must use these exact event names.
 
+### Phase 1 Events (Implemented)
+
+These are the only events with a live backing system today. Fired via `captureServerEvent()` in `lib/posthog.ts`.
+
+user_signed_up / user_signed_in
+
+When: A user completes sign-up or sign-in. Fired from `app/(auth)/sign-in/actions.ts`.
+
+verification_started
+
+When: `initiateVerification` kicks off a Didit KYC session. Fired from `app/onboarding/actions.ts`.
+
+verification_completed
+
+When: Didit posts any status transition to the webhook. Fired from `app/api/webhooks/didit/route.ts`, tagged with `status`.
+
+onboarding_completed
+
+When: `submitProfile` finishes onboarding. Fired from `app/actions/profile.ts`.
+
+profile_updated
+
+When: `updateProfileIdentity` or `updateAvatarUrl` saves a profile edit. Fired from `app/actions/profile-edit.ts`, tagged with `field: 'identity' | 'avatar'`.
+
+### Phase 2+ Events (Future — no backing system yet)
+
+The events below describe planned behavior for listings, escrow, and handshakes. None of these fire today — the underlying models (Listing, escrow, spatial handshake) don't exist. Do not implement until the corresponding build-plan phase lands.
+
 onboarding_kyc_completed
 
 When: User successfully passes Didit verification.
@@ -257,7 +285,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY — Client-side DB requests.
 
 NEXT_PUBLIC_SUPABASE_ANON_KEY — Authentication UI.
 
-NEXT_PUBLIC_POSTHOG_KEY — Browser telemetry.
+NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN — Browser telemetry.
 
 NEXT_PUBLIC_POSTHOG_HOST — Telemetry routing.
 

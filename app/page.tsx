@@ -180,7 +180,7 @@ export default function Home() {
                 Enter marketplace
               </a>
               <a
-                href="/listing/create"
+                href="/marketplace/listing/create"
                 className={clsx('glass-btn', 'inline-flex', 'items-center', 'justify-center', 'rounded-xl', 'border', 'border-glass-border-medium', 'bg-glass-light', 'px-6', 'py-4', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'text-text-primary', 'backdrop-blur-md')}
               >
                 Create listing

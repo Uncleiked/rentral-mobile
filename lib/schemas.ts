@@ -32,3 +32,29 @@ export const usernameBioSchema = z.object({
 export const emailChangeSchema = z.object({
   email: z.string().trim().email("Enter a valid email address."),
 })
+
+// Listing capture — category-specific structural metadata (build-plan.md Phase 2, Item 05)
+export const houseMetadataSchema = z.object({
+  bedrooms: z.string().min(1, "Bedrooms is required"),
+  bathrooms: z.string().min(1, "Bathrooms is required"),
+  sizeSqm: z.string().min(1, "Size is required"),
+  amenities: z.string().max(280, "Amenities must be 280 characters or fewer."),
+})
+
+export const carMetadataSchema = z.object({
+  transmission: z.enum(['automatic', 'manual'], { message: "Select a transmission type" }),
+  mileageKm: z.string().min(1, "Mileage is required"),
+  seats: z.string().min(1, "Seat count is required"),
+  fuelType: z.string().min(1, "Fuel type is required"),
+})
+
+export const boatMetadataSchema = z.object({
+  vesselType: z.string().min(1, "Vessel type is required"),
+  capacityPersons: z.string().min(1, "Capacity is required"),
+  hasCaptain: z.boolean(),
+})
+
+export const listingDetailsSchema = z.object({
+  address: z.string().min(5, "Address is required"),
+  basePrice: z.string().min(1, "Base price is required"),
+})

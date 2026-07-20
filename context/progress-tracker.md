@@ -1,67 +1,3 @@
-<!-- # Progress Tracker
-
-Update this file after every completed feature. Any AI agent reading this should immediately know what is done, what is in progress, and what is next.
-
----
-
-## Current Status
-
-**Phase:**
-**Last completed:**
-**Next:**
-
----
-
-## Progress
-
-### Phase 1 — Foundation
-
-- [ ] 01 Homepage
-- [ ] 02 Auth
-- [ ] 03 PostHog Initialization
-- [ ] 04 Database Schema
-
-### Phase 2 — Profile Page
-
-- [ ] 05 Profile Page — Full UI
-- [ ] 06 Profile Save Logic
-- [ ] 07 AI Profile Extraction from Resume
-- [ ] 08 Resume PDF Generation from Profile
-
-### Phase 3 — Find Jobs Page
-
-- [ ] 09 Find Jobs Page — Full UI
-- [ ] 10 Adzuna Job Discovery
-- [ ] 11 Filter + Sort + Pagination
-
-### Phase 4 — Job Details Page
-
-- [ ] 12 Job Details Page — Full UI
-- [ ] 13 Company Research Agent
-
-### Phase 5 — Dashboard
-
-- [ ] 14 Dashboard Page — Full UI
-- [ ] 15 Stats Bar — Real Data
-- [ ] 16 Recent Activity — Real Data
-- [ ] 17 Analytics Charts — PostHog Data
-
----
-
-## Decisions Made During Build
-
-_Add decisions here as they are made during implementation._
-
----
-
-## Notes
-
-_Add notes here as the build progresses — workarounds, patterns, anything that differs from the context files._ -->
-
-
-
-
-
 ## Progress Tracker
 
 Update this file after every completed feature. Any AI agent reading this should immediately know what is done, what is in progress, and what is next.
@@ -71,7 +7,9 @@ Update this file after every completed feature. Any AI agent reading this should
 Phase: Phase 1 — Foundation, Auth, & Core Infrastructure (with Profile UI pulled forward from Phase 7)
 Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed). Also: Marketplace Profile Page — Owner + Visitor UI (`/marketplace/profile`, `/marketplace/profile/[username]`), built ahead of schedule with real identity data (username/name/verification/account type from Prisma), real trust-stat counts via `getTrustSummary()` (with a `null`/"Coming soon" placeholder for the 3 metrics with no backing system yet), and a real empty state for listings until the Listing table exists. Profile is editable end-to-end: bio + avatar_url added to `User`, a public `profile-avatars` Storage bucket with owner-scoped RLS, live username-availability checking, Supabase secure (double-confirm) email change synced back to Prisma via `app/auth/callback/route.ts`, real Sign Out, and a Copy Link/WhatsApp/X/Facebook share menu.
 Also: 05 Telemetry & PostHog Initialization — `posthog-js` client init (`instrumentation-client.ts`) + `posthog-node` server client (`lib/posthog.ts`, `flushAt: 1`, flush-per-call so events land before short-lived server actions/route handlers exit). 6 events wired to real code paths: `user_signed_in`/`user_signed_up` (sign-in actions), `verification_started` (onboarding `initiateVerification`), `verification_completed` (Didit webhook), `onboarding_completed` (`submitProfile`), `profile_updated` (`updateProfileIdentity`/`updateAvatarUrl`, tagged by `field`).
-Next: 06 Mobile-First Capture UI (WebRTC Camera & HTML5 Geolocation hooks)
+Also: Listing Capture — Full UI (build-plan.md Phase 2, Item 05). Wizard shell (Category → Walkthrough → Details → Documents → Activate → Done) now nested at `/marketplace/listing/create` (moved from a top-level `/listing/create` to match the `/marketplace/profile` convention), `useRentralStore` (Zustand) driving wizard state, category-specific metadata schemas (House/Car/Boat) in `lib/schemas.ts`. `CaptureCanvas` uses a real `getUserMedia` live preview; countdown, GPS-lock dot, document upload, and the ₦1,000 checkout screen are simulated local state — no `navigator.geolocation`, no DB writes, no Mux/Gemini/OPay calls yet.
+Also: Listing Hub (`/marketplace/listing`) — "Your Listings" page reusing the existing `ListingsGrid`/`getListingsForProfile()` (previously only rendered on visitor profile views) plus a "Create Listing" CTA into the wizard. Sidebar (`MarketplaceSidebar`) and mobile bottom nav (`MarketplaceBottomNav`) "Listing" items — previously dead `href="#"` placeholders — now both route here instead of straight to the wizard. Homepage's "Create listing" CTA still goes directly to `/marketplace/listing/create`. Verified end-to-end with a headless Chrome + fake-camera-device Playwright run across both entry points (sidebar → hub → wizard, and homepage → wizard directly): real video frames rendered, correct routing at every hop, zero console errors. Also confirmed the existing `proxy.ts` auth gate correctly protects all of these routes (redirects unauthenticated visitors to `/sign-in`, then to `/marketplace`/`/onboarding` per profile state).
+Next: 06 Spatial Integrity & Upload Logic — wire real `navigator.geolocation` + Mux video upload + Server Action DB persistence behind the same capture screens (build-plan.md Phase 2, Item 06)
 
 ## Progress
 
@@ -182,4 +120,6 @@ _Currency Handling: Always multiply NGN values by 100 before sending to OPay/Pay
 _Admin Security: The admin-bypass-verification and is-admin-override flags must always be guarded by a strict backend check validating profiles.is-admin = true to prevent production exploitation during staging/testing._
 
 _Holding Lock Split: When a 24-hour holding lock expires, the Edge Function must programmatically distribute 30% to the platform and 70% to the asset owner's bank account before resetting the listing to 'active'._
+
+_Listing Capture UI-First Boundary: `/listing/create` intentionally stops at the browser boundary — real camera preview, but simulated GPS lock/countdown/document verification/payment confirmation. No Listing DB writes happen until Item 06's logic phase lands, per the build-plan's "no invisible backend phases" principle._
 
