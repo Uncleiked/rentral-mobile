@@ -1,7 +1,7 @@
-import type { MockTrustProfile } from "@/lib/mock-profile-data";
+import type { TrustSummary } from "@/lib/profile-data";
 
 interface TrustStatsBarProps {
-  stats: MockTrustProfile;
+  stats: TrustSummary;
 }
 
 function StatCell({ value, label }: { value: string; label: string }) {
@@ -18,10 +18,10 @@ function StatCell({ value, label }: { value: string; label: string }) {
 export function TrustStatsBar({ stats }: TrustStatsBarProps) {
   return (
     <div className="w-full rounded-2xl bg-accent-primary px-5 py-5 flex flex-wrap justify-around gap-4">
-      <StatCell value={stats.trustScore} label="Trust Score" />
+      <StatCell value={stats.trustScore ?? "—"} label="Trust Score" />
       <StatCell value={String(stats.ghostListings)} label="Ghost Listings" />
-      <StatCell value={`${stats.avgResponseMinutes} min`} label="Avg Response" />
-      <StatCell value={`${stats.showUpRatePercent}%`} label="Show-Up Rate" />
+      <StatCell value={stats.avgResponseMinutes != null ? `${stats.avgResponseMinutes} min` : "—"} label="Avg Response" />
+      <StatCell value={stats.showUpRatePercent != null ? `${stats.showUpRatePercent}%` : "—"} label="Show-Up Rate" />
       <StatCell value={String(stats.verifiedSinceYear)} label="GPS-Verified Since" />
     </div>
   );

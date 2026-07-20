@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { individualProfileSchema, organizationProfileSchema } from '@/lib/schemas'
+import { captureServerEvent } from '@/lib/posthog'
 
 export async function submitProfile(data: z.infer<typeof individualProfileSchema> | z.infer<typeof organizationProfileSchema>) {
   const supabase = await createClient()
@@ -87,6 +88,10 @@ export async function submitProfile(data: z.infer<typeof individualProfileSchema
       username: updatedDbUser?.username,
       profile_completed: true,
     }
+  })
+
+  await captureServerEvent(user.id, 'onboarding_completed', {
+    account_type: updatedDbUser?.account_type,
   })
 
   revalidatePath('/onboarding')

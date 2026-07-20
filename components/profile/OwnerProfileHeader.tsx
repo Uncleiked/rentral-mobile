@@ -1,12 +1,11 @@
 import { AvatarUploadButton } from "@/components/profile/AvatarUploadButton";
 import { VerifiedBadge } from "@/components/profile/VerifiedBadge";
 import { OwnerProfileActions } from "@/components/profile/OwnerProfileActions";
-import type { OwnProfileDetails } from "@/lib/profile-data";
-import type { MockTrustProfile } from "@/lib/mock-profile-data";
+import type { OwnProfileDetails, TrustSummary } from "@/lib/profile-data";
 
 interface OwnerProfileHeaderProps {
   profile: OwnProfileDetails;
-  stats: MockTrustProfile;
+  stats: TrustSummary;
 }
 
 export function OwnerProfileHeader({ profile, stats }: OwnerProfileHeaderProps) {
@@ -44,10 +43,10 @@ export function OwnerProfileHeader({ profile, stats }: OwnerProfileHeaderProps) 
 
       <div className="flex flex-col items-end gap-2">
         <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-extrabold text-accent-hover">★ {stats.trustScore}</span>
+          <span className="text-2xl font-extrabold text-accent-hover">★ {stats.trustScore ?? "—"}</span>
         </div>
         <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-          Trust score · {stats.topPercentLabel}
+          {stats.topPercentLabel ? `Trust score · ${stats.topPercentLabel}` : "Trust score · Coming soon"}
         </span>
         <div className="mt-1">
           <OwnerProfileActions profile={profile} />

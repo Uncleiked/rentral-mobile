@@ -27,6 +27,57 @@ export type OwnProfileDetails = ProfileRecord & {
   address: string | null
 }
 
+export type TrustSummary = {
+  // Computed metrics with no backing system yet (reputation scoring,
+  // messaging, handshake check-ins). null means "not available", not zero —
+  // render as a placeholder, never fabricate a number.
+  trustScore: string | null
+  topPercentLabel: string | null
+  avgResponseMinutes: number | null
+  showUpRatePercent: number | null
+  // Real counts. Legitimately zero for every user until listings, handshakes,
+  // and bookings exist — same as a brand-new account showing "0 followers".
+  ghostListings: number
+  listingsCount: number
+  followersCount: number
+  handshakesCount: number
+  rentalsCompleted: number
+  onTimePayments: number
+  verifiedSinceYear: number
+}
+
+export type ListingSummary = {
+  id: string
+  title: string
+  price: string
+  priceDenomination: string
+  posterUrl: string
+  badges: string[]
+}
+
+// No Listing model exists yet (build-plan.md Phase 1 items 06-11: capture UI,
+// spatial forms, media ingestion, listing editor). Returns real empty state
+// instead of mock inventory — swap this for a Prisma query once listings ship.
+export function getListingsForProfile(): ListingSummary[] {
+  return []
+}
+
+export function getTrustSummary(profile: ProfileRecord): TrustSummary {
+  return {
+    trustScore: null,
+    topPercentLabel: null,
+    avgResponseMinutes: null,
+    showUpRatePercent: null,
+    ghostListings: 0,
+    listingsCount: 0,
+    followersCount: 0,
+    handshakesCount: 0,
+    rentalsCompleted: 0,
+    onTimePayments: 0,
+    verifiedSinceYear: profile.memberSince.getFullYear(),
+  }
+}
+
 type UserWithProfiles = User & {
   individualProfile: IndividualProfile | null
   organizationProfile: OrganizationProfile | null

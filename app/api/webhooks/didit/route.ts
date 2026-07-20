@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { createAdminClient } from '@/lib/admin'
 import prisma from '@/lib/db'
+import { captureServerEvent } from '@/lib/posthog'
 
 type DiditWebhookPayload = {
   event_id?: unknown
@@ -249,6 +250,12 @@ export async function POST(request: Request): Promise<Response> {
         kycVerified,
         username: updatedUser.username,
         profileCompleted,
+      })
+
+      await captureServerEvent(vendorDataUserId, 'verification_completed', {
+        status: verificationStatus,
+        kyc_verified: kycVerified,
+        account_type: updatedUser.account_type,
       })
     }
 

@@ -1,8 +1,8 @@
 import Image from "next/image";
-import type { MockListing } from "@/lib/mock-profile-data";
+import type { ListingSummary } from "@/lib/profile-data";
 
 interface ListingCardProps {
-  listing: MockListing;
+  listing: ListingSummary;
 }
 
 export function ListingCard({ listing }: ListingCardProps) {

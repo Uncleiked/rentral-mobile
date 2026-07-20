@@ -1,8 +1,8 @@
 import { ShieldCheck } from "lucide-react";
-import type { MockTrustProfile } from "@/lib/mock-profile-data";
+import type { TrustSummary } from "@/lib/profile-data";
 
 interface TrustLedgerSummaryProps {
-  stats: MockTrustProfile;
+  stats: TrustSummary;
 }
 
 export function TrustLedgerSummary({ stats }: TrustLedgerSummaryProps) {

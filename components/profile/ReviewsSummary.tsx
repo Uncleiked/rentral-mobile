@@ -2,7 +2,7 @@ import { Star } from "lucide-react";
 
 interface ReviewsSummaryProps {
   reviewsCount: number;
-  trustScore: string;
+  trustScore: string | null;
 }
 
 export function ReviewsSummary({ reviewsCount, trustScore }: ReviewsSummaryProps) {
@@ -12,7 +12,7 @@ export function ReviewsSummary({ reviewsCount, trustScore }: ReviewsSummaryProps
         <Star className="h-6 w-6 text-text-muted" />
       </div>
       <p className="text-sm font-semibold text-text-primary">
-        {trustScore} average across {reviewsCount} reviews
+        {trustScore ? `${trustScore} average across ${reviewsCount} reviews` : "Ratings coming soon"}
       </p>
       <p className="text-sm text-text-muted max-w-xs">
         Reviews are collected automatically after a verified GPS handshake at inspection.

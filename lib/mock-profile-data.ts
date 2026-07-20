@@ -1,112 +1,12 @@
 // Mock fixtures for the marketplace profile page.
 //
 // The `profiles` table (real, via lib/profile-data.ts) only carries identity
-// fields today. Listings, transactions, escrow, and trust-score tables are
-// Phase 3-5 of build-plan.md and don't exist yet, so every stat below is
-// mocked but deterministically seeded per-username so the same profile
-// always renders the same numbers instead of reshuffling on every request.
-
-function seedFromUsername(username: string): number {
-  let hash = 0
-  for (let i = 0; i < username.length; i++) {
-    hash = (hash * 31 + username.charCodeAt(i)) >>> 0
-  }
-  return hash
-}
-
-export type MockTrustProfile = {
-  trustScore: string
-  ghostListings: number
-  avgResponseMinutes: number
-  showUpRatePercent: number
-  verifiedSinceYear: number
-  listingsCount: number
-  followersCount: number
-  handshakesCount: number
-  rentalsCompleted: number
-  onTimePayments: number
-  verifiedInspections: number
-  topPercentLabel: string
-}
-
-export function getMockTrustProfile(username: string): MockTrustProfile {
-  const seed = seedFromUsername(username)
-
-  return {
-    trustScore: (4.4 + (seed % 60) / 100).toFixed(2),
-    ghostListings: 0,
-    avgResponseMinutes: 8 + (seed % 20),
-    showUpRatePercent: 92 + (seed % 8),
-    verifiedSinceYear: 2025,
-    listingsCount: 6 + (seed % 24),
-    followersCount: 200 + (seed % 1800),
-    handshakesCount: 40 + (seed % 200),
-    rentalsCompleted: 1 + (seed % 6),
-    onTimePayments: 10 + (seed % 30),
-    verifiedInspections: 2 + (seed % 10),
-    topPercentLabel: `Top ${5 + (seed % 20)}%`,
-  }
-}
-
-export type MockListing = {
-  id: string
-  title: string
-  price: string
-  priceDenomination: string
-  posterUrl: string
-  badges: string[]
-}
-
-export const MOCK_LISTINGS: MockListing[] = [
-  {
-    id: '1',
-    title: 'Luxury 3-Bed Villa with Pool',
-    price: '4,500,000',
-    priceDenomination: 'YEAR',
-    posterUrl: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80',
-    badges: ['3 Beds', '4 Baths', 'Ikoyi'],
-  },
-  {
-    id: '2',
-    title: '2-Bed Apartment, Ocean View',
-    price: '2,800,000',
-    priceDenomination: 'YEAR',
-    posterUrl: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80',
-    badges: ['2 Beds', 'Lekki Ph 1'],
-  },
-  {
-    id: '3',
-    title: 'Shortlet Studio, Victoria Island',
-    price: '85,000',
-    priceDenomination: 'NIGHT',
-    posterUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80',
-    badges: ['Studio', 'VI'],
-  },
-  {
-    id: '4',
-    title: '4-Bed Semi-Detached Duplex',
-    price: '6,200,000',
-    priceDenomination: 'YEAR',
-    posterUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80',
-    badges: ['4 Beds', 'Chevron'],
-  },
-  {
-    id: '5',
-    title: '3-Bed Terrace, Gated Estate',
-    price: '3,600,000',
-    priceDenomination: 'YEAR',
-    posterUrl: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
-    badges: ['3 Beds', 'Ikate'],
-  },
-  {
-    id: '6',
-    title: 'Penthouse Shortlet, Oniru',
-    price: '150,000',
-    priceDenomination: 'NIGHT',
-    posterUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-    badges: ['2 Beds', 'Oniru'],
-  },
-]
+// fields today. Trust stats and listings are now computed for real via
+// getTrustSummary() / getListingsForProfile() in lib/profile-data.ts.
+// Transactions and escrow tables are Phase 3-5 of build-plan.md and don't
+// exist yet, so everything below is still mocked but deterministically
+// seeded per-username so the same profile always renders the same numbers
+// instead of reshuffling on every request.
 
 export type MockEscrowActivity = {
   id: string

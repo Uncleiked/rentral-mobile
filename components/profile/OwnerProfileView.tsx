@@ -7,15 +7,14 @@ import { InspectionsHandshakesCard } from "@/components/profile/InspectionsHands
 import { SavedSearchesCard } from "@/components/profile/SavedSearchesCard";
 import { SecurityCard } from "@/components/profile/SecurityCard";
 import { EmailChangeToast } from "@/components/profile/EmailChangeToast";
-import { getMockTrustProfile } from "@/lib/mock-profile-data";
-import type { OwnProfileDetails } from "@/lib/profile-data";
+import { getTrustSummary, type OwnProfileDetails } from "@/lib/profile-data";
 
 interface OwnerProfileViewProps {
   profile: OwnProfileDetails;
 }
 
 export function OwnerProfileView({ profile }: OwnerProfileViewProps) {
-  const stats = getMockTrustProfile(profile.username);
+  const stats = getTrustSummary(profile);
 
   return (
     <div className="flex flex-col gap-6">

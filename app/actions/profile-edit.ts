@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
+import { captureServerEvent } from '@/lib/posthog'
 import { revalidatePath } from 'next/cache'
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/
@@ -93,6 +94,7 @@ export async function updateProfileIdentity(data: { username: string; bio: strin
     })
 
     revalidateProfilePaths(username, previous?.username)
+    await captureServerEvent(userId, 'profile_updated', { field: 'identity' })
     return { success: true }
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -158,6 +160,7 @@ export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> 
       revalidatePath(`/marketplace/profile/${dbUser.username}`)
     }
 
+    await captureServerEvent(userId, 'profile_updated', { field: 'avatar' })
     return { success: true }
   } catch (error) {
     console.error('[actions/profile-edit] updateAvatarUrl failed:', error)

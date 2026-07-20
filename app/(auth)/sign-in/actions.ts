@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/server'
+import { captureServerEvent } from '@/lib/posthog'
 
 type AuthResult =
   | { success: true; redirectTo: string; message?: string }
@@ -31,6 +32,10 @@ export async function login(formData: FormData): Promise<AuthResult> {
     data: { user },
   } = await supabase.auth.getUser()
 
+  if (user) {
+    await captureServerEvent(user.id, 'user_signed_in')
+  }
+
   return { success: true, redirectTo: onboardingComplete(user) ? '/marketplace' : '/onboarding' }
 }
 
@@ -45,6 +50,10 @@ export async function signup(formData: FormData): Promise<AuthResult> {
   if (error) {
     console.error('[auth/login/actions] Supabase signup failed:', error.message)
     return { error: error.message }
+  }
+
+  if (data.user) {
+    await captureServerEvent(data.user.id, 'user_signed_up')
   }
 
   if (!data.session) {

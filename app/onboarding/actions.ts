@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/admin'
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
+import { captureServerEvent } from '@/lib/posthog'
 import { redirect } from 'next/navigation'
 
 type AccountType = 'individual' | 'organization'
@@ -233,6 +234,11 @@ export async function initiateVerification(formData: FormData): Promise<ActionRe
         didit_session_id: sessionId,
         verification_status: 'in_progress',
       },
+    })
+
+    await captureServerEvent(user.id, 'verification_started', {
+      account_type: accountType,
+      verification_kind: verificationKind,
     })
 
     return { url: sessionUrl, session_id: sessionId }

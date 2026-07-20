@@ -1,12 +1,11 @@
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { VerifiedBadge } from "@/components/profile/VerifiedBadge";
 import { ShareMenu } from "@/components/profile/ShareMenu";
-import type { ProfileRecord } from "@/lib/profile-data";
-import type { MockTrustProfile } from "@/lib/mock-profile-data";
+import type { ProfileRecord, TrustSummary } from "@/lib/profile-data";
 
 interface VisitorProfileHeaderProps {
   profile: ProfileRecord;
-  stats: MockTrustProfile;
+  stats: TrustSummary;
 }
 
 export function VisitorProfileHeader({ profile, stats }: VisitorProfileHeaderProps) {
