@@ -1,58 +1,16 @@
-"use client";
-
 import clsx from "clsx";
+import Link from "next/link";
+import { PlusSquare } from "lucide-react";
 import { MarketplaceHeader } from "@/components/feed/MarketplaceHeader";
 import { MarketplaceFeedCard } from "@/components/feed/MarketplaceFeedCard";
 import { MarketplaceSidebar } from "@/components/feed/MarketplaceSidebar";
 import { MarketplaceSuggestions } from "@/components/feed/MarketplaceSuggestions";
 import { MarketplaceBottomNav } from "@/components/feed/MarketplaceBottomNav";
+import { getMarketplaceFeed } from "@/lib/listing-data";
 
-const mockListings = [
-  {
-    id: "1",
-    title: "Luxury 3-Bed Villa with Pool",
-    price: "4,500,000",
-    priceDenomination: "YEAR",
-    category: "House" as const,
-    videoUrl: "https://videos.pexels.com/video-files/7578548/7578548-uhd_2560_1440_30fps.mp4",
-    posterUrl: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80",
-    badges: ["3 Beds", "4 Baths", "Ikoyi"],
-    username: "realestate_king",
-    avatarUrl: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
-    isVerified: true,
-    trustScore: "4.92"
-  },
-  {
-    id: "2",
-    title: "2023 Range Rover Velar",
-    price: "150,000",
-    priceDenomination: "DAY",
-    category: "Car" as const,
-    videoUrl: "https://videos.pexels.com/video-files/2568600/2568600-hd_1920_1080_30fps.mp4",
-    posterUrl: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80",
-    badges: ["Automatic", "V6 Engine", "Lekki"],
-    username: "auto_prestige",
-    avatarUrl: "https://i.pravatar.cc/150?u=a042581f4e29026024d",
-    isVerified: true,
-    trustScore: "4.75"
-  },
-  {
-    id: "3",
-    title: "Modern Minimalist Co-living Apartment",
-    price: "1,200,000",
-    priceDenomination: "YEAR",
-    category: "House" as const,
-    videoUrl: "https://videos.pexels.com/video-files/4442654/4442654-hd_1920_1080_30fps.mp4",
-    posterUrl: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=800&q=80",
-    badges: ["1 Bed", "Shared Kitchen", "Yaba"],
-    username: "sarah_properties",
-    avatarUrl: "https://i.pravatar.cc/150?u=a042581f4e29026703d",
-    isVerified: true,
-    trustScore: "4.88"
-  }
-];
+export default async function MarketplacePage() {
+  const listings = await getMarketplaceFeed();
 
-export default function MarketplacePage() {
   return (
     <main className={clsx('bg-background-app', 'min-h-[100dvh]', 'w-full', 'flex', 'text-text-primary')}>
       {/* Left Sidebar (Desktop/Tablet) */}
@@ -62,12 +20,28 @@ export default function MarketplacePage() {
       <div className={clsx('flex-1', 'flex', 'justify-center', 'md:ml-64', 'lg:ml-[244px]')}>
         <div className={clsx('w-full', 'max-w-[470px]', 'flex', 'flex-col', 'pb-16', 'md:pb-0')}>
           <MarketplaceHeader />
-          
-          <div className="flex flex-col gap-6 mt-2">
-            {mockListings.map((listing) => (
-              <MarketplaceFeedCard key={listing.id} {...listing} />
-            ))}
-          </div>
+
+          {listings.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 py-20 text-center">
+              <p className="text-sm font-semibold text-text-primary">No listings yet</p>
+              <p className="max-w-xs text-sm text-text-muted">
+                Verified walkthrough listings appear here the moment they are posted. Be the first.
+              </p>
+              <Link
+                href="/marketplace/listing/create"
+                className="glass-btn inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98"
+              >
+                <PlusSquare className="h-4 w-4" />
+                Create Listing
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6 mt-2">
+              {listings.map((listing) => (
+                <MarketplaceFeedCard key={listing.id} {...listing} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

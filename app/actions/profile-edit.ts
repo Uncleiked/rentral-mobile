@@ -4,7 +4,7 @@ import { z } from 'zod'
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
 import { captureServerEvent } from '@/lib/posthog'
-import { revalidatePath } from 'next/cache'
+import { requireUserId, revalidateProfilePaths } from '@/lib/action-helpers'
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/
 const MAX_BIO_LENGTH = 280
@@ -18,22 +18,6 @@ function isUniqueConstraintError(error: unknown): boolean {
     'code' in error &&
     (error as { code?: string }).code === 'P2002'
   )
-}
-
-async function requireUserId(): Promise<string | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user?.id ?? null
-}
-
-function revalidateProfilePaths(username: string, previousUsername?: string | null) {
-  revalidatePath('/marketplace/profile')
-  revalidatePath(`/marketplace/profile/${username}`)
-  if (previousUsername && previousUsername !== username) {
-    revalidatePath(`/marketplace/profile/${previousUsername}`)
-  }
 }
 
 export async function checkUsernameAvailability(
@@ -149,16 +133,13 @@ export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> 
   }
 
   try {
-    await prisma.user.update({
+    const dbUser = await prisma.user.update({
       where: { id: userId },
       data: { avatar_url: parsed.data },
+      select: { username: true },
     })
 
-    revalidatePath('/marketplace/profile')
-    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } })
-    if (dbUser?.username) {
-      revalidatePath(`/marketplace/profile/${dbUser.username}`)
-    }
+    revalidateProfilePaths(dbUser.username)
 
     await captureServerEvent(userId, 'profile_updated', { field: 'avatar' })
     return { success: true }

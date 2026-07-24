@@ -1,0 +1,144 @@
+import prisma from '@/lib/db'
+import { listingsMediaPublicUrl, originalNameFromPath } from '@/lib/storage'
+import { requireUserId } from '@/lib/action-helpers'
+import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
+import {
+  capitalizeCategory,
+  deriveListingTitle,
+  formatListingPrice,
+  listingPriceDenomination,
+  type ListingMetadataJson,
+} from '@/lib/profile-data'
+import {
+  DRAFT_WIZARD_STEPS,
+  LISTING_CATEGORIES,
+  type DraftPayload,
+  type ListingCategory,
+} from '@/store/useRentralStore'
+
+type DraftRow = {
+  id: string
+  category: string
+  text_address: string | null
+  base_rent_amount: unknown
+  asset_metadata: unknown
+  wizard_step: string | null
+  video_path: string | null
+  poster_path: string | null
+  document_path: string | null
+  has_coords: boolean
+}
+
+// Serializes a draft for wizard resume. Coordinates never leave the server —
+// only the has_coords boolean travels (spatial privacy invariant). One raw
+// query (Prisma can't select the Unsupported geography column at all, so a
+// second findFirst just for the other columns would be a pure-waste round-trip).
+export async function getDraftForOwner(draftId: string): Promise<DraftPayload | null> {
+  const userId = await requireUserId()
+  if (!userId) return null
+
+  const rows = await prisma.$queryRaw<DraftRow[]>`
+    SELECT "id", "category", "text_address", "base_rent_amount", "asset_metadata",
+           "wizard_step", "video_path", "poster_path", "document_path",
+           ("hardware_coordinates" IS NOT NULL) AS has_coords
+    FROM "Listing"
+    WHERE "id" = ${draftId} AND "lister_id" = ${userId} AND "listing_status" = ${LISTING_STATUS.DRAFT}
+  `
+  const row = rows[0]
+  if (!row || !LISTING_CATEGORIES.includes(row.category as ListingCategory)) return null
+
+  const wizardStep = (DRAFT_WIZARD_STEPS as readonly string[]).includes(row.wizard_step ?? '')
+    ? (row.wizard_step as DraftPayload['wizardStep'])
+    : null
+
+  return {
+    id: row.id,
+    category: row.category as ListingCategory,
+    address: row.text_address ?? '',
+    basePrice: row.base_rent_amount ? String(Number(row.base_rent_amount)) : '',
+    metadata: (row.asset_metadata ?? null) as Record<string, unknown> | null,
+    wizardStep,
+    videoPath: row.video_path,
+    posterPath: row.poster_path,
+    documentPath: row.document_path,
+    documentName: originalNameFromPath(row.document_path),
+    hasCoords: row.has_coords,
+  }
+}
+
+export type FeedListing = {
+  id: string
+  title: string
+  price: string
+  priceDenomination: string
+  category: 'House' | 'Car' | 'Boat'
+  videoUrl: string
+  posterUrl: string | null
+  badges: string[]
+  username: string
+  avatarUrl: string | null
+  isVerified: boolean
+  trustScore: string | null
+}
+
+function feedBadges(category: string, metadata: ListingMetadataJson, status: string): string[] {
+  const badges: string[] = []
+  if (status === LISTING_STATUS.PENDING_VERIFICATION) badges.push('Pending Verification')
+  if (category === 'house') {
+    if (metadata.bedrooms) badges.push(`${metadata.bedrooms} Beds`)
+    if (metadata.bathrooms) badges.push(`${metadata.bathrooms} Baths`)
+  } else if (category === 'car') {
+    if (metadata.transmission) badges.push(capitalizeCategory(String(metadata.transmission)))
+    if (metadata.seats) badges.push(`${metadata.seats} Seats`)
+  } else if (category === 'boat') {
+    if (metadata.capacityPersons) badges.push(`${metadata.capacityPersons} Persons`)
+    if (metadata.hasCaptain) badges.push('Captain Included')
+  }
+  return badges
+}
+
+export async function getMarketplaceFeed(): Promise<FeedListing[]> {
+  const rows = await prisma.listing.findMany({
+    // `in` (not `not: draft`) so this hot-path query can use the
+    // (listing_status, createdAt) index instead of a full scan + sort.
+    where: { listing_status: { in: PUBLIC_LISTING_STATUSES } },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: {
+      id: true,
+      category: true,
+      base_rent_amount: true,
+      asset_metadata: true,
+      video_path: true,
+      poster_path: true,
+      listing_status: true,
+      lister: { select: { username: true, avatar_url: true, kyc_verified: true } },
+    },
+  })
+
+  return rows.flatMap((row) => {
+    // Posted rows always have a video (DB CHECK) and posted listers always
+    // have a username (onboarding gate) — the guards are for type narrowing.
+    const videoUrl = listingsMediaPublicUrl(row.video_path)
+    if (!videoUrl || !row.lister.username) return []
+
+    const metadata = (row.asset_metadata ?? {}) as ListingMetadataJson
+    return [
+      {
+        id: row.id,
+        title: deriveListingTitle(row.category, metadata),
+        price: formatListingPrice(row.base_rent_amount),
+        priceDenomination: listingPriceDenomination(row.category, true),
+        category: capitalizeCategory(row.category) as FeedListing['category'],
+        videoUrl,
+        posterUrl: listingsMediaPublicUrl(row.poster_path),
+        badges: feedBadges(row.category, metadata, row.listing_status),
+        username: row.lister.username,
+        avatarUrl: row.lister.avatar_url,
+        isVerified: row.lister.kyc_verified,
+        // No reputation system yet — render nothing rather than a fake score.
+        trustScore: null,
+      },
+    ]
+  })
+}

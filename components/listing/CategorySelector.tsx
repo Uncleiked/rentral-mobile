@@ -1,6 +1,7 @@
 'use client'
 
-import { Home, Car, Ship } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Home, Car, Ship } from 'lucide-react'
 import { useRentralStore, type ListingCategory } from '@/store/useRentralStore'
 
 const CATEGORIES: { value: ListingCategory; label: string; description: string; icon: typeof Home }[] = [
@@ -55,6 +56,14 @@ export function CategorySelector() {
           )
         })}
       </div>
+
+      <Link
+        href="/marketplace/listing"
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Your Listings
+      </Link>
     </div>
   )
 }

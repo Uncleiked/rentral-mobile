@@ -13,12 +13,28 @@ interface MarketplaceFeedCardProps {
   priceDenomination: string;
   category: "House" | "Car" | "Boat";
   videoUrl: string;
-  posterUrl: string;
+  posterUrl: string | null;
   badges: string[];
   username: string;
-  avatarUrl: string;
+  avatarUrl: string | null;
   isVerified: boolean;
-  trustScore: string;
+  trustScore: string | null;
+}
+
+// Real listers may not have uploaded an avatar yet — fall back to an initial.
+function FeedAvatar({ avatarUrl, username, size }: { avatarUrl: string | null; username: string; size: string }) {
+  return (
+    <Link
+      href={`/marketplace/profile/${username}`}
+      className={clsx(size, "relative rounded-full overflow-hidden border border-glass-border-medium flex-shrink-0 bg-glass-light flex items-center justify-center")}
+    >
+      {avatarUrl ? (
+        <Image src={avatarUrl} alt={username} fill className="object-cover" />
+      ) : (
+        <span className="text-sm font-bold uppercase text-text-primary">{username.charAt(0)}</span>
+      )}
+    </Link>
+  );
 }
 
 export function MarketplaceFeedCard({
@@ -43,9 +59,7 @@ export function MarketplaceFeedCard({
         {/* Header */}
         <div className="flex items-center justify-between px-4 md:px-0 py-3">
           <div className="flex items-center gap-3">
-            <Link href={`/marketplace/profile/${username}`} className="relative h-9 w-9 rounded-full overflow-hidden border border-glass-border-medium flex-shrink-0">
-              <Image src={avatarUrl} alt={username} fill className="object-cover" />
-            </Link>
+            <FeedAvatar avatarUrl={avatarUrl} username={username} size="h-9 w-9" />
             <div className="flex flex-col">
               <div className="flex items-center gap-1">
                 <Link href={`/marketplace/profile/${username}`} className="text-sm font-semibold text-text-primary hover:underline">{username}</Link>
@@ -57,9 +71,11 @@ export function MarketplaceFeedCard({
                 <span className="text-text-muted mx-1">•</span>
                 <button className="text-sm font-semibold text-[#0095f6]">Follow</button>
               </div>
-              <div className="text-[10px] font-bold text-accent-hover flex items-center">
-                ★ {trustScore} Trust Score
-              </div>
+              {trustScore && (
+                <div className="text-[10px] font-bold text-accent-hover flex items-center">
+                  ★ {trustScore} Trust Score
+                </div>
+              )}
             </div>
           </div>
           <button className="text-text-primary hover:text-text-muted transition-colors">
@@ -72,16 +88,16 @@ export function MarketplaceFeedCard({
           className={clsx('w-full', 'aspect-[4/5]', 'bg-black', 'rounded-md', 'overflow-hidden', 'relative', 'cursor-pointer')}
           onClick={() => setIsFullscreen(true)}
         >
+          {/* src directly on the element so the browser sniffs webm/mp4 alike */}
           <video
             className="h-full w-full object-cover"
-            poster={posterUrl}
+            src={videoUrl}
+            poster={posterUrl ?? undefined}
             autoPlay
             muted
             loop
             playsInline
-          >
-            <source src={videoUrl} type="video/mp4" />
-          </video>
+          />
         </div>
 
         {/* Actions Bar */}
@@ -128,14 +144,13 @@ export function MarketplaceFeedCard({
           <div className="relative flex-1 h-full bg-black flex items-center justify-center" onClick={() => setIsFullscreen(false)}>
             <video
               className="h-full w-full object-contain"
-              poster={posterUrl}
+              src={videoUrl}
+              poster={posterUrl ?? undefined}
               autoPlay
               controls
               loop
               playsInline
-            >
-              <source src={videoUrl} type="video/mp4" />
-            </video>
+            />
             
             {/* Close button for mobile inside video */}
             <button 
@@ -150,9 +165,7 @@ export function MarketplaceFeedCard({
           <div className="hidden sm:flex flex-col w-[350px] bg-background-app border-l border-border-subtle h-full">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <div className="flex items-center gap-3">
-                <Link href={`/marketplace/profile/${username}`} className="relative h-10 w-10 rounded-full overflow-hidden border border-glass-border-medium flex-shrink-0">
-                  <Image src={avatarUrl} alt={username} fill className="object-cover" />
-                </Link>
+                <FeedAvatar avatarUrl={avatarUrl} username={username} size="h-10 w-10" />
                 <div className="flex items-center gap-1">
                   <Link href={`/marketplace/profile/${username}`} className="text-sm font-semibold text-text-primary hover:underline">{username}</Link>
                   {isVerified && (

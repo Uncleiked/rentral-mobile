@@ -4,9 +4,10 @@ import type { ListingSummary } from "@/lib/profile-data";
 
 interface ListingsGridProps {
   listings: ListingSummary[];
+  owner?: boolean;
 }
 
-export function ListingsGrid({ listings }: ListingsGridProps) {
+export function ListingsGrid({ listings, owner = false }: ListingsGridProps) {
   if (listings.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -24,7 +25,7 @@ export function ListingsGrid({ listings }: ListingsGridProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
       {listings.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
+        <ListingCard key={listing.id} listing={listing} owner={owner} />
       ))}
     </div>
   );

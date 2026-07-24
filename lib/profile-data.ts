@@ -1,5 +1,8 @@
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
+import { listingsMediaPublicUrl } from '@/lib/storage'
+import { requireUserId } from '@/lib/action-helpers'
+import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import type { User, IndividualProfile, OrganizationProfile } from '@prisma/client'
 
 export type ProfileRecord = {
@@ -51,15 +54,86 @@ export type ListingSummary = {
   title: string
   price: string
   priceDenomination: string
-  posterUrl: string
+  posterUrl: string | null
+  videoUrl: string | null
   badges: string[]
+  status: string
 }
 
-// No Listing model exists yet (build-plan.md Phase 1 items 06-11: capture UI,
-// spatial forms, media ingestion, listing editor). Returns real empty state
-// instead of mock inventory — swap this for a Prisma query once listings ship.
-export function getListingsForProfile(): ListingSummary[] {
-  return []
+const LISTING_STATUS_BADGES: Record<string, string> = {
+  [LISTING_STATUS.DRAFT]: 'Draft',
+  [LISTING_STATUS.PENDING_VERIFICATION]: 'Pending Verification',
+  [LISTING_STATUS.ACTIVE]: 'Active',
+}
+
+export type ListingMetadataJson = Record<string, string | number | boolean | null>
+
+export function capitalizeCategory(category: string): string {
+  return category.charAt(0).toUpperCase() + category.slice(1)
+}
+
+export function deriveListingTitle(category: string, metadata: ListingMetadataJson): string {
+  if (category === 'house' && metadata.bedrooms) return `${metadata.bedrooms} Bed House • ${metadata.sizeSqm} sqm`
+  if (category === 'car' && metadata.fuelType) return `${metadata.fuelType} Car • ${metadata.seats} Seats`
+  if (category === 'boat' && metadata.vesselType) return `${metadata.vesselType}`
+  return `${capitalizeCategory(category)} Listing`
+}
+
+// Shared by getListingsForProfile and getMarketplaceFeed so money formatting
+// and the per-category denomination rule can't drift between the two feeds.
+export function formatListingPrice(amount: unknown): string {
+  return amount ? Number(amount).toLocaleString('en-NG') : '—'
+}
+
+export function listingPriceDenomination(category: string, uppercase = false): string {
+  const denomination = category === 'house' ? 'year' : 'day'
+  return uppercase ? denomination.toUpperCase() : denomination
+}
+
+export async function getListingsForProfile(
+  listerId: string,
+  options?: { includeDrafts?: boolean }
+): Promise<ListingSummary[]> {
+  // Explicit select: hardware_coordinates must never travel to any client
+  // (architecture.md's spatial privacy invariant). Prisma already omits the
+  // Unsupported geography column from results; the select is defense in depth.
+  const rows = await prisma.listing.findMany({
+    where: {
+      lister_id: listerId,
+      // Drafts are private to their owner — only the "Your Listings" hub asks
+      // for them; visitor profiles never see them. `in` (not `not: draft`)
+      // so the query can use the (listing_status, createdAt) index.
+      ...(options?.includeDrafts ? {} : { listing_status: { in: PUBLIC_LISTING_STATUSES } }),
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      category: true,
+      base_rent_amount: true,
+      asset_metadata: true,
+      poster_path: true,
+      video_path: true,
+      listing_status: true,
+    },
+  })
+
+  return rows.map((row) => {
+    const metadata = (row.asset_metadata ?? {}) as ListingMetadataJson
+    const isDraft = row.listing_status === LISTING_STATUS.DRAFT
+    const statusBadge = LISTING_STATUS_BADGES[row.listing_status] ?? row.listing_status
+    return {
+      id: row.id,
+      title: isDraft
+        ? `${capitalizeCategory(row.category)} — Draft`
+        : deriveListingTitle(row.category, metadata),
+      price: formatListingPrice(row.base_rent_amount),
+      priceDenomination: listingPriceDenomination(row.category),
+      posterUrl: listingsMediaPublicUrl(row.poster_path),
+      videoUrl: listingsMediaPublicUrl(row.video_path),
+      badges: [statusBadge, capitalizeCategory(row.category)],
+      status: row.listing_status,
+    }
+  })
 }
 
 export function getTrustSummary(profile: ProfileRecord): TrustSummary {
@@ -106,15 +180,11 @@ function toProfileRecord(dbUser: UserWithProfiles): ProfileRecord | null {
 }
 
 export async function getOwnProfile(): Promise<ProfileRecord | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return null
+  const userId = await requireUserId()
+  if (!userId) return null
 
   const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: userId },
     include: { individualProfile: true, organizationProfile: true },
   })
 
@@ -124,11 +194,12 @@ export async function getOwnProfile(): Promise<ProfileRecord | null> {
 }
 
 export async function getOwnProfileDetails(): Promise<OwnProfileDetails | null> {
+  // Needs the full Supabase user (for pendingEmail), not just the id, so this
+  // one keeps its own auth call rather than requireUserId() + a second round-trip.
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
   if (!user) return null
 
   const dbUser = await prisma.user.findUnique({

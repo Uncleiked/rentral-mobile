@@ -1,4 +1,4 @@
-tttgenerator client {
+generator client {
   provider = "prisma-client-js"
 }
 
@@ -22,8 +22,35 @@ model User {
   avatar_url       String?
   individualProfile   IndividualProfile?
   organizationProfile OrganizationProfile?
+  listings         Listing[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model Listing {
+  id               String  @id @default(uuid())
+  lister_id        String
+  lister           User    @relation(fields: [lister_id], references: [id], onDelete: Cascade)
+  category         String // 'house' | 'car' | 'boat'
+  // Nullable to allow partial 'draft' rows; a DB CHECK constraint
+  // (Listing_posted_complete_check) forces completeness for any other status.
+  text_address     String?
+  base_rent_amount Decimal? @db.Decimal(12, 2)
+  asset_metadata   Json?
+  video_path       String? // listings-media object path ({uid}/{mediaFolder}/video_raw.ext)
+  poster_path      String? // listings-media object path (JPEG frame)
+  document_path    String? // compliance-docs object path
+  listing_status   String  @default("draft") // 'draft' | 'pending_verification' | 'active'
+  wizard_step      String? // resume point for drafts ('capture' | 'details' | 'documents' | 'checkout')
+  // Written only via raw SQL (ST_SetSRID/ST_MakePoint) inside the save
+  // transaction; Prisma excludes Unsupported columns from every query result,
+  // which enforces the "never expose raw hardware coordinates" invariant.
+  hardware_coordinates Unsupported("extensions.geography(Point, 4326)")?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([lister_id, createdAt(sort: Desc)])
+  @@index([listing_status, createdAt(sort: Desc)])
 }
 
 model IndividualProfile {

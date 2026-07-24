@@ -11,9 +11,11 @@ interface VisitorProfileViewProps {
   profile: ProfileRecord;
 }
 
-export function VisitorProfileView({ profile }: VisitorProfileViewProps) {
-  const stats = getTrustSummary(profile);
-  const listings = getListingsForProfile();
+export async function VisitorProfileView({ profile }: VisitorProfileViewProps) {
+  const listings = await getListingsForProfile(profile.id);
+  // getTrustSummary has no listing awareness yet — override with the real count
+  // so the header never contradicts the grid rendered right below it.
+  const stats = { ...getTrustSummary(profile), listingsCount: listings.length };
 
   return (
     <div className="flex flex-col gap-6">

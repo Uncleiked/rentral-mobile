@@ -4,10 +4,13 @@ import { PlusSquare } from "lucide-react";
 import { MarketplaceSidebar } from "@/components/feed/MarketplaceSidebar";
 import { MarketplaceBottomNav } from "@/components/feed/MarketplaceBottomNav";
 import { ListingsGrid } from "@/components/profile/ListingsGrid";
-import { getListingsForProfile } from "@/lib/profile-data";
+import { getListingsForProfile, getOwnProfile } from "@/lib/profile-data";
 
-export default function MyListingsPage() {
-  const listings = getListingsForProfile();
+export default async function MyListingsPage() {
+  // proxy.ts already gates /marketplace behind auth; a missing profile here
+  // just means onboarding hasn't assigned a username yet — show empty state.
+  const profile = await getOwnProfile();
+  const listings = profile ? await getListingsForProfile(profile.id, { includeDrafts: true }) : [];
 
   return (
     <main className={clsx("bg-background-app", "min-h-[100dvh]", "w-full", "flex", "text-text-primary")}>
@@ -31,7 +34,7 @@ export default function MyListingsPage() {
             </Link>
           </div>
 
-          <ListingsGrid listings={listings} />
+          <ListingsGrid listings={listings} owner />
 
           <Link
             href="/marketplace/listing/create"
