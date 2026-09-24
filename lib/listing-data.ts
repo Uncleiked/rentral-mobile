@@ -1,5 +1,7 @@
 import prisma from '@/lib/db'
-import { listingsMediaPublicUrl, originalNameFromPath } from '@/lib/storage'
+import { muxEnabled } from '@/lib/media/config'
+import { listingMediaStatuses } from '@/lib/media/status'
+import { listingMediaUrl, originalNameFromPath } from '@/lib/storage'
 import { requireUserId } from '@/lib/action-helpers'
 import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import {
@@ -73,6 +75,7 @@ export type FeedListing = {
   priceDenomination: string
   category: 'House' | 'Car' | 'Boat'
   videoUrl: string
+  useMux: boolean
   posterUrl: string | null
   badges: string[]
   username: string
@@ -116,11 +119,13 @@ export async function getMarketplaceFeed(): Promise<FeedListing[]> {
     },
   })
 
+  const useMux = muxEnabled()
+  const media = await listingMediaStatuses(rows.map(row => row.id))
   return rows.flatMap((row) => {
     // Posted rows always have a video (DB CHECK) and posted listers always
     // have a username (onboarding gate) — the guards are for type narrowing.
-    const videoUrl = listingsMediaPublicUrl(row.video_path)
-    if (!videoUrl || !row.lister.username) return []
+    const videoUrl = useMux ? '' : row.video_path ? listingMediaUrl(row.id, 'video') : null
+    if ((!useMux && !videoUrl) || !row.lister.username || (useMux && media.get(row.id)?.status !== 'ready')) return []
 
     const metadata = (row.asset_metadata ?? {}) as ListingMetadataJson
     return [
@@ -130,8 +135,9 @@ export async function getMarketplaceFeed(): Promise<FeedListing[]> {
         price: formatListingPrice(row.base_rent_amount),
         priceDenomination: listingPriceDenomination(row.category, true),
         category: capitalizeCategory(row.category) as FeedListing['category'],
-        videoUrl,
-        posterUrl: listingsMediaPublicUrl(row.poster_path),
+        videoUrl: videoUrl ?? '',
+        useMux,
+        posterUrl: !useMux && row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
         badges: feedBadges(row.category, metadata, row.listing_status),
         username: row.lister.username,
         avatarUrl: row.lister.avatar_url,

@@ -1,99 +1,69 @@
 'use server'
 
-import { z } from 'zod'
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
 import { createAdminClient } from '@/lib/admin'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-
 import { individualProfileSchema, organizationProfileSchema } from '@/lib/schemas'
 import { captureServerEvent } from '@/lib/posthog'
 
-export async function submitProfile(data: z.infer<typeof individualProfileSchema> | z.infer<typeof organizationProfileSchema>) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+type ProfileResult = { success: true } | { success: false; error: string }
 
-  if (authError || !user) {
-    throw new Error('Not authenticated')
-  }
+export async function submitProfile(data: unknown): Promise<ProfileResult> {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return { success: false, error: 'Please sign in again.' }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id }
-  })
-
-  if (!dbUser) {
-    throw new Error('User record not found in database')
-  }
-
-  if (dbUser.account_type === 'individual' || !dbUser.account_type) {
-    const parsed = individualProfileSchema.parse(data)
-    
-    await prisma.individualProfile.upsert({
-      where: { userId: user.id },
-      update: {
-        full_name: parsed.full_name,
-        date_of_birth: parsed.date_of_birth,
-        country: parsed.country,
-        state: (parsed as any).state || '',
-        address: parsed.address,
-        phone_number: parsed.phone_number,
-      },
-      create: {
-        userId: user.id,
-        full_name: parsed.full_name,
-        date_of_birth: parsed.date_of_birth,
-        country: parsed.country,
-        state: (parsed as any).state || '',
-        address: parsed.address,
-        phone_number: parsed.phone_number,
-      }
-    })
-  } else if (dbUser.account_type === 'organization') {
-    const parsed = organizationProfileSchema.parse(data)
-    
-    const diditPayload = (dbUser.didit_decision as any) || {}
-    const verifiedOrgName = diditPayload.companyName || diditPayload.name || 'Verified Organization'
-
-    await prisma.organizationProfile.upsert({
-      where: { userId: user.id },
-      update: {
-        organization_name: verifiedOrgName,
-        country: parsed.country,
-        address: parsed.address,
-        phone_number: parsed.phone_number,
-      },
-      create: {
-        userId: user.id,
-        organization_name: verifiedOrgName,
-        country: parsed.country,
-        address: parsed.address,
-        phone_number: parsed.phone_number,
-      }
-    })
-  }
-
-  // Sync full app_metadata using Admin client — include all fields for consistency
-  const adminClient = createAdminClient()
-  const updatedDbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-  })
-
-  await adminClient.auth.admin.updateUserById(user.id, {
-    app_metadata: {
-      kyc_verified: updatedDbUser?.kyc_verified ?? false,
-      account_type: updatedDbUser?.account_type,
-      verification_status: updatedDbUser?.verification_status,
-      verification_kind: updatedDbUser?.verification_kind,
-      username: updatedDbUser?.username,
-      profile_completed: true,
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
+    if (!dbUser?.kyc_verified) {
+      return { success: false, error: 'Complete identity verification before saving your profile.' }
     }
-  })
 
-  await captureServerEvent(user.id, 'onboarding_completed', {
-    account_type: updatedDbUser?.account_type,
-  })
+    if (dbUser.account_type === 'individual') {
+      const parsed = individualProfileSchema.safeParse(data)
+      if (!parsed.success) return { success: false, error: 'Please check your personal details.' }
+      await prisma.individualProfile.upsert({
+        where: { userId: user.id },
+        update: parsed.data,
+        create: { userId: user.id, ...parsed.data },
+      })
+    } else if (dbUser.account_type === 'organization') {
+      const parsed = organizationProfileSchema.safeParse(data)
+      if (!parsed.success) return { success: false, error: 'Please check your company details.' }
+      const decision = dbUser.didit_decision
+      const name = decision && typeof decision === 'object' && !Array.isArray(decision)
+        ? decision.companyName ?? decision.name : null
+      const organizationName = typeof name === 'string' && name.trim() ? name : 'Verified Organization'
+      const profile = { ...parsed.data, organization_name: organizationName }
+      await prisma.organizationProfile.upsert({
+        where: { userId: user.id }, update: profile, create: { userId: user.id, ...profile },
+      })
+    } else {
+      return { success: false, error: 'Choose an account type before completing your profile.' }
+    }
 
-  revalidatePath('/onboarding')
-  return { success: true }
+    const adminClient = createAdminClient()
+    const { error } = await adminClient.auth.admin.updateUserById(user.id, {
+      app_metadata: {
+        kyc_verified: dbUser.kyc_verified,
+        account_type: dbUser.account_type,
+        verification_status: dbUser.verification_status,
+        verification_kind: dbUser.verification_kind,
+        username: dbUser.username,
+        profile_completed: true,
+      },
+    })
+    if (error) {
+      console.error('[actions/profile] Metadata sync failed:', error.code)
+      return { success: false, error: 'Your details were saved, but setup could not finish. Please retry.' }
+    }
+
+    await captureServerEvent(user.id, 'onboarding_completed', { account_type: dbUser.account_type })
+    revalidatePath('/onboarding')
+    return { success: true }
+  } catch {
+    console.error('[actions/profile] Profile submission failed')
+    return { success: false, error: 'We could not save your profile. Please try again.' }
+  }
 }

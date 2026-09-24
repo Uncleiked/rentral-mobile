@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, CheckCircle2, Loader2 } from "lucide-react";
 import { usernameBioSchema, emailChangeSchema } from "@/lib/schemas";
@@ -29,8 +29,7 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
   const router = useRouter();
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identitySuccess, setIdentitySuccess] = useState(false);
-  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [usernameCheck, setUsernameCheck] = useState<{ username: string; status: 'available' | 'taken' | 'error' } | null>(null);
 
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailPending, setEmailPending] = useState(false);
@@ -38,13 +37,10 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
   const {
     register: registerIdentity,
     handleSubmit: handleIdentitySubmit,
-    watch: watchIdentity,
+    control: identityControl,
     formState: { errors: identityErrors, isSubmitting: isSavingIdentity },
   } = useForm<IdentityFormData>({
-    // zod 4's internal type shape isn't yet recognized by @hookform/resolvers 5's
-    // Zod3Type overload (runtime works fine) — same pre-existing cast used in
-    // components/onboarding/ProfileForm.tsx for the same version mismatch.
-    resolver: zodResolver(usernameBioSchema as never) as never,
+    resolver: zodResolver(usernameBioSchema),
     defaultValues: { username: profile.username, bio: profile.bio ?? "" },
   });
 
@@ -53,33 +49,32 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
     handleSubmit: handleEmailSubmit,
     formState: { errors: emailErrors, isSubmitting: isSendingEmail },
   } = useForm<EmailFormData>({
-    resolver: zodResolver(emailChangeSchema as never) as never,
+    resolver: zodResolver(emailChangeSchema),
     defaultValues: { email: "" },
   });
 
-  const watchedUsername = watchIdentity("username");
-  const watchedBio = watchIdentity("bio");
+  const watchedUsername = useWatch({ control: identityControl, name: "username" });
+  const watchedBio = useWatch({ control: identityControl, name: "bio" });
+  const usernameStatus = watchedUsername === profile.username ? 'idle'
+    : usernameCheck?.username === watchedUsername ? usernameCheck.status : 'checking';
 
   useEffect(() => {
-    if (!isOpen) return;
-    if (watchedUsername === profile.username) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setUsernameStatus("checking");
-
-    debounceRef.current = setTimeout(async () => {
-      const result = await checkUsernameAvailability(watchedUsername);
-      setUsernameStatus(result.available ? "available" : "taken");
+    if (!isOpen || watchedUsername === profile.username) return;
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        const result = await checkUsernameAvailability(watchedUsername);
+        if (!cancelled) setUsernameCheck({ username: watchedUsername, status: result.available ? 'available' : 'taken' });
+      } catch {
+        if (!cancelled) setUsernameCheck({ username: watchedUsername, status: 'error' });
+      }
     }, 500);
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      cancelled = true;
+      clearTimeout(timeout);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedUsername, isOpen]);
+  }, [watchedUsername, isOpen, profile.username]);
 
   if (!isOpen) return null;
 
@@ -148,6 +143,7 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
             {!identityErrors.username && usernameStatus === "taken" && (
               <span className="text-xs text-trust-flagged">That username is already taken.</span>
             )}
+            {usernameStatus === 'error' && <span className="text-xs text-trust-flagged">Availability check failed. Try saving again.</span>}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -187,7 +183,7 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
             </p>
           )}
           <div className="flex items-center gap-2 mt-1">
-            <input {...registerEmail("email")} className={`${inputClass} flex-1`} placeholder="New email address" />
+            <input {...registerEmail("email")} className={`${inputClass} min-w-0 flex-1`} placeholder="New email address" />
             <button
               type="submit"
               disabled={isSendingEmail}

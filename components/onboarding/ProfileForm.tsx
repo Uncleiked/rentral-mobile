@@ -1,10 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { submitProfile } from '@/app/actions/profile'
-import { individualProfileSchema, organizationProfileSchema } from '@/lib/schemas'
+import { profileFormSchema } from '@/lib/schemas'
+
+type ProfileFormData = z.infer<ReturnType<typeof profileFormSchema>>
 
 // Phone prefix mapping
 const COUNTRY_CODES: Record<string, string> = {
@@ -16,14 +19,17 @@ const COUNTRY_CODES: Record<string, string> = {
   'United Kingdom': '+44',
 }
 
-export function ProfileForm({ accountType }: { accountType: 'individual' | 'organization' }) {
+export function ProfileForm({ accountType, onComplete }: {
+  accountType: 'individual' | 'organization'
+  onComplete: () => Promise<void>
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  const schema = accountType === 'individual' ? individualProfileSchema : organizationProfileSchema
+  const schema = profileFormSchema(accountType)
   
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<any>({
-    resolver: zodResolver(schema as any) as any,
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<ProfileFormData>({
+    resolver: zodResolver(schema),
     defaultValues: {
       full_name: '',
       date_of_birth: '',
@@ -33,8 +39,6 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
       phone_number: '',
     }
   })
-
-  const selectedCountry = watch('country')
 
   const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCountry = e.target.value
@@ -46,19 +50,25 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
     }
   }
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: ProfileFormData): Promise<void> => {
     setIsSubmitting(true)
     setError(null)
     try {
-      await submitProfile(data)
-    } catch (e: any) {
-      setError(e.message || 'An error occurred')
+      const result = await submitProfile(data)
+      if (!result.success) {
+        setError(result.error)
+        return
+      }
+      await onComplete()
+    } catch {
+      setError('We could not save your profile. Please try again.')
+    } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-md mx-auto">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full min-w-0 max-w-md mx-auto [&_input]:min-w-0 [&_select]:min-w-0">
       <div className="mb-8 text-center">
         <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
           {accountType === 'individual' ? 'Personal Details' : 'Company Details'}
@@ -77,10 +87,11 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
       {accountType === 'individual' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
+            <label htmlFor="profile-full-name" className="text-xs font-medium text-text-muted uppercase tracking-wider">
               Full Name
             </label>
             <input
+              id="profile-full-name"
               {...register('full_name')}
               className="bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all"
               placeholder="Legal name"
@@ -90,10 +101,11 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
             )}
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
+            <label htmlFor="profile-birth-date" className="text-xs font-medium text-text-muted uppercase tracking-wider">
               Date of Birth
             </label>
             <input
+              id="profile-birth-date"
               type="date"
               {...register('date_of_birth')}
               className="bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all"
@@ -107,8 +119,9 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium uppercase tracking-wider text-text-muted">Country of Residence</label>
+          <label htmlFor="profile-country" className="text-xs font-medium uppercase tracking-wider text-text-muted">Country of Residence</label>
           <select 
+            id="profile-country"
             {...register('country')} 
             onChange={handleCountryChange}
             className="rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary"
@@ -124,8 +137,9 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
 
         {accountType === 'individual' && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium uppercase tracking-wider text-text-muted">State</label>
+            <label htmlFor="profile-state" className="text-xs font-medium uppercase tracking-wider text-text-muted">State</label>
             <input 
+              id="profile-state"
               {...register('state')} 
               placeholder="e.g. Lagos"
               className="rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary"
@@ -135,8 +149,9 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
         )}
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium uppercase tracking-wider text-text-muted">Address</label>
+          <label htmlFor="profile-address" className="text-xs font-medium uppercase tracking-wider text-text-muted">Address</label>
           <input 
+            id="profile-address"
             {...register('address')} 
             placeholder="Your full address"
             className="rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary"
@@ -145,8 +160,10 @@ export function ProfileForm({ accountType }: { accountType: 'individual' | 'orga
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium uppercase tracking-wider text-text-muted">Phone Number</label>
+          <label htmlFor="profile-phone" className="text-xs font-medium uppercase tracking-wider text-text-muted">Phone Number</label>
           <input 
+            id="profile-phone"
+            type="tel"
             {...register('phone_number')} 
             placeholder="+234..."
             className="rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary"

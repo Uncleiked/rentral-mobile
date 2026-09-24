@@ -226,11 +226,21 @@ export async function POST(request: Request): Promise<Response> {
 
     const vendorDataUserId = readString(payload.vendor_data)
     if (vendorDataUserId && SESSION_EVENT_TYPES.has(webhookType)) {
+      const workflowId = readString(payload.workflow_id)
+      if (!sessionId || !workflowId || !status) {
+        return new Response('missing session fields', { status: 400 })
+      }
+      const currentUser = await prisma.user.findUnique({ where: { id: vendorDataUserId } })
+      // The provider can deliver its first event before session creation returns.
+      // Ask for a retry while that session is being persisted.
+      if (currentUser && !currentUser.didit_session_id) {
+        return new Response('session not ready', { status: 503 })
+      }
       const verificationStatus = mapDiditStatus(status)
       const kycVerified = verificationStatus === 'verified'
 
-      const updatedUser = await prisma.user.update({
-        where: { id: vendorDataUserId },
+      const updated = await prisma.user.updateMany({
+        where: { id: vendorDataUserId, didit_session_id: sessionId, didit_workflow_id: workflowId },
         data: {
           kyc_verified: kycVerified,
           verification_status: verificationStatus,
@@ -238,6 +248,14 @@ export async function POST(request: Request): Promise<Response> {
           didit_workflow_id: readString(payload.workflow_id),
           didit_decision: toJsonInput(payload.decision),
         },
+      })
+
+      if (updated.count === 0) {
+        await prisma.webhookLog.update({ where: { event_id: eventId }, data: { processed_at: new Date() } })
+        return new Response('ignored superseded session')
+      }
+      const updatedUser = await prisma.user.findUniqueOrThrow({
+        where: { id: vendorDataUserId },
         include: { individualProfile: true, organizationProfile: true },
       })
 
@@ -246,8 +264,8 @@ export async function POST(request: Request): Promise<Response> {
       await syncAppMetadata(vendorDataUserId, {
         accountType: updatedUser.account_type,
         verificationKind: updatedUser.verification_kind,
-        verificationStatus,
-        kycVerified,
+        verificationStatus: updatedUser.verification_status,
+        kycVerified: updatedUser.kyc_verified,
         username: updatedUser.username,
         profileCompleted,
       })

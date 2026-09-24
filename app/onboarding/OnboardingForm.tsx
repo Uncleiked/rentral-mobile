@@ -187,7 +187,7 @@ export default function OnboardingForm({ initialState, initialError }: Onboardin
           </button>
         </form>
       ) : needsProfile ? (
-        <ProfileForm accountType={state?.accountType ?? 'individual'} />
+        <ProfileForm accountType={state?.accountType ?? 'individual'} onComplete={loadState} />
       ) : (
         <>
           <form onSubmit={handleStartVerification} className="flex flex-col gap-6">

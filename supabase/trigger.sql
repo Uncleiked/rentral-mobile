@@ -21,7 +21,9 @@ begin
   on conflict (id) do nothing;
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
+
+revoke all on function public.handle_new_user() from public, anon, authenticated;
 
 -- 2. Create the trigger
 drop trigger if exists on_auth_user_created on auth.users;

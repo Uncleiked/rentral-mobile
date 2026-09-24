@@ -1,5 +1,7 @@
 ## Rentral Build Plan
 
+> Execute the dependency order and acceptance checks in [production-plan.md](production-plan.md). Track status using the 31 IDs in progress-tracker.md; the 18 IDs below are historical feature groupings, not equivalent numbering.
+
 ## Core Principle
 
 Strict Decoupling of Presentation and Logic: Full-page UI is built with mock data first and verified visually before any backend infrastructure, AI orchestration, or spatial logic is written. Every feature must follow a visible, testable, two-step lifecycle. There are no invisible backend phases. If the UI is not polished, responsive, and behaviorally sound, no database mutations or third-party APIs (OPay, Gemini, PostGIS) are wired.

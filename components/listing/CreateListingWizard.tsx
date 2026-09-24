@@ -16,7 +16,7 @@ const STEP_LABELS: Record<(typeof WIZARD_STEPS)[number], string> = {
   capture: 'Walkthrough',
   details: 'Details',
   documents: 'Documents',
-  checkout: 'Activate',
+  checkout: 'Review',
   done: 'Done',
 }
 
@@ -64,8 +64,8 @@ function DoneScreen() {
       </span>
       <h2 className="text-xl font-bold text-text-primary tracking-wide">Listing saved</h2>
       <p className="max-w-sm text-sm text-text-secondary">
-        Your walkthrough, details, and documents are saved. The listing is pending verification —
-        it appears under Your Listings and on the marketplace feed now.
+        Your walkthrough, details, and documents are saved under Your Listings.
+        Your listing will appear in the marketplace once verification and publication are complete.
       </p>
       <Link
         href="/marketplace/listing"

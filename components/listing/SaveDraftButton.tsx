@@ -11,6 +11,7 @@ import { useRentralStore } from '@/store/useRentralStore'
 export function SaveDraftButton() {
   const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
+  const [uncertain, setUncertain] = useState(false)
   const step = useRentralStore((state) => state.step)
   const category = useRentralStore((state) => state.category)
 
@@ -33,41 +34,47 @@ export function SaveDraftButton() {
     }
     const { supabase, media } = resolved
 
-    const result = await saveDraft({
-      draftId: store.draftListingId ?? undefined,
-      category: store.category,
-      wizardStep: store.step === 'done' ? 'checkout' : store.step,
-      address: store.address || undefined,
-      basePrice: store.basePrice || undefined,
-      metadata: store.metadata[store.category],
-      lat: store.coords?.lat,
-      lng: store.coords?.lng,
-      videoPath: media.videoPath ?? undefined,
-      posterPath: media.posterPath ?? undefined,
-      documentPath: media.documentPath ?? undefined,
-    })
+    try {
+      const result = await saveDraft({
+        draftId: store.draftListingId ?? undefined,
+        category: store.category,
+        wizardStep: store.step === 'done' ? 'checkout' : store.step,
+        address: store.address || undefined,
+        basePrice: store.basePrice || undefined,
+        metadata: store.metadata[store.category],
+        lat: store.coords?.lat,
+        lng: store.coords?.lng,
+        videoPath: media.videoPath ?? undefined,
+        posterPath: media.posterPath ?? undefined,
+        documentPath: media.documentPath ?? undefined,
+      })
 
-    if (!result.success) {
-      await removeUploads(supabase, media.newUploads)
-      toast.error(result.error)
+      if (!result.success) {
+        await removeUploads(supabase, media.newUploads)
+        toast.error(result.error)
+        return
+      }
+
+      toast.success('Draft saved — continue anytime from Your Listings.')
+      store.reset()
+      router.push('/marketplace/listing')
+    } catch {
+      setUncertain(true)
+      toast.error('Could not confirm the save. Check Your Listings before saving again.')
+    } finally {
       setIsSaving(false)
-      return
     }
-
-    toast.success('Draft saved — continue anytime from Your Listings.')
-    store.reset()
-    router.push('/marketplace/listing')
   }
 
   return (
     <button
       type="button"
-      onClick={handleSave}
+      onClick={uncertain ? () => router.push('/marketplace/listing') : handleSave}
       disabled={isSaving}
       className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-2 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
     >
       <Save className="h-4 w-4" />
-      {isSaving ? 'Saving Draft...' : 'Save Draft & Exit'}
+      {isSaving ? 'Saving Draft...' : uncertain ? 'Check Your Listings' : 'Save Draft & Exit'}
     </button>
   )
 }

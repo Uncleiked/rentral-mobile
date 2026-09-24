@@ -80,8 +80,8 @@ export async function uploadListingMedia(
     )
   }
 
-  const results = await Promise.all(pending)
-  if (results.some((result) => result.error)) {
+  const results = await Promise.allSettled(pending)
+  if (results.some((result) => result.status === 'rejected' || result.value.error)) {
     await removeUploads(supabase, newUploads)
     throw new Error('listing-media-upload-failed')
   }
@@ -100,16 +100,11 @@ export async function resolveSessionAndUpload(
   folderId: string,
   media: ListingMediaSnapshot
 ): Promise<SessionUpload> {
-  const supabase = createClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  const uid = session?.user.id
-  if (!uid) {
-    return { ok: false, error: 'You are signed out. Sign in and try again.' }
-  }
-
   try {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const uid = session?.user.id
+    if (!uid) return { ok: false, error: 'You are signed out. Sign in and try again.' }
     const uploaded = await uploadListingMedia(supabase, uid, folderId, media)
     return { ok: true, supabase, uid, media: uploaded }
   } catch {

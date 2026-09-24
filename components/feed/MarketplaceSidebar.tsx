@@ -6,7 +6,6 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Home,
-  Compass,
   MessageCircle,
   Search,
   Bell,
@@ -46,9 +45,9 @@ export function MarketplaceSidebar() {
           <Image 
             src="/Rentral.svg" 
             alt="Rentral" 
-            width={120} 
-            height={40} 
-            className="invert brightness-0"
+            width={490}
+            height={509}
+            className="h-10 w-auto invert brightness-0"
           />
         </Link>
       </div>

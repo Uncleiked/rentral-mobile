@@ -1,59 +1,124 @@
-# Memory — Profile Real-Data Wiring & PostHog Telemetry
+# Memory - Private Media and Staging Boundary
 
-Last updated: 2026-07-20
+Last updated: 2026-09-24
 
-## What was built
+## What Was Built
 
-### Dev environment fixes (unrelated bugs surfaced along the way)
+- Latest slice: protected GET `/api/listings/[id]/source?kind=video|poster`,
+  same-origin saved previews, five-minute signed redirects and owner/active queries.
+  Non-owner original video is denied when Mux is enabled. Compliance documents are
+  excluded. No public URL fallback; every response is private/no-store.
+- Profile posters use unoptimized Next Image. Native and Mux playback have accessible
+  retry states; CaptureCanvas previews remain visible after live-camera denial.
+- Prepared `20260924170000_private_listing_media` (unapplied remotely). It changes
+  the existing bucket to private, replaces broad reads with owner SELECT and adds
+  a restrictive SELECT boundary against legacy permissive policies. Paths unchanged.
+- `pnpm test:storage` creates a disposable local PostgreSQL cluster and replays the
+  Storage migrations against minimal fixtures. Actual RLS assertions passed; it never
+  uses the app database/environment. Requires local initdb/pg_ctl/psql and escalation
+  on this Mac for shared memory. Hosted Storage/API/CDN acceptance remains open.
+- Added `context/private-media-plan.md`; updated registry, tracker, library docs,
+  media/production plans and README. No dependency, credential or feature-flag changes.
+- Previous slice: `lib/media/worker.ts`, `worker-auth.ts`, and protected POST
+  `/api/internal/media-worker`. It dispatches queued media and reconciles known
+  Mux asset IDs after missed callbacks, with two-row batches per phase and a
+  five-minute cooldown. Stale submitting jobs become uncertain after ten minutes.
+- Queue claims compare the observed attempt count; reconciliation claims and applies
+  state with updatedAt compare-and-swap. Ambiguous submissions never automatically
+  create a second asset. Webhook changes win over stale polling responses.
+- Exact worker path bypasses browser-session middleware; its own server-only bearer
+  secret is mandatory before DB/provider access. No broad /api bypass was added.
+- Worker requires MEDIA_WORKER_ENABLED=true, MUX_ENABLED=true, all Mux keys, and
+  MEDIA_WORKER_SECRET (minimum 32 characters, no whitespace). Nothing enabled locally.
+- Added `context/media-worker-plan.md`; expanded `context/media-staging.md` with
+  deployment, scheduling, alerting and secret instructions. Updated tracker,
+  registry, production plan, library docs and README. No new UI styling this pass.
 
-- Fixed corrupted Next.js auto-generated `.next/dev/types/validator.ts` (TS1109 errors) — cleared `.next`, restarted. Not a source bug.
-- Fixed `next/image` "unconfigured host" error for Supabase avatar URLs — added `rabnthzbbkskdihvjpwc.supabase.co` (scoped to `/storage/v1/object/public/**`) to `next.config.ts` `images.remotePatterns`.
+## Existing Implementation
 
-### Profile real-data wiring
+- Gated Mux ingestion, SDK-verified callbacks, signed playback, owner status/retry
+  controls, atomic MediaAsset job creation and MediaWebhookReceipt deduplication.
+  API credentials are Video-scoped; the local Mux CLI may need System Read access.
+- Upload cleanup waits for in-flight uploads; ambiguous save responses retain files
+  and direct users to Your Listings. Post-commit refresh errors preserve success.
+- Auth recovery/callback/redirect-cookie repairs, allowlisted login errors, keyboard
+  submission and live OAuth-provider availability are implemented. Login worked in
+  runtime logs; this does not prove the full authenticated/provider journey.
+- Current-database KYC gates protect listing mutations. Pending inventory is hidden
+  from public discovery. Fake payment confirmations were removed; no auto-publication.
+- Didit events bind to the stored user/session/workflow. Username-based KYC bypass
+  is removed. Same-session ordering and real approval/revocation still need work.
 
-- Added `TrustSummary` type + `getTrustSummary()` in `lib/profile-data.ts`. Real zero counts for fields with no backing system yet (ghost listings, listings count, followers, handshakes, rentals, on-time payments — all legitimately 0, same as any new account). Real `verifiedSinceYear` from `User.createdAt`. `null` → "—"/"Coming soon" placeholder for trust score, avg response time, show-up rate, top-percent rank (no reputation/messaging/handshake systems exist yet — never fabricate these). Updated `TrustStatsBar`, `TrustLedgerSummary`, `OwnerProfileHeader`, `VisitorProfileHeader`, `ReviewsSummary` to consume it. Removed dead `getMockTrustProfile`/`MockTrustProfile`.
-- Added `getListingsForProfile()` in `lib/profile-data.ts` — returns `[]` (no `Listing` model exists yet; build-plan.md Phase 1 items 06–11 unbuilt). `ListingsGrid` now renders a real "No listings yet" empty state instead of 6 fake Unsplash listings. Removed dead `MockListing`/`MOCK_LISTINGS`.
-- Left `progress-tracker.md` item 28 unchecked — owner dashboard (`EscrowWalletCard`, `ActiveLeaseCard`, `CreditTrustCard`, `InspectionsHandshakesCard`, `SavedSearchesCard`, `SecurityCard`) is still fully mock; none of their backing models exist.
+## Decisions
 
-### PostHog telemetry (progress-tracker item 05 → `[x]`)
+- Follow `context/production-plan.md`; historical tracker checkboxes and provider
+  examples are not production acceptance. Preserve existing Next/Prisma boundaries,
+  strict TypeScript and semantic UI tokens. Use pnpm, not npm/yarn/bun.
+- Milestone 08 is still partial. Finish inventory acceptance before Gemini/payment
+  publication checks. AI analysis is a review signal, never proof of ownership.
+- Do not apply migrations to the current shared database or turn on Mux from a
+  statement that CLI forwarding works. A separate staging target is still required.
+- External scheduling is not deployed. The worker is a POST endpoint, not a
+  GET-only hosting cron. No provider calls run inside DB transactions. Host timeout
+  can leave dispatch uncertain; operator reconciliation remains deliberate.
 
-- `lib/posthog.ts` — singleton `posthog-node` client (`flushAt: 1`), `captureServerEvent()` helper: flushes per call, swallows/logs errors so analytics can never break a user-facing flow.
-- 6 real events wired, each verified against actual function bodies first (not the wizard's stale plan): `user_signed_in`/`user_signed_up` (`app/(auth)/sign-in/actions.ts`), `verification_started` (`app/onboarding/actions.ts` → `initiateVerification`), `verification_completed` (`app/api/webhooks/didit/route.ts`, fires on every Didit status transition, tagged `status`), `onboarding_completed` (`app/actions/profile.ts` → `submitProfile`), `profile_updated` (`app/actions/profile-edit.ts` → `updateProfileIdentity`/`updateAvatarUrl`, tagged `field: 'identity'|'avatar'`).
-- Client-side init (`instrumentation-client.ts`, `posthog-js`) was already wizard-generated; left as-is.
-- Removed stale `posthog-setup-report.md` after fixes made it inaccurate.
-- Ran the project's `/review` skill against this work (see Open questions — 2 Important + 4 Minor issues found, all doc-vs-implementation gaps, not bugs; reported to developer, not yet resolved).
+## Verification
 
-## Decisions made
+- Latest: 159 unit regressions, 28 Playwright route/browser checks across
+  320/390/768/1440px, local PostgreSQL RLS checks, lint, TypeScript, production build
+  and whitespace checks passed. Earlier Prisma validation remains unchanged.
+- New checks cover source authorization, path validation, short-lived no-store
+  signing, failure handling and static error/poster rendering. Browser tests cover
+  public/auth compatibility and anonymous guards, not authenticated media playback.
+- New tests cover bearer-secret gates, exact proxy exception, default-disabled DB
+  isolation, bounded scheduling, stale claims, missed callbacks, asset binding,
+  partial failure, and webhook/poller races using mocks. They do NOT prove live SQL
+  concurrency, deployed scheduling, Mux ingestion or actual HLS playback.
+- Browser tests require escalation for Chrome/localhost access; build requires
+  network for the configured Geist font. Sandbox failures were environmental,
+  and approved reruns passed. Existing dev server on localhost:3000 was reused.
+- Supabase Storage info() uses camel-cased contentType. Mux SDK 15 unwrap() is async;
+  await it. Signed-only output requires a video track and duration 0 < n <= 125.
 
-- `.agents/skills/` (`remember`, `review`, `architect`, `imprint`, `recover`, plus Tailwind/Supabase reference skills) are project-local skills **not** registered with the Skill tool — must be read directly via the Read tool and followed manually, never invoked via `Skill()`.
-- For profile stats with no backing system, established the pattern: real zero where the concept is genuinely empty (counts), `null`/placeholder where it requires an actual computed formula (scores, rates, rankings) — never fabricate either.
-- PostHog server client: chose a persistent module-level singleton + `flush()` per call over `library-docs.md`'s documented per-call factory + `shutdown()` pattern. Reasoning: `shutdown()` permanently closes a client, so applying it to a reused singleton would break every subsequent call. Flagged explicitly to developer in the review rather than silently deciding it was right — awaiting their call.
-- Used `npx` instead of `pnpm dlx` specifically for the one-off PostHog wizard CLI launch (pnpm's strict `node_modules` broke `@inkjs/ui`'s `react` resolution). Confirmed this doesn't violate the project's "always use pnpm" rule — the wizard's own internal agent uses `pnpm add`/`pnpm typecheck` for all actual project changes; `npx` here only launches the throwaway tool.
+## Current State
 
-## Problems solved
+- User reports Mux CLI connection now works. Presence-only local check confirms all
+  five Mux credentials present, but MUX_ENABLED=false. Gemini key remains missing.
+  The exposed CLI webhook secret should have been replaced; rotation not verified.
+- No remote database writes, assets, credentials or feature flags changed this pass.
+  The user was asked asynchronously whether separate staging migrations are verified;
+  no answer was received before the implementation checks finished.
+- Pending migrations remain unverified here:
+  `20260924130000_harden_profile_access`, `20260924150000_add_mux_media_pipeline`,
+  `20260924170000_private_listing_media` (local SQL/RLS verified only).
+  Do not assume they were applied based on the user's CLI setup confirmation.
+- One private-bucket migration and no dependency were added. Existing worktree is heavily dirty with
+  earlier auth/media work and unrelated user changes. Do not revert or auto-commit.
+- Website preview: http://localhost:3000. Do not run a second Next dev process in
+  the same working directory or stop the user's existing server unnecessarily.
 
-- PostHog wizard `Unsupported engine` — required Node ≥22.22.0, had v22.12.0. Fixed via `nvm install 22.23.1 && nvm alias default 22.23.1`.
-- `pnpm: command not found` after the Node switch — nvm keeps separate global `node_modules` per Node version. Fixed with `npm install -g pnpm`.
-- `pnpm dlx @posthog/wizard` → `ERR_MODULE_NOT_FOUND: react` — pnpm's strict/symlinked `node_modules` doesn't hoist `react` into `@inkjs/ui`'s own `node_modules`. Switched to `npx` for this one command only.
-- `ERR_PNPM_UNEXPECTED_STORE` / `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` — the freshly installed global pnpm was a newer major version (11.x) than what built the existing `node_modules` (v10 store). Fixed with `CI=true pnpm install` (lockfile-driven relink, no version changes).
-- `ERR_PNPM_IGNORED_BUILDS` blocking every pnpm command — `pnpm-workspace.yaml` had an unresolved `core-js: set this to true or false` placeholder. Verified `core-js`'s postinstall is a harmless no-op, set to `false`.
-- Post-reinstall `Module '"@prisma/client"' has no exported member` errors — Prisma client wasn't regenerated after the fresh install. Fixed with `pnpm exec prisma generate`.
-- `posthog-js`/`posthog-node` were referenced in wizard-generated files but never actually in `package.json` — the wizard silently failed mid-run on the pnpm store issue above. Installed both explicitly.
+## Next Session Starts With
 
-## Current state
+1. Confirm separate Supabase staging configuration and migration verification.
+   Follow `context/media-staging.md` before enabling Mux or its worker. Read-only
+   `scripts/audit-database.ts` exists; do not run db push against shared databases.
+2. Follow `private-media-plan.md` for staged bucket cutover. Code is ready but the
+   currently public Storage originals are NOT protected by signed Mux playback.
+   Existing submitted listings need an approved backfill before enabling Mux.
+3. Deploy/test the worker schedule in staging. Verify actual callbacks/playback,
+   missed-event recovery, current KYC gating and races. Investigate unknown assets
+   by passthrough; never blindly reset uncertain/submitting jobs to queued.
+4. Add committed-object deletion protection and durable orphan cleanup; current
+   owner DELETE policies still permit deleting referenced files. Finish camera/GPS
+   device acceptance. Browser GPS is
+   spoofable evidence, not hardware attestation. Preserve coordinate privacy.
+5. Continue document review and payment milestones only after inventory acceptance;
+   check current Gemini/provider APIs and obtain sandbox credentials locally.
 
-- Dev server running clean on `http://localhost:3000`. Node v22.23.1 is now the nvm default (was v22.12.0).
-- `tsc --noEmit` and `eslint` clean across all touched files.
-- `progress-tracker.md`: items 01–05 marked `[x]`. Next roadmap item: 06 Mobile-First Capture UI.
-- PostHog events are live and functional, but the `/review` skill found 2 Important + 4 Minor issues — all documentation-vs-implementation gaps (`code-standards.md`'s PostHog event-name list is 100% Phase 2+ concepts with no Phase 1 coverage; `lib/posthog.ts`'s singleton+flush pattern vs. the docs' per-call factory+shutdown pattern; minor file/env-var naming mismatches vs. `architecture.md`/`library-docs.md`). None fixed yet — awaiting developer decision on whether to conform code to the docs or update the docs to reflect Phase 1 reality.
+## Open Risks
 
-## Next session starts with
-
-- Get developer's decision on the review findings, then either apply fixes or extend `code-standards.md`/`library-docs.md`/`architecture.md`'s PostHog sections with a Phase 1 events addendum covering the 6 events actually shipped.
-- After that: roadmap item 06, Mobile-First Capture UI (WebRTC camera + HTML5 Geolocation) — the first step toward giving listings (and richer trust stats) something real to show.
-
-## Open questions
-
-- Should `code-standards.md`'s "PostHog Telemetry Events" list be extended with the 6 Phase 1 events actually implemented, or left as pure future-state documentation?
-- Should `lib/posthog.ts` switch to the documented per-call factory + `shutdown()` pattern, or should the docs be updated to reflect the singleton + `flush()` approach?
-- Unverified: whether `instrumentation-client.ts`'s `defaults: '2026-05-30'` bundle auto-captures pageviews, which would contradict `library-docs.md`'s explicit `capture_pageview: false` + manual-trigger instruction. Wizard-generated file, not yet audited.
+- Private profile-table grants still require the security migration and staging audit.
+- Didit concurrency, revocation, real provider fixtures and SMTP/OAuth acceptance.
+- Mux ready assets do not auto-publish listings or satisfy document/payment checks.
+- Owner financial/lease cards remain mock; bookings, payments, messaging and admin
+  are incomplete. Do not present the website as production-complete.

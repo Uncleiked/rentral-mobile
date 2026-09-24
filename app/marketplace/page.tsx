@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import Link from "next/link";
+import { connection } from "next/server";
 import { PlusSquare } from "lucide-react";
 import { MarketplaceHeader } from "@/components/feed/MarketplaceHeader";
 import { MarketplaceFeedCard } from "@/components/feed/MarketplaceFeedCard";
@@ -9,6 +10,7 @@ import { MarketplaceBottomNav } from "@/components/feed/MarketplaceBottomNav";
 import { getMarketplaceFeed } from "@/lib/listing-data";
 
 export default async function MarketplacePage() {
+  await connection();
   const listings = await getMarketplaceFeed();
 
   return (
@@ -25,7 +27,7 @@ export default async function MarketplacePage() {
             <div className="flex flex-col items-center gap-4 py-20 text-center">
               <p className="text-sm font-semibold text-text-primary">No listings yet</p>
               <p className="max-w-xs text-sm text-text-muted">
-                Verified walkthrough listings appear here the moment they are posted. Be the first.
+                Listings appear here after verification and publication are complete.
               </p>
               <Link
                 href="/marketplace/listing/create"

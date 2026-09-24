@@ -13,9 +13,11 @@ import {
   saveListingInputSchema,
   updateListingInputSchema,
 } from '@/lib/schemas'
-import { requireUserId, revalidateProfilePaths } from '@/lib/action-helpers'
+import { requireVerifiedUserId, revalidateProfilePaths } from '@/lib/action-helpers'
 import { LISTING_STATUS } from '@/lib/listing-status'
 import { captureServerEvent } from '@/lib/posthog'
+import { muxConfigured, muxEnabled } from '@/lib/media/config'
+import { processListingMedia } from '@/lib/media/processing'
 
 const METADATA_SCHEMAS = {
   house: houseMetadataSchema,
@@ -31,6 +33,7 @@ type UpdateListingResult = { success: true } | ActionFailure
 // Thrown inside a $transaction to abort with a specific user-facing message
 // while still rolling back — caught once, right below the transaction call.
 class DraftNotFoundError extends Error {}
+class MissingCoordinatesError extends Error {}
 
 // The client uploaded these objects itself; storage RLS scopes writes to the
 // uploader's folder, and this check stops a caller from pointing a listing at
@@ -56,10 +59,14 @@ async function setListingCoordinates(
 }
 
 export async function saveListing(input: unknown): Promise<SaveListingResult> {
+  let committedListingId: string | null = null
   try {
-    const userId = await requireUserId()
+    if (muxEnabled() && !muxConfigured()) {
+      return { success: false, error: 'Video processing is temporarily unavailable. Save your draft and try again later.' }
+    }
+    const userId = await requireVerifiedUserId()
     if (!userId) {
-      return { success: false, error: 'Not authenticated' }
+      return { success: false, error: 'Sign in and complete identity verification to manage listings.' }
     }
 
     const parsed = saveListingInputSchema.safeParse(input)
@@ -85,22 +92,7 @@ export async function saveListing(input: unknown): Promise<SaveListingResult> {
     // against — otherwise a caller could swap in unrelated footage while
     // riding an earlier take's GPS lock, defeating the spatial-integrity gate.
     const hasFreshCoords = lat !== undefined && lng !== undefined
-    let draftHasCoords = false
-    if (draftId) {
-      // Doubles as the ownership check for draftId — Prisma's update() can only
-      // filter by a unique field (id), so this pre-transaction lookup is the
-      // one place lister_id gets verified before the transaction's update runs.
-      const rows = await prisma.$queryRaw<{ has_coords: boolean; video_path: string | null }[]>`
-        SELECT ("hardware_coordinates" IS NOT NULL) AS has_coords, "video_path"
-        FROM "Listing"
-        WHERE "id" = ${draftId} AND "lister_id" = ${userId} AND "listing_status" = ${LISTING_STATUS.DRAFT}
-      `
-      if (rows.length === 0) {
-        return { success: false, error: 'Draft not found.' }
-      }
-      draftHasCoords = rows[0].has_coords && rows[0].video_path === videoPath
-    }
-    if (!hasFreshCoords && !draftHasCoords) {
+    if (!hasFreshCoords && !draftId) {
       return { success: false, error: 'Your walkthrough is missing its GPS lock. Go back and re-record it.' }
     }
 
@@ -120,9 +112,23 @@ export async function saveListing(input: unknown): Promise<SaveListingResult> {
     // the constraint holds after every statement and a listing can never be
     // posted incomplete.
     const listing = await prisma.$transaction(async (tx) => {
+      if (draftId) {
+        // Serialize draft publication with edits so ownership, status, footage
+        // and its stored GPS are checked against the exact row being published.
+        const rows = await tx.$queryRaw<{ has_coords: boolean; video_path: string | null }[]>`
+          SELECT ("hardware_coordinates" IS NOT NULL) AS has_coords, "video_path"
+          FROM "Listing"
+          WHERE "id" = ${draftId} AND "lister_id" = ${userId} AND "listing_status" = ${LISTING_STATUS.DRAFT}
+          FOR UPDATE
+        `
+        if (!rows[0]) throw new DraftNotFoundError()
+        if (!hasFreshCoords && (!rows[0].has_coords || rows[0].video_path !== videoPath)) {
+          throw new MissingCoordinatesError()
+        }
+      }
       const row = draftId
         ? await tx.listing.update({
-            where: { id: draftId },
+            where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
             data: listingData,
             select: { id: true, lister: { select: { username: true } } },
           })
@@ -139,8 +145,12 @@ export async function saveListing(input: unknown): Promise<SaveListingResult> {
         where: { id: row.id },
         data: { listing_status: LISTING_STATUS.PENDING_VERIFICATION },
       })
+      if (muxEnabled()) {
+        await tx.mediaAsset.create({ data: { listing_id: row.id, source_path: videoPath } })
+      }
       return row
     })
+    committedListingId = listing.id
 
     revalidatePath('/marketplace')
     revalidatePath('/marketplace/listing')
@@ -153,19 +163,35 @@ export async function saveListing(input: unknown): Promise<SaveListingResult> {
         from_draft: Boolean(draftId),
       })
     )
+    if (muxEnabled()) after(async () => {
+      try {
+        await processListingMedia(listing.id, userId)
+      } catch {
+        console.warn('[media] Dispatch interrupted; inspect the persisted job before retrying.')
+      }
+    })
 
     return { success: true, listingId: listing.id }
   } catch (error) {
+    if (committedListingId) {
+      console.warn('[listings] Listing saved; post-commit refresh or dispatch failed.')
+      return { success: true, listingId: committedListingId }
+    }
+    if (error instanceof DraftNotFoundError) return { success: false, error: 'Draft not found or already submitted.' }
+    if (error instanceof MissingCoordinatesError) {
+      return { success: false, error: 'Your walkthrough is missing its GPS lock. Go back and re-record it.' }
+    }
     console.error('[actions/listingActions] saveListing failed:', error)
     return { success: false, error: 'We could not save your listing. Please try again.' }
   }
 }
 
 export async function saveDraft(input: unknown): Promise<SaveDraftResult> {
+  let committedDraftId: string | null = null
   try {
-    const userId = await requireUserId()
+    const userId = await requireVerifiedUserId()
     if (!userId) {
-      return { success: false, error: 'Not authenticated' }
+      return { success: false, error: 'Sign in and complete identity verification to manage listings.' }
     }
 
     const parsed = saveDraftInputSchema.safeParse(input)
@@ -234,6 +260,7 @@ export async function saveDraft(input: unknown): Promise<SaveDraftResult> {
       }
       return { id: id! }
     })
+    committedDraftId = row.id
 
     revalidatePath('/marketplace/listing')
 
@@ -241,6 +268,10 @@ export async function saveDraft(input: unknown): Promise<SaveDraftResult> {
 
     return { success: true, draftId: row.id }
   } catch (error) {
+    if (committedDraftId) {
+      console.warn('[listings] Draft saved; post-commit refresh failed.')
+      return { success: true, draftId: committedDraftId }
+    }
     if (error instanceof DraftNotFoundError) {
       return { success: false, error: 'Draft not found.' }
     }
@@ -251,9 +282,9 @@ export async function saveDraft(input: unknown): Promise<SaveDraftResult> {
 
 export async function updateListing(input: unknown): Promise<UpdateListingResult> {
   try {
-    const userId = await requireUserId()
+    const userId = await requireVerifiedUserId()
     if (!userId) {
-      return { success: false, error: 'Not authenticated' }
+      return { success: false, error: 'Sign in and complete identity verification to manage listings.' }
     }
 
     const parsed = updateListingInputSchema.safeParse(input)

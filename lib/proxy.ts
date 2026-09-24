@@ -1,10 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-
-// Routes that don't require authentication at all
-const PUBLIC_ROUTES = ['/sign-in', '/auth/callback', '/api/webhooks']
+import { authRedirect } from '@/lib/auth-policy'
 
 export async function updateSession(request: NextRequest) {
+  // This exact service route authenticates its own bearer secret, not a browser
+  // cookie. It must remain reachable by the scheduler when Auth is unavailable.
+  if (request.nextUrl.pathname === '/api/internal/media-worker') {
+    return NextResponse.next({ request })
+  }
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -34,38 +37,16 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
   const { data: { user } } = await supabase.auth.getUser()
-  const claims = user?.app_metadata
-  const pathname = request.nextUrl.pathname
-
-  // Allow public routes through without auth checks
-  const isPublicRoute = pathname === '/' || PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
-  if (isPublicRoute) {
-    return supabaseResponse
-  }
-
-  // No user — redirect to login
-  if (!claims) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/sign-in'
-    return NextResponse.redirect(url)
-  }
-
-  const kycVerified = (claims as Record<string, unknown>)?.kyc_verified === true
-  const username = (claims as Record<string, unknown>)?.username
-  const hasUsername = typeof username === 'string' && username.length > 0
-  const profileCompleted = (claims as Record<string, unknown>)?.profile_completed === true
-  const isOnboarding = pathname.startsWith('/onboarding')
-
-  if ((!kycVerified || !hasUsername || !profileCompleted) && !isOnboarding && !pathname.startsWith('/api/verify')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/onboarding'
-    return NextResponse.redirect(url)
-  }
-
-  if (kycVerified && hasUsername && profileCompleted && isOnboarding) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/marketplace'
-    return NextResponse.redirect(url)
+  const destination = authRedirect(request.nextUrl.pathname, user)
+  if (destination) {
+    const response = NextResponse.redirect(new URL(destination, request.url))
+    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie)
+    for (const header of ['cache-control', 'expires', 'pragma']) {
+      const value = supabaseResponse.headers.get(header)
+      if (value) response.headers.set(header, value)
+    }
+    response.headers.set('Cache-Control', 'private, no-store')
+    return response
   }
 
   return supabaseResponse

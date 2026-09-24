@@ -4,6 +4,110 @@ Update this file after every completed feature. Any AI agent reading this should
 
 ## Current Status
 
+### Private Media Previews - Code Complete, Storage Cutover Pending
+
+- Removed public Storage URL construction from draft resume, profile cards and
+  marketplace feeds. The authenticated source endpoint reads only owner/active
+  inventory, validates the stored owner path and signs a five-minute redirect.
+- With Mux enabled, non-owners cannot obtain originals. Disabled mode preserves
+  authenticated playback of active inventory. Compliance documents have no route
+  through this endpoint. All responses are private/no-store, with no public fallback.
+- Private posters bypass the Next image optimizer. Native and Mux video failures
+  have keyboard-accessible retry controls; camera denial no longer hides a resumed
+  draft's already-recorded preview. Existing responsive dimensions/tokens remain.
+- Prepared `20260924170000_private_listing_media`; NOT applied remotely. Preserves
+  existing object keys, makes the bucket private and bounds legacy broad reads with
+  an owner-only restrictive SELECT policy. See `context/private-media-plan.md`.
+- Added an isolated local PostgreSQL policy test (`pnpm test:storage`). It passed
+  anonymous, cross-owner, legacy-policy, owner upload/cleanup and unrelated-bucket
+  checks. This fixture is not the hosted Storage service or full migration replay.
+- Verification passed: 159 unit tests, 28 browser checks at 320/390/768/1440px,
+  local PostgreSQL policy checks, lint, TypeScript and production build. Browser
+  checks cover public routes and anonymous guards, not authenticated playback or
+  real provider acceptance; rendering tests verify protected poster URLs and errors.
+- Milestone 08 remains partial: staged private-bucket rollout, committed-object
+  deletion protection, durable orphan cleanup, live Mux and camera/GPS acceptance.
+  No credentials, flags, remote assets or shared database contents changed.
+
+### Media Worker - Code Complete, Deployment Pending
+
+- Restored project memory and reviewed the root/context docs and relevant architect,
+  Supabase/Postgres, API security, responsive-design, review and imprint guidance.
+- Mux credentials are now present locally and the user reports a working CLI listener.
+  Presence is not live API acceptance. MUX_ENABLED remains false; no credentials,
+  feature flags, remote assets or database migrations were changed in this pass.
+- Added `context/media-worker-plan.md`, the protected POST worker route and the
+  bounded dispatcher/reconciler in `lib/media`. Current queued work no longer has
+  to depend solely on a successful Next.js after callback once scheduling is enabled.
+- Stale submitting jobs become uncertain; ambiguous jobs never get a second automatic
+  create request. Known provider assets can recover missed callbacks. Compare-and-swap
+  updates avoid duplicate claims and prevent stale polling from overwriting webhooks.
+- Worker returns counts only, denies anonymous requests, fails closed while disabled,
+  and isolates individual job failures. No new schema or dependency was introduced.
+- Verification: 130 unit regressions, lint, TypeScript, Prisma validation, production
+  build and 24 Playwright checks passed at 320/390/768/1440px. Small-mobile and desktop
+  sign-in screenshots were visually inspected; whitespace checks passed.
+  Real database races, scheduled execution and enabled media playback are not covered
+  by these checks. See `context/media-staging.md` for activation and alerting.
+- Milestone 08 remains partial: private originals, orphan cleanup, staging rollout,
+  real callbacks/playback and camera/GPS device tests still need completion. Gemini
+  configuration is still missing; do not skip this milestone or simulate approval.
+
+### Media Processing - Implementation Added, Acceptance Pending
+
+- Added the gated Mux pipeline described in `context/media-plan.md`: one durable
+  MediaAsset job per submitted listing, atomic dispatch claim, signed-only assets,
+  bounded retries and explicit uncertain-submission handling.
+- SDK-verified webhooks fetch current provider state, bind media/asset IDs, and
+  transactionally store deduplication receipts and status. Media callbacks never
+  activate listings. Playback requires an authenticated owner or active inventory,
+  uses 15-minute signed tokens and denies caching.
+- Wired Mux Player into feed/profile cards, owner processing status and guarded
+  retries. No new-table queries occur while disabled; existing Storage playback
+  remains unchanged in this default mode.
+- Fixed upload rejection cleanup to wait for all uploads; retained originals after
+  ambiguous save responses; preserved committed save results after refresh failures.
+  Corrected codec-qualified MP4 extensions and removed fabricated 120-second badges.
+- Added 36 regressions (100 total), including real SDK signature verification,
+  source/output validation, ownership, duplicate/early/reordered events and failure
+  handling. Twenty browser checks passed across 320/390/768/1440px for existing
+  public/auth flows and disabled-mode safety. These do not prove live HLS playback.
+- Final checks passed: 100 tests, lint, TypeScript/production build, Prisma schema
+  validation, dependency peer checks and whitespace checks. Migration
+  `20260924150000_add_mux_media_pipeline` is unapplied,
+  as is the earlier profile-security migration. No remote assets/data were created.
+- Follow `context/media-staging.md` before enabling. Still required: staging replay,
+  actual callbacks/playback, private original-media staging, scheduled reconciliation,
+  cleanup of abandoned objects/assets, and device camera/GPS acceptance.
+
+### Sign-In Recovery - 2026-09-24
+
+- Reproduced `/sign-in` returning 404 despite an existing route. Restarted the stale Next.js dev process on port 3000; the route returned 200 and the existing desktop auth/recovery checks passed before further code changes.
+- Supabase Auth settings and the read-only database audit now connect successfully. Email auth is enabled; Google/Apple are disabled in the current project. No credentials or remote data were changed.
+- Login now distinguishes service outages, rate limits, unconfirmed email and invalid credentials, and cannot succeed without a verified user. The form supports keyboard submit, persistent inline errors and recovery after failed requests.
+- Provider buttons follow live Supabase settings. Local telemetry is opt-in; server analytics requests have bounded timeout/no retries. Added marketplace image size hints and corrected the logo aspect ratio.
+- Server logs showed a successful login action followed by `/marketplace` 200 responses. This is runtime evidence, not a full authenticated end-to-end acceptance test.
+- Database audit still flags profile-table Data API grants. The prepared security migration remains unapplied pending staging verification.
+- Verified: 64 unit regressions, 16 Playwright checks across 320/390/768/1440px, TypeScript, lint and whitespace checks passed. Inspected the 320px sign-in screenshot. No production build was rerun during this targeted repair.
+
+### Acceptance Review - 2026-09-24
+
+The historical implementation notes below describe built features, not production acceptance. The architecture and ordered remaining work are now in `context/production-plan.md`.
+
+- Fixed recovery route access, safe callback destinations, redirect cookie preservation, username-based KYC reapproval, typed profile submission, metadata-sync error handling, and onboarding progression.
+- Listing mutations now check current database KYC/profile eligibility. Public feed/profile listings only include `active` inventory. Removed the fabricated payment account and "I've Paid" flow; submission saves as pending review without collecting a payment.
+- Didit updates are scoped to the stored user/session/workflow, and `/api/verify` shares the guarded onboarding action. Same-session event ordering/concurrency and live sandbox approval/revocation remain acceptance work.
+- Marketplace now renders inventory at request time and has a retryable error boundary.
+- Draft publication now locks the owner/status/GPS row inside its write transaction before submission; the real concurrent-request database test still needs staging connectivity.
+- Final local checks passed: lint, TypeScript, Prisma schema validation, production build, 48 Vitest regressions and 12 Playwright checks (homepage/recovery/anonymous protection at 320, 390, 768 and 1440 pixels). Browser preview is the existing server at http://localhost:3000. These checks do not prove live OAuth/SMTP/Didit/payment behavior.
+- Added Vitest/Playwright checks and a read-only schema audit. Supabase rejects the configured database connection with XX000 / tenant-user not found; authenticated DB flows and migration verification are blocked until configuration/project availability is restored.
+- Prepared `20260924130000_harden_profile_access` to deny Data API access to private individual/organization profiles and restrict the signup trigger. Migration is NOT applied or live-verified.
+- External inputs still missing: Mux credentials, Gemini credentials, and payment-provider sandbox credentials. Do not mark provider-backed milestones complete until tested with real sandbox callbacks.
+
+Next: restore database connectivity, replay/verify the pending migration in staging, complete authenticated/provider acceptance, then continue item 08 per the dependency plan.
+
+### Historical Implementation Notes
+
 Phase: Phase 1 — Foundation, Auth, & Core Infrastructure (with Profile UI pulled forward from Phase 7)
 Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed). Also: Marketplace Profile Page — Owner + Visitor UI (`/marketplace/profile`, `/marketplace/profile/[username]`), built ahead of schedule with real identity data (username/name/verification/account type from Prisma), real trust-stat counts via `getTrustSummary()` (with a `null`/"Coming soon" placeholder for the 3 metrics with no backing system yet), and a real empty state for listings until the Listing table exists. Profile is editable end-to-end: bio + avatar_url added to `User`, a public `profile-avatars` Storage bucket with owner-scoped RLS, live username-availability checking, Supabase secure (double-confirm) email change synced back to Prisma via `app/auth/callback/route.ts`, real Sign Out, and a Copy Link/WhatsApp/X/Facebook share menu.
 Also: 05 Telemetry & PostHog Initialization — `posthog-js` client init (`instrumentation-client.ts`) + `posthog-node` server client (`lib/posthog.ts`, `flushAt: 1`, flush-per-call so events land before short-lived server actions/route handlers exit). 6 events wired to real code paths: `user_signed_in`/`user_signed_up` (sign-in actions), `verification_started` (onboarding `initiateVerification`), `verification_completed` (Didit webhook), `onboarding_completed` (`submitProfile`), `profile_updated` (`updateProfileIdentity`/`updateAvatarUrl`, tagged by `field`).
@@ -34,7 +138,7 @@ Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 re
 
 [x] 07 Dynamic Spatial Metadata Forms (Category-specific: House, Car, Boat — digits-only validation, persisted to `Listing.asset_metadata`)
 
-[~] 08 Media Transcoding & Ingestion (Supabase Storage leg done: `listings-media`/`compliance-docs` buckets + upload flow; Mux transcoding pending API keys)
+[~] 08 Media Transcoding & Ingestion (Storage flow and gated Mux lifecycle implemented; migration, credentials, private originals and live acceptance pending)
 
 [ ] 09 AI Document Verification Pipeline (Gemini 1.5 Pro Title/CAC Audit)
 
@@ -127,4 +231,3 @@ _Admin Security: The admin-bypass-verification and is-admin-override flags must 
 _Holding Lock Split: When a 24-hour holding lock expires, the Edge Function must programmatically distribute 30% to the platform and 70% to the asset owner's bank account before resetting the listing to 'active'._
 
 _Listing Capture Boundary (updated with Item 06): recording, GPS, storage uploads, and the DB write are real. Still simulated/deferred pending API keys: the ₦1,000 OPay fee (button confirms without payment), Gemini document audit (docs land in `compliance-docs` unreviewed), and Mux transcoding (cards play the raw Storage file). Listings therefore stay `pending_verification` — nothing auto-activates. Wizard blobs live only in Zustand memory, so a refresh at checkout requires redoing capture/document steps (guarded with a clear error, no orphan rows; failed saves best-effort delete their uploads)._
-

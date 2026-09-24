@@ -1,5 +1,3 @@
-import { createClient as createBareClient, type SupabaseClient } from '@supabase/supabase-js'
-
 // Single source of truth for the listing storage vocabulary. The buckets
 // themselves are provisioned in prisma/migrations/20260724100500_add_listing_storage_buckets.
 export const LISTINGS_MEDIA_BUCKET = 'listings-media'
@@ -32,22 +30,11 @@ const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
 }
 
 export function videoExtensionForMime(mimeType: string): string {
-  return VIDEO_EXTENSION_BY_MIME[mimeType] ?? 'webm'
+  return VIDEO_EXTENSION_BY_MIME[mimeType.split(';')[0]] ?? 'webm'
 }
 
-// Public URLs are pure string construction — no auth, no cookies, no network —
-// so they come from one bare module-level client instead of forcing every
-// caller to construct (or await) a session-bound client first.
-let urlClient: SupabaseClient | null = null
-function getUrlClient(): SupabaseClient {
-  urlClient ??= createBareClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-  )
-  return urlClient
-}
-
-export function listingsMediaPublicUrl(path: string | null): string | null {
-  if (!path) return null
-  return getUrlClient().storage.from(LISTINGS_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl
+// The route resolves the current database reference and authorizes every fresh
+// media request. Bearer tokens are never embedded in page props.
+export function listingMediaUrl(listingId: string, kind: 'video' | 'poster'): string {
+  return `/api/listings/${encodeURIComponent(listingId)}/source?kind=${kind}`
 }

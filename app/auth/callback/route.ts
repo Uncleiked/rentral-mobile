@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/server'
 import prisma from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { onboardingComplete, safeAuthNext } from '@/lib/auth-policy'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/marketplace'
+  const nextUrl = safeAuthNext(searchParams.get('next'), origin)
   const errorMsg = searchParams.get('error_description') || searchParams.get('error')
 
   if (errorMsg) {
@@ -17,11 +18,6 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
-      const onboardingComplete =
-        user?.app_metadata?.kyc_verified === true &&
-        typeof user.app_metadata?.username === 'string' &&
-        user.app_metadata.username.length > 0 &&
-        user?.app_metadata?.profile_completed === true
 
       // Secure email change sends two confirmation links (old + new inbox).
       // Once both are clicked, Supabase's `user.email` flips to the new
@@ -35,12 +31,11 @@ export async function GET(request: Request) {
           })
       }
 
-      const nextUrl = new URL(next, origin)
       if (nextUrl.searchParams.get('email_change') === 'check') {
         nextUrl.searchParams.set('email_change', user?.new_email ? 'pending' : 'confirmed')
       }
 
-      if (onboardingComplete || next.startsWith('/reset-password')) {
+      if (user && (onboardingComplete(user) || nextUrl.pathname === '/reset-password')) {
         return NextResponse.redirect(nextUrl.toString())
       }
 

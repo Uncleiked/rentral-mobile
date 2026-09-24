@@ -18,6 +18,67 @@ After building any component — update this file with the component name, file 
 
 ## Components
 
+### Listing Video and Processing State
+
+Files: `components/listing/ListingVideo.tsx`, `components/listing/MediaProcessingStatus.tsx`, `components/profile/ListingCard.tsx`
+Last updated: 2026-09-24
+
+- Media stays within existing `aspect-[4/3]` cards and `aspect-[4/5]` feed surfaces.
+- Loading/error surfaces: `bg-background-app text-sm text-text-muted` or `text-text-secondary`, centered with `role="status"`.
+- Retry/refresh uses Lucide RefreshCw in a stable icon button, with title and accessible label; no fake percent progress.
+- Owner processing status: unframed `border-t border-border-subtle pt-2 text-xs text-text-secondary`; errors use `text-trust-flagged`.
+- Cards no longer claim every recording is a verified 120-second walkthrough. Labels distinguish draft, walkthrough and confirmed video-ready state.
+- Uncertain save responses retain files and link to Your Listings instead of inviting duplicate submission. Existing semantic auth/listing styling is retained.
+- Signed playback is fetched from an authenticated no-store endpoint and renews before expiry. No public raw-video fallback is used for submitted listings when Mux is enabled.
+- Private-media follow-up: saved draft, profile and feed media use same-origin
+  authorized URLs. Protected posters must have `unoptimized` so they retain viewer
+  credentials and never enter the shared Next image cache.
+- Native/Mux error surfaces use `bg-background-app text-sm text-text-secondary`,
+  `px-4 gap-2`, centered within the existing media frame. Retry icons use `h-4 w-4`
+  inside `h-10 w-10 rounded-lg bg-glass-light hover:bg-glass-light-hover` buttons,
+  with `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary`.
+  Keep the accessible label/title "Retry video" and `role="status"` message.
+- Resumed CaptureCanvas previews take precedence over a denied live-camera request;
+  failed previews use the same retry pattern without changing the 9/16 frame.
+- Live media-state screenshots/playback remain staging acceptance work; public/auth viewport checks cover disabled-mode compatibility only.
+- Background worker follow-up: no new UI component or styling variation. The worker
+  writes the same media states consumed here; owner refresh/retry and pending-review
+  behavior are unchanged. Public/auth responsive compatibility was rechecked across
+  320, 390, 768 and 1440px, including the internal endpoint's anonymous-access guard.
+
+### Sign-In Feedback and Provider Availability
+
+Files: `app/(auth)/sign-in/AuthForm.tsx`, `app/(auth)/sign-in/page.tsx`
+Last updated: 2026-09-24
+
+- Retains `bg-surface-card border border-border-subtle`, existing input/action tokens, and responsive `p-6 sm:p-8` spacing.
+- Errors persist below the actions using `role="alert"` and `text-sm text-trust-flagged break-words`; provider internals are never rendered.
+- Form submission supports Enter, `aria-busy`, disabled actions and visible pending copy. OAuth exceptions reset pending state.
+- OAuth buttons render only for enabled Supabase providers. Loading provider settings has a visible `role="status"` fallback; failures leave email login available.
+- Marketplace avatar images declare fixed `sizes` (44px suggestions, 40px feed); sidebar branding uses intrinsic SVG dimensions and `h-10 w-auto` to preserve aspect ratio.
+
+### Foundation Forms and Submission States
+
+Files: `components/onboarding/ProfileForm.tsx`, `components/profile/EditProfileModal.tsx`, `components/listing/CheckoutPrompt.tsx`, `app/marketplace/error.tsx`
+Last updated: 2026-09-24
+
+| Property | Class |
+| --- | --- |
+| Form surface | Existing `bg-surface-card border border-border-subtle` |
+| Inputs | `bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary` |
+| Labels | `text-xs font-medium uppercase tracking-wider text-text-muted` |
+| Focus | `focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary` |
+| Primary action | `bg-accent-primary text-text-inverse hover:bg-accent-hover` |
+| Secondary action | `bg-glass-light border border-glass-border-medium text-text-primary` |
+| Error feedback | `text-xs text-trust-flagged` |
+| Spacing | Form `space-y-6`; fields `gap-4`; actions `px-4 py-3` |
+
+Pattern notes: Retain the homepage's semantic brand tokens and existing auth surface. Form labels associate with input IDs. Inputs in constrained rows can shrink using `min-w-0`. Profile completion advances from confirmed server state. Listing submission has no fabricated bank details, payment receipt or countdown; pending listings remain absent from discovery. Marketplace failures use an unframed, centered error state with a Lucide retry action. Homepage and recovery-route viewport checks passed at 320, 390, 768 and 1440 pixels; this does not assert full authenticated-form visual acceptance.
+
+### Registry Authority
+
+This is the canonical registry required by AGENTS.md. The root `ui-registry.md` contains historical profile-component patterns; consult those until migrated here. Earlier entries below with raw color classes or obsolete paths are historical observations, not permission to bypass semantic tokens.
+
 ### Navigation & Header
 
 - **File Path**: [app/page.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/app/page.tsx)

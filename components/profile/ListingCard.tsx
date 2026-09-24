@@ -3,6 +3,8 @@ import Link from "next/link";
 import { PencilLine } from "lucide-react";
 import type { ListingSummary } from "@/lib/profile-data";
 import { LISTING_STATUS } from "@/lib/listing-status";
+import { MediaProcessingStatus } from '@/components/listing/MediaProcessingStatus';
+import { ListingVideo } from '@/components/listing/ListingVideo';
 
 interface ListingCardProps {
   listing: ListingSummary;
@@ -21,20 +23,21 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
     <div className="rounded-xl overflow-hidden bg-surface-card border border-border-subtle">
       <div className="relative aspect-[4/3] w-full">
         {listing.posterUrl ? (
-          <Image src={listing.posterUrl} alt={listing.title} fill className="object-cover" />
-        ) : listing.videoUrl ? (
-          <video
+          <Image src={listing.posterUrl} alt={listing.title} fill unoptimized sizes="(min-width: 640px) 33vw, 50vw" className="object-cover" />
+        ) : listing.videoUrl || listing.useMux ? (
+          <ListingVideo
+            listingId={listing.id}
+            useMux={listing.useMux}
             src={listing.videoUrl}
             muted
             playsInline
-            preload="metadata"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="absolute inset-0 bg-glass-light" />
         )}
         <span className="absolute top-2 left-2 rounded-full bg-glass-dark backdrop-blur-sm border border-glass-border-light px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-text-primary">
-          ✓ 120s Walkthrough
+          {isDraft ? 'Draft' : listing.media?.status === 'ready' ? 'Video ready' : 'Walkthrough'}
         </span>
       </div>
 
@@ -64,6 +67,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
             {ownerAction.label}
           </Link>
         )}
+        {owner && listing.media && <MediaProcessingStatus listingId={listing.id} media={listing.media} />}
       </div>
     </div>
   );

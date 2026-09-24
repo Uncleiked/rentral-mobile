@@ -7,11 +7,17 @@
     "dev:https": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:storage": "node scripts/test-storage-policies.mjs"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.2.1",
     "@hookform/resolvers": "^5.4.0",
+    "@mux/mux-node": "15.2.0",
+    "@mux/mux-player-react": "3.13.4",
     "@oluso/nextjs": "^1.0.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
@@ -37,8 +43,9 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^22.20.4",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -47,6 +54,7 @@
     "eslint-config-next": "16.2.7",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.1"
   }
 }

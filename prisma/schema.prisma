@@ -42,6 +42,7 @@ model Listing {
   document_path    String? // compliance-docs object path
   listing_status   String  @default("draft") // 'draft' | 'pending_verification' | 'active'
   wizard_step      String? // resume point for drafts ('capture' | 'details' | 'documents' | 'checkout')
+  media            MediaAsset?
   // Written only via raw SQL (ST_SetSRID/ST_MakePoint) inside the save
   // transaction; Prisma excludes Unsupported columns from every query result,
   // which enforces the "never expose raw hardware coordinates" invariant.
@@ -51,6 +52,33 @@ model Listing {
 
   @@index([lister_id, createdAt(sort: Desc)])
   @@index([listing_status, createdAt(sort: Desc)])
+}
+
+model MediaAsset {
+  id              String   @id @default(uuid())
+  listing_id      String   @unique
+  listing         Listing  @relation(fields: [listing_id], references: [id], onDelete: Restrict)
+  source_path     String
+  status          String   @default("queued")
+  mux_asset_id    String?  @unique
+  playback_id     String?  @unique
+  duration        Float?
+  attempts        Int      @default(0)
+  error_code      String?
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  receipts        MediaWebhookReceipt[]
+
+  @@index([status, updatedAt])
+}
+
+model MediaWebhookReceipt {
+  event_id        String   @id
+  media_id        String
+  media           MediaAsset @relation(fields: [media_id], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([media_id])
 }
 
 model IndividualProfile {

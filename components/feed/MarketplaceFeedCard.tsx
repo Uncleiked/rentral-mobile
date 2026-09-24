@@ -4,7 +4,8 @@ import clsx from "clsx";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from "lucide-react";
+import { Heart, Send, Bookmark, MoreHorizontal } from "lucide-react";
+import { ListingVideo } from '@/components/listing/ListingVideo';
 
 interface MarketplaceFeedCardProps {
   id: string;
@@ -13,6 +14,7 @@ interface MarketplaceFeedCardProps {
   priceDenomination: string;
   category: "House" | "Car" | "Boat";
   videoUrl: string;
+  useMux: boolean;
   posterUrl: string | null;
   badges: string[];
   username: string;
@@ -29,7 +31,7 @@ function FeedAvatar({ avatarUrl, username, size }: { avatarUrl: string | null; u
       className={clsx(size, "relative rounded-full overflow-hidden border border-glass-border-medium flex-shrink-0 bg-glass-light flex items-center justify-center")}
     >
       {avatarUrl ? (
-        <Image src={avatarUrl} alt={username} fill className="object-cover" />
+        <Image src={avatarUrl} alt={username} fill sizes="40px" className="object-cover" />
       ) : (
         <span className="text-sm font-bold uppercase text-text-primary">{username.charAt(0)}</span>
       )}
@@ -38,10 +40,12 @@ function FeedAvatar({ avatarUrl, username, size }: { avatarUrl: string | null; u
 }
 
 export function MarketplaceFeedCard({
+  id,
   title,
   price,
   priceDenomination,
   videoUrl,
+  useMux,
   posterUrl,
   badges,
   username,
@@ -89,7 +93,9 @@ export function MarketplaceFeedCard({
           onClick={() => setIsFullscreen(true)}
         >
           {/* src directly on the element so the browser sniffs webm/mp4 alike */}
-          <video
+          <ListingVideo
+            listingId={id}
+            useMux={useMux}
             className="h-full w-full object-cover"
             src={videoUrl}
             poster={posterUrl ?? undefined}
@@ -142,7 +148,9 @@ export function MarketplaceFeedCard({
       {isFullscreen && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col sm:flex-row">
           <div className="relative flex-1 h-full bg-black flex items-center justify-center" onClick={() => setIsFullscreen(false)}>
-            <video
+            <ListingVideo
+              listingId={id}
+              useMux={useMux}
               className="h-full w-full object-contain"
               src={videoUrl}
               poster={posterUrl ?? undefined}

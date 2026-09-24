@@ -22,7 +22,7 @@ export function MarketplaceSuggestions() {
       <div className="flex items-center justify-between mb-6">
         <Link href="/marketplace/profile" className="flex items-center gap-3">
           <div className="relative h-11 w-11 rounded-full overflow-hidden border border-glass-border-medium">
-            <Image src="https://i.pravatar.cc/150?u=current_user" alt="Me" fill className="object-cover" />
+            <Image src="https://i.pravatar.cc/150?u=current_user" alt="Me" fill sizes="44px" className="object-cover" />
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold text-text-primary">david_ikediashi</span>
@@ -42,7 +42,7 @@ export function MarketplaceSuggestions() {
           <div key={user.id} className="flex items-center justify-between">
             <Link href={`/marketplace/profile/${user.username}`} className="flex items-center gap-3">
               <div className="relative h-11 w-11 rounded-full overflow-hidden border border-glass-border-medium">
-                <Image src={user.avatar} alt={user.username} fill className="object-cover" />
+                <Image src={user.avatar} alt={user.username} fill sizes="44px" className="object-cover" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-bold text-text-primary">{user.username}</span>

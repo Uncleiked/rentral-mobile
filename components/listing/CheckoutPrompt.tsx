@@ -1,22 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Landmark } from 'lucide-react'
+import Link from 'next/link'
+import { ShieldCheck } from 'lucide-react'
 import { saveListing } from '@/app/actions/listingActions'
 import { removeUploads, resolveSessionAndUpload } from '@/lib/listing-upload'
 import { useRentralStore } from '@/store/useRentralStore'
-
-// The ₦1,000 fee flow is still simulated (no OPay keys yet) — "I've Paid" is
-// where the wizard leaves the browser: media goes to Storage, then the
-// saveListing server action persists the row.
-const MOCK_ACCOUNT_NUMBER = '9019283746'
-const MOCK_BANK_NAME = 'OPay (Paycom)'
 
 type Phase = 'idle' | 'uploading' | 'saving'
 
 export function CheckoutPrompt() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [uncertain, setUncertain] = useState(false)
   const goNext = useRentralStore((state) => state.goNext)
   const goBack = useRentralStore((state) => state.goBack)
 
@@ -72,8 +68,9 @@ export function CheckoutPrompt() {
 
       goNext()
     } catch {
-      await removeUploads(supabase, media.newUploads)
-      setError('Something went wrong while saving your listing. Please try again.')
+      // The server may have committed before the connection failed.
+      setUncertain(true)
+      setError('We could not confirm submission. Check Your Listings before submitting again.')
     } finally {
       setPhase('idle')
     }
@@ -83,40 +80,33 @@ export function CheckoutPrompt() {
     <div className="w-full max-w-md mx-auto">
       <div className="mb-8 text-center">
         <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
-          Activate your listing
+          Submit your listing
         </h2>
         <p className="text-sm text-text-secondary">
-          A small anti-spam fee keeps ghost listings off Rentral.
+          Your listing will appear in the marketplace after verification is complete.
         </p>
       </div>
 
       <div className="rounded-2xl border border-border-subtle bg-surface-card px-6 py-6">
         <div className="flex items-center justify-between border-b border-border-subtle pb-4">
-          <span className="text-sm font-medium text-text-secondary">Listing Fee</span>
-          <span className="text-xl font-extrabold text-accent-hover">₦1,000</span>
+          <span className="text-sm font-medium text-text-secondary">Publication status</span>
+          <span className="text-sm font-semibold text-text-primary">Pending review</span>
         </div>
 
         <div className="mt-4 flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-glass-light">
-            <Landmark className="h-4 w-4 text-text-primary" />
+            <ShieldCheck className="h-4 w-4 text-text-primary" />
           </span>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-text-muted">{MOCK_BANK_NAME}</p>
-            <p className="text-sm font-semibold text-text-primary">Dynamic Virtual Account</p>
+            <p className="text-sm font-semibold text-text-primary">No payment collected</p>
+            <p className="mt-1 text-xs text-text-muted">Payments are not available yet.</p>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border-subtle bg-background-app px-4 py-3">
-          <span className="text-lg font-bold tracking-widest text-text-primary">{MOCK_ACCOUNT_NUMBER}</span>
-          <Copy className="h-4 w-4 text-text-muted" />
-        </div>
-
-        <p className="mt-4 text-center text-xs font-semibold uppercase tracking-wide text-text-muted">
-          Expires in 30:00
-        </p>
       </div>
 
       {error && <p className="mt-4 text-center text-xs font-semibold text-trust-flagged">{error}</p>}
+      {uncertain && <Link href="/marketplace/listing" className="mt-3 block text-center text-sm text-accent-primary underline">Check Your Listings</Link>}
 
       <div className="mt-6 flex gap-3">
         <button
@@ -130,10 +120,10 @@ export function CheckoutPrompt() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={phase !== 'idle'}
+          disabled={phase !== 'idle' || uncertain}
           className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {phase === 'uploading' ? 'Uploading walkthrough...' : phase === 'saving' ? 'Saving listing...' : "I've Paid"}
+          {phase === 'uploading' ? 'Uploading walkthrough...' : phase === 'saving' ? 'Saving listing...' : 'Submit for Review'}
         </button>
       </div>
     </div>

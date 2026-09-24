@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { RotateCcw, Video, VideoOff } from 'lucide-react'
-import { listingsMediaPublicUrl, VIDEO_MIME_CANDIDATES } from '@/lib/storage'
+import { listingMediaUrl, VIDEO_MIME_CANDIDATES } from '@/lib/storage'
 import { useRentralStore } from '@/store/useRentralStore'
 
 const WALKTHROUGH_SECONDS = 120
@@ -39,6 +39,7 @@ export function CaptureCanvas() {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState(false)
   const [gpsError, setGpsError] = useState<string | null>(null)
   const [isAcquiringGps, setIsAcquiringGps] = useState(false)
   const [gpsPermission, setGpsPermission] = useState<PermissionState | 'unknown'>('unknown')
@@ -47,6 +48,7 @@ export function CaptureCanvas() {
   const videoBlob = useRentralStore((state) => state.videoBlob)
   const coords = useRentralStore((state) => state.coords)
   const remoteVideoPath = useRentralStore((state) => state.remoteVideoPath)
+  const draftListingId = useRentralStore((state) => state.draftListingId)
   const hasRemoteCoords = useRentralStore((state) => state.hasRemoteCoords)
   const updateCapture = useRentralStore((state) => state.updateCapture)
   const setRecordedVideo = useRentralStore((state) => state.setRecordedVideo)
@@ -132,9 +134,9 @@ export function CaptureCanvas() {
   }, [])
 
   // A resumed draft has its take in Storage rather than in memory — preview it
-  // from the public URL; a GPS lock recorded in an earlier session lives only
+  // through an authorized route; a GPS lock recorded in an earlier session lives only
   // server-side and is represented by hasRemoteCoords.
-  const remoteVideoUrl = useMemo(() => listingsMediaPublicUrl(remoteVideoPath), [remoteVideoPath])
+  const remoteVideoUrl = remoteVideoPath && draftListingId ? listingMediaUrl(draftListingId, 'video') : null
   const showPreview = capture.isComplete && (videoBlob !== null || remoteVideoUrl !== null)
   const gpsLocked = coords !== null || hasRemoteCoords
 
@@ -291,15 +293,28 @@ export function CaptureCanvas() {
       </div>
 
       <div className="relative isolate aspect-[9/16] w-full overflow-hidden rounded-2xl border border-border-subtle bg-background-app shadow-2xl">
-        {!isSecure || cameraError ? (
+        {showPreview ? (
+          <>
+            <video key="preview" ref={previewVideoRef} controls playsInline className="h-full w-full object-cover"
+              onError={() => setPreviewError(true)} onLoadedData={() => setPreviewError(false)} onLoadStart={() => setPreviewError(false)} />
+            {previewError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background-app px-4 text-center text-sm text-text-secondary">
+                <p role="status">Video unavailable</p>
+                <button type="button" title="Retry video" aria-label="Retry video"
+                  onClick={() => { setPreviewError(false); previewVideoRef.current?.load() }}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-glass-light hover:bg-glass-light-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary">
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </>
+        ) : !isSecure || cameraError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass-light p-4">
               <VideoOff className="h-6 w-6 text-text-muted" />
             </span>
             <p className="text-sm font-medium text-text-muted">{!isSecure ? INSECURE_CONTEXT_COPY : cameraError}</p>
           </div>
-        ) : showPreview ? (
-          <video key="preview" ref={previewVideoRef} controls playsInline className="h-full w-full object-cover" />
         ) : (
           <video key="live" ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
         )}

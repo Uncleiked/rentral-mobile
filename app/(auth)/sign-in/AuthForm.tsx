@@ -5,48 +5,53 @@ import { createClient } from '@/lib/client'
 import { useRouter } from 'next/navigation'
 import { login, signup } from './actions'
 import { toast } from 'sonner'
+import { authErrorMessage } from '@/lib/auth-errors'
 
-export default function AuthForm() {
+export default function AuthForm({ providers }: { providers: { google: boolean; apple: boolean } }) {
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
-  const supabase = createClient()
-
   const handleOAuth = async (provider: 'google' | 'apple') => {
+    if (isLoading) return
     setIsLoading(true)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) toast.error(error.message)
-    setIsLoading(false)
+    setErrorMessage(null)
+    try {
+      const { error } = await createClient().auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      })
+      if (error) setErrorMessage(authErrorMessage(error))
+    } catch {
+      setErrorMessage('Unable to connect. Check your connection and try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleEmailAuth = async (e: React.MouseEvent<HTMLButtonElement>, action: 'login' | 'signup') => {
-    e.preventDefault()
-    const form = e.currentTarget.form
+  const handleEmailAuth = async (form: HTMLFormElement | null, action: 'login' | 'signup') => {
+    if (isLoading) return
     if (!form || !form.checkValidity()) {
       form?.reportValidity()
       return
     }
 
     setIsLoading(true)
+    setErrorMessage(null)
     const formData = new FormData(form)
     
     try {
       const result = action === 'login' ? await login(formData) : await signup(formData)
       if ('error' in result) {
-        toast.error(result.error)
+        setErrorMessage(result.error)
       } else if (result.success && result.redirectTo) {
         toast.success(result.message ?? (action === 'login' ? 'Signed in successfully.' : 'Account created!'))
         router.replace(result.redirectTo)
         router.refresh()
       }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'An unexpected error occurred.')
+    } catch {
+      setErrorMessage('Unable to connect. Check your connection and try again.')
     } finally {
       setIsLoading(false)
     }
@@ -59,7 +64,10 @@ export default function AuthForm() {
         <p className="text-sm text-text-secondary">Sign in to access the ultimate trust marketplace.</p>
       </div>
 
-      <form className="flex flex-col gap-4">
+      <form className="flex flex-col gap-4" aria-busy={isLoading} onSubmit={(event) => {
+        event.preventDefault()
+        void handleEmailAuth(event.currentTarget, 'login')
+      }}>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="email">
             Email
@@ -69,6 +77,7 @@ export default function AuthForm() {
             id="email"
             name="email"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
             required
           />
@@ -88,6 +97,7 @@ export default function AuthForm() {
               className="w-full bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all pr-12"
               id="password"
               name="password"
+              autoComplete="current-password"
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
               required
@@ -115,24 +125,25 @@ export default function AuthForm() {
         <div className="flex flex-col gap-3 mt-4">
           <button
             type="submit"
-            onClick={(e) => handleEmailAuth(e, 'login')}
             className="bg-accent-primary text-text-inverse font-bold uppercase tracking-wide text-xs py-3 px-4 rounded-xl hover:bg-accent-hover active:scale-95 transition-all shadow-lg text-center"
             disabled={isLoading}
           >
-            Sign In
+            {isLoading ? 'Please wait...' : 'Sign In'}
           </button>
           
           <button
             type="button"
-            onClick={(e) => handleEmailAuth(e, 'signup')}
+            onClick={(event) => void handleEmailAuth(event.currentTarget.form, 'signup')}
             className="bg-glass-light border border-glass-border-medium text-text-primary font-bold uppercase tracking-wide text-xs py-3 px-4 rounded-xl hover:bg-glass-light-hover active:scale-95 transition-all backdrop-blur-md text-center"
             disabled={isLoading}
           >
             Create Account
           </button>
         </div>
+        {errorMessage && <p role="alert" className="text-sm text-trust-flagged break-words">{errorMessage}</p>}
       </form>
 
+      {(providers.google || providers.apple) && <>
       <div className="my-6 flex items-center gap-3">
         <div className="h-[1px] flex-1 bg-border-subtle"></div>
         <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Or continue with</span>
@@ -140,7 +151,7 @@ export default function AuthForm() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <button
+        {providers.google && <button
           onClick={() => handleOAuth('google')}
           type="button"
           className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary shadow-md backdrop-blur-md transition-all hover:bg-glass-light-hover active:scale-95"
@@ -151,9 +162,9 @@ export default function AuthForm() {
             <path d="M12 12h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
           </svg>
           Google
-        </button>
+        </button>}
         
-        <button
+        {providers.apple && <button
           onClick={() => handleOAuth('apple')}
           type="button"
           className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-background-app px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary shadow-md transition-all hover:bg-glass-light active:scale-95"
@@ -163,8 +174,9 @@ export default function AuthForm() {
             <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
           </svg>
           Apple
-        </button>
+        </button>}
       </div>
+      </>}
     </div>
   )
 }

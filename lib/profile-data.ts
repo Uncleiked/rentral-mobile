@@ -1,9 +1,11 @@
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
-import { listingsMediaPublicUrl } from '@/lib/storage'
+import { listingMediaUrl } from '@/lib/storage'
 import { requireUserId } from '@/lib/action-helpers'
 import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import type { User, IndividualProfile, OrganizationProfile } from '@prisma/client'
+import { muxEnabled } from '@/lib/media/config'
+import { listingMediaStatuses, type MediaSummary } from '@/lib/media/status'
 
 export type ProfileRecord = {
   id: string
@@ -56,6 +58,8 @@ export type ListingSummary = {
   priceDenomination: string
   posterUrl: string | null
   videoUrl: string | null
+  useMux: boolean
+  media: MediaSummary | null
   badges: string[]
   status: string
 }
@@ -117,10 +121,13 @@ export async function getListingsForProfile(
     },
   })
 
+  const mediaByListing = await listingMediaStatuses(rows.map(row => row.id))
   return rows.map((row) => {
     const metadata = (row.asset_metadata ?? {}) as ListingMetadataJson
     const isDraft = row.listing_status === LISTING_STATUS.DRAFT
     const statusBadge = LISTING_STATUS_BADGES[row.listing_status] ?? row.listing_status
+    const media = mediaByListing.get(row.id) ?? null
+    const useMux = muxEnabled() && !isDraft
     return {
       id: row.id,
       title: isDraft
@@ -128,8 +135,10 @@ export async function getListingsForProfile(
         : deriveListingTitle(row.category, metadata),
       price: formatListingPrice(row.base_rent_amount),
       priceDenomination: listingPriceDenomination(row.category),
-      posterUrl: listingsMediaPublicUrl(row.poster_path),
-      videoUrl: listingsMediaPublicUrl(row.video_path),
+      posterUrl: !useMux && row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
+      videoUrl: !useMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
+      useMux: useMux && media?.status === 'ready',
+      media,
       badges: [statusBadge, capitalizeCategory(row.category)],
       status: row.listing_status,
     }

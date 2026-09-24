@@ -1,9 +1,8 @@
 import { z } from 'zod'
 import { DRAFT_WIZARD_STEPS, LISTING_CATEGORIES } from '@/store/useRentralStore'
 
-// Strict regex validations to prevent script injection
+// Validate phone formatting; output escaping remains the renderer's responsibility.
 const phoneRegex = /^\+?[0-9]+$/
-const lettersOnlyRegex = /^[a-zA-Z\s]+$/
 
 export const individualProfileSchema = z.object({
   full_name: z.string().min(2, "Full name is required"),
@@ -21,6 +20,14 @@ export const organizationProfileSchema = z.object({
 })
 
 const usernameRegex = /^[a-z0-9_]{3,24}$/
+
+export function profileFormSchema(accountType: 'individual' | 'organization') {
+  return organizationProfileSchema.extend({
+    full_name: accountType === 'individual' ? individualProfileSchema.shape.full_name : z.string(),
+    date_of_birth: accountType === 'individual' ? individualProfileSchema.shape.date_of_birth : z.string(),
+    state: accountType === 'individual' ? individualProfileSchema.shape.state : z.string(),
+  })
+}
 
 export const usernameBioSchema = z.object({
   username: z.string().regex(

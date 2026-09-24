@@ -1,5 +1,7 @@
 ## Rentral: Multi-Asset Spatial Trust Architecture
 
+> Current implementation and production design: [Architecture and Delivery Plan](production-plan.md), reviewed 2026-09-24. The older examples below describe the original target and contain outdated routes/provider assumptions. Use the new plan when they conflict.
+
 ### Stack Overview
 
 #### Frontend & Core Framework

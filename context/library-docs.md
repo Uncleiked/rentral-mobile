@@ -1,5 +1,24 @@
 ## Rentral Library Docs & Integration Patterns
 
+### Current Implementation Corrections (2026-09-24)
+
+Use `context/production-plan.md` for the current architecture. The snippets below include historical APIs and must be verified against current provider documentation before implementation.
+
+- Auth uses `proxy.ts` and `lib/proxy.ts`, with `lib/server.ts` (request cookies/publishable key), `lib/client.ts` (browser) and `lib/admin.ts` (service role). Redirect responses must preserve refreshed cookies. `getUser()` supplies current server-owned metadata; protected mutations also check database eligibility.
+- Didit endpoint: `/api/webhooks/didit`, not `/api/webhooks/smile-id`. Approval binds to the recorded session/workflow. The legacy `/api/verify` endpoint now delegates to the onboarding session action so it cannot skip persistence or verification guards.
+- Prisma is the current database access layer; parameterized raw SQL handles unsupported PostGIS columns. Private tables deny Data API access. Browser Storage uploads are allowed through owner-scoped policies.
+- PostHog uses a reusable singleton with per-call flush, not shutdown of a shared client. Local/test telemetry is opt-in via `NEXT_PUBLIC_POSTHOG_ENABLED=true`; production remains enabled with a configured token unless explicitly set to `false`. Server delivery uses a 1.5-second request timeout and no retries so analytics outages cannot hold login for the SDK's default retry window.
+- Sign-in discovers Google/Apple availability from Supabase's public Auth settings, with a three-second timeout and email-only fallback. Disabled providers are not offered. Auth failures use allowlisted messages, not raw provider errors; a missing user after sign-in is never treated as success.
+- Mux uses pinned `@mux/mux-node` 15.2.0 and `@mux/mux-player-react` 3.13.4. Use `inputs` and `playback_policies` (plural); await `webhooks.unwrap` before parsing. All asset creation has retries disabled, 15-second timeouts and persistent correlation. Playback tokens expire after 15 minutes. See `media-plan.md` and `media-staging.md`; historical public-playback snippets below are not the current implementation.
+- Media background processing uses POST `/api/internal/media-worker`, gated by `MEDIA_WORKER_ENABLED`, the Mux gate/configuration, and a separate `MEDIA_WORKER_SECRET`. Queue claims compare the observed attempt; reconciliation uses a timestamp compare-and-swap and never creates replacement assets for uncertain submissions. The route has its own secret authorization and bypasses browser-session middleware only at that exact path. External scheduling and staging acceptance remain required.
+- Vitest is approved for isolated TypeScript regression tests; Playwright for real Next.js route/viewport checks. The configured browser channel is installed Chrome. No production identities or provider charges belong in automated tests.
+- Saved listing media uses the authenticated `/api/listings/:id/source` redirect,
+  with owner/active authorization before service-role signing and five-minute URLs.
+  Protected posters use Next Image `unoptimized`. The private-bucket migration is
+  prepared, not deployed; see `private-media-plan.md`. `pnpm test:storage` uses a
+  disposable local PostgreSQL cluster and never the configured application database.
+- Installed Supabase/Postgres and Tailwind skills are references; examples for unrelated projects, Tailwind v3 configs, and obsolete Gemini/provider endpoints do not override this app's Tailwind v4 tokens or verified provider contracts.
+
 This document serves as the absolute, definitive architectural guide for implementing every third-party library and SDK within the Rentral marketplace. Because Rentral operates as a zero-trust, spatially locked financial infrastructure for the African digital economy, generic implementations of these libraries will introduce severe vulnerabilities.
 
 Every engineer and AI agent operating on this codebase must read the relevant section thoroughly before writing any code that touches these systems.

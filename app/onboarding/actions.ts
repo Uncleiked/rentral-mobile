@@ -86,40 +86,13 @@ export async function getOnboardingState(): Promise<OnboardingState | { error: s
 
     const profileCompleted = !!(dbUser.individualProfile || dbUser.organizationProfile)
 
-    let isKycVerified = dbUser.kyc_verified
-    let verificationStatus = dbUser.verification_status
-
-    // Auto-recovery: If they have a username, they must have completed KYC.
-    // The previous initiateVerification bug could have wiped this.
-    if (dbUser.username && !isKycVerified) {
-      isKycVerified = true
-      verificationStatus = 'approved'
-      
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          kyc_verified: true,
-          verification_status: 'approved'
-        }
-      })
-      
-      await syncUserAppMetadata(user.id, {
-        kyc_verified: true,
-        account_type: dbUser.account_type,
-        verification_status: 'approved',
-        verification_kind: dbUser.verification_kind,
-        username: dbUser.username,
-        profile_completed: profileCompleted
-      })
-    }
-
     return {
       accountType:
         dbUser.account_type === 'individual' || dbUser.account_type === 'organization'
           ? dbUser.account_type
           : null,
-      verificationStatus,
-      kycVerified: isKycVerified,
+      verificationStatus: dbUser.verification_status,
+      kycVerified: dbUser.kyc_verified,
       username: dbUser.username,
       diditSessionId: dbUser.didit_session_id,
       profileCompleted,
@@ -173,6 +146,7 @@ export async function initiateVerification(formData: FormData): Promise<ActionRe
         verification_kind: verificationKind,
         verification_status: 'in_progress',
         didit_workflow_id: workflowId,
+        didit_session_id: null,
       },
       create: {
         id: user.id,
@@ -224,7 +198,7 @@ export async function initiateVerification(formData: FormData): Promise<ActionRe
         ? sessionRecord.session_id
         : null
 
-    if (!sessionUrl) {
+    if (!sessionUrl || !sessionId) {
       return { error: 'Didit did not return a verification URL. Please try again.' }
     }
 

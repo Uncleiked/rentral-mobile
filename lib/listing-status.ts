@@ -13,6 +13,5 @@ export type ListingStatus = (typeof LISTING_STATUS)[keyof typeof LISTING_STATUS]
 // An `in` filter on these matches the (listing_status, createdAt) index;
 // `not: 'draft'` would not.
 export const PUBLIC_LISTING_STATUSES: ListingStatus[] = [
-  LISTING_STATUS.PENDING_VERIFICATION,
   LISTING_STATUS.ACTIVE,
 ]
