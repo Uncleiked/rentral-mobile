@@ -1,22 +1,12 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { parse } from 'dotenv'
 
-// Local recovery only: preserve entries accidentally placed in a shareable template.
+// Preserve the complete original privately before removing credentials from a
+// shareable example. Never change the active .env.local or .env.staging files.
 const templatePath = resolve('.env.staging.example')
-const privatePath = resolve('.env.staging')
+const privatePath = resolve(`.env.staging.example.private-backup-${Date.now()}`)
 const original = readFileSync(templatePath, 'utf8')
-const source = parse(original)
-const privateOriginal = existsSync(privatePath) ? readFileSync(privatePath, 'utf8') : ''
-const destination = parse(privateOriginal)
-const updates = Object.entries(source).filter(([name, value]) => value.trim() && !destination[name]?.trim())
-let privateText = privateOriginal
-for (const [name, value] of updates) {
-  const expression = new RegExp(`^${name}=.*$`, 'm')
-  if (expression.test(privateText)) privateText = privateText.replace(expression, () => `${name}=${value}`)
-  else privateText += `\n${name}=${value}`
-}
-writeFileSync(privatePath, privateText)
+writeFileSync(privatePath, original, { flag: 'wx' })
 const sanitized = original.split(/\r?\n/).map(line => {
   const match = /^(\w+)=/.exec(line)
   if (!match) return line
@@ -29,4 +19,4 @@ const sanitized = original.split(/\r?\n/).map(line => {
 }).join('\n')
 if (readFileSync(templatePath, 'utf8') !== original) throw new Error('The template changed during recovery. Retry after saving your editor.')
 writeFileSync(templatePath, sanitized)
-console.log('Staging entries preserved in the ignored private file; the shareable template contains placeholders only.')
+console.log('Original example preserved in an ignored private backup; the shareable template contains placeholders only. Active environment files were preserved.')

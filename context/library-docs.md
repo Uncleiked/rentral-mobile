@@ -2,6 +2,13 @@
 
 ### Current Implementation Corrections (2026-09-24)
 
+Build correction (2026-11-07): `pnpm build` explicitly runs `prisma generate`
+before Next.js. Never rely on an existing local `.prisma/client` or dependency
+postinstall behavior. Prisma config omits its optional datasource when DIRECT_URL
+is absent, allowing code generation without database credentials. Migration
+commands still require a configured datasource and are not part of the build.
+Node24.x is selected in package.json to match the supported local/runtime major.
+
 Use `context/production-plan.md` for the current architecture. The snippets below include historical APIs and must be verified against current provider documentation before implementation.
 
 - Auth uses `proxy.ts` and `lib/proxy.ts`, with `lib/server.ts` (request cookies/publishable key), `lib/client.ts` (browser) and `lib/admin.ts` (service role). Redirect responses must preserve refreshed cookies. `getUser()` supplies current server-owned metadata; protected mutations also check database eligibility.

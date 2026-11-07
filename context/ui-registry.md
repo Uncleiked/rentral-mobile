@@ -260,3 +260,7 @@ Backend-only Storage hardening introduces no new UI component or visual pattern.
 Existing document upload/preview controls retain their established semantic tokens.
 Documents stay owner-private; private originals must never gain a public fallback
 when an authorization or preview request fails.
+# Build configuration checkpoint — 2026-11-07
+
+Prisma generation is now part of `pnpm build`. No UI components, tokens, layout,
+motion or responsive patterns changed in this build fix.

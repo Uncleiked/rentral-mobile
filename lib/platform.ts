@@ -1,4 +1,4 @@
-/** Enable only after the platform migration has passed staging acceptance. */
+/** Enable only after the configured database has passed migration acceptance. */
 export function platformEnabled(): boolean {
   return process.env.RENTRAL_PLATFORM_ENABLED === 'true'
 }

@@ -10,18 +10,20 @@ The responsive web implementation now includes a GSAP homepage, advanced discove
 grid/walkthrough views, listing details and saves, a cross-device Media Vault,
 booking requests and GPS/code check-in, Paystack collection and payment history,
 private messaging, reviews/disputes, human document review, notifications/renewals,
-staff operations and consent-based aggregate insights. Active dashboards no longer
-use fabricated financial/lease data. New domains remain disabled until migrations
-and provider acceptance have passed in a separate staging environment.
+staff operations and consent-based aggregate insights. Hold-to-rental credit and
+staff-reviewed safety notices/appeals are implemented. Active dashboards use real
+records. Schema-dependent domains remain gated until migrations are accepted.
 
 This is not a production-complete financial service. OPay integration, actual
-refund/payout execution, hold-credit conversion and automatic default splits still
+refund/payout execution and automatic default splits still
 need approved provider contracts and implementation/acceptance. Squat-Mates AI is
 explicitly deferred. See [release readiness](context/release-readiness.md).
 
-Start with the [step-by-step staging guide](context/staging-setup.md) and the blank
-[staging template](.env.staging.example). Keep credentials in the ignored
-`.env.staging` file and use `pnpm staging ...` to avoid mixing project credentials.
+The user has selected `.env.local` for current development. Start with the
+[local configuration checkpoint](context/local-development.md). The database it
+connects to is hosted. The user explicitly declined its twelve pending migrations:
+keep that database unchanged, keep feature gates off, and use the isolated local
+fixture for database tests. Do not ask again to apply the hosted updates.
 
 Read [the architecture and delivery plan](context/production-plan.md) and
 [the progress tracker](context/progress-tracker.md) before starting a task.
@@ -29,7 +31,7 @@ Follow AGENTS.md's context-reading order.
 
 ## Local Development
 
-Use Node 22.23.1 or compatible and pnpm. Keep secrets in the ignored local environment
+Use Node 24.x and pnpm (the versions selected by package.json). Keep secrets in the ignored local environment
 file. Use the existing project's Supabase connection settings, not placeholder values.
 
 ```sh
@@ -49,6 +51,7 @@ on the device. A plain HTTP LAN address cannot grant camera/geolocation permissi
 | Supabase browser/auth | NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY |
 | Server administration | SUPABASE_SERVICE_ROLE_KEY |
 | Database runtime/migrations | DATABASE_URL, DIRECT_URL |
+| Verified database TLS | SUPABASE_DB_CA_CERT_PATH (optional project CA file) |
 | Callback origin | NEXT_PUBLIC_APP_URL |
 | Identity verification | DIDIT_API_KEY, DIDIT_WEBHOOK_SECRET, DIDIT_KYC_WORKFLOW_ID, DIDIT_KYB_WORKFLOW_ID, DIDIT_ORDERING_ENABLED |
 | Analytics | NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, NEXT_PUBLIC_POSTHOG_HOST |
@@ -71,7 +74,16 @@ are in the media staging runbook.
 
 ## Verification
 
+`pnpm build` runs `prisma generate` before `next build`, so fresh and cached Vercel
+installs both compile against the current schema. Set Vercel's Build Command to
+`pnpm build`. Generation does not require `DIRECT_URL` and never applies migrations.
+Runtime Supabase/database configuration still belongs in Vercel's environment
+settings; ignored local environment files are not uploaded automatically. The user
+declined hosted migrations, so leave schema-dependent feature flags off.
+
 ```sh
+pnpm check:local --remote
+pnpm audit:local
 pnpm lint
 pnpm typecheck
 pnpm test

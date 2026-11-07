@@ -9,7 +9,7 @@ test('public guidance pages are responsive and keyboard reachable', async ({ pag
 })
 
 test('new private workspaces deny anonymous URL access', async ({ page }) => {
-  for (const path of ['/marketplace/messages', '/marketplace/bookings', '/marketplace/vault', '/marketplace/dashboard', '/marketplace/admin', '/marketplace/insights', '/marketplace/notifications', '/marketplace/renewals']) {
+  for (const path of ['/marketplace/messages', '/marketplace/bookings', '/marketplace/vault', '/marketplace/dashboard', '/marketplace/admin', '/marketplace/insights', '/marketplace/notifications', '/marketplace/renewals', '/marketplace/appeals']) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/sign-in$/)
   }

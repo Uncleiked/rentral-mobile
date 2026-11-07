@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "check:staging": "node --experimental-strip-types scripts/check-staging.ts",
     "check:local": "node --experimental-strip-types scripts/check-staging.ts --local",
@@ -11,7 +14,7 @@
     "staging": "node --experimental-strip-types scripts/with-staging.ts",
     "dev": "next dev",
     "dev:https": "next dev --experimental-https",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",

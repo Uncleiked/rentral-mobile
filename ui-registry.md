@@ -273,3 +273,7 @@ preserve text after network failures. No animation or icon conveys status alone.
 
 Booking credit notices and balances follow `context/ui-registry.md` → **Holding credit and rental balance**. Reuse the existing semantic booking cards, `min-h-11` controls, muted financial labels and integer-kobo formatting. Gross total, applied hold and additional payment must remain distinct; allocation does not imply provider settlement.
 
+# Build configuration checkpoint — 2026-11-07
+
+Prisma generation now precedes the production build. No visual patterns changed.
+

@@ -1,20 +1,44 @@
 ## Progress Tracker
 
-## Staging verification and continuation — 2026-11-07
+## Vercel generated-client build fix — 2026-11-07
 
-- Added `pnpm check:staging` and a credential-safe read-only `--remote` check.
-  Configuration points to a separate staging project; Supabase Auth accepts the
-  publishable key and Storage accepts the server key. No credential values printed.
-- Both configured database endpoints are IPv6-only and cannot resolve through this
-  machine's connection path. Requested Session pooler5432 for DIRECT_URL and
-  Transaction pooler6543 for DATABASE_URL, copied from staging's Connect panel.
-  No hosted migration has run while this connection issue remains unresolved.
-- Continuing one-time hold-to-rental credit allocation and staff-reviewed safety
-  notice/appeal workflows, with additive migrations and financial gates preserved.
-- Hosted-readiness review found compliance-docs also needs a restrictive legacy
-  policy boundary and an explicit private-bucket cutover; an additive migration
-  and fixture regressions are being prepared.
-- User edits in ignored .env.staging are preserved; examples stay credential-free.
+- Fresh Vercel install compiled JavaScript but failed TypeScript because
+  `@prisma/client` had no generated `Prisma` export. The build script now generates
+  the client before Next.js; strict type checking stays enabled.
+- Prisma config omits its optional datasource without DIRECT_URL, so generation
+  can run without migration credentials. Database commands are not added to builds.
+- Node24.x selected to match the installed supported Node major. pnpm remains pinned.
+- User explicitly declined hosted migrations. No database updates or repeated
+  approval requests; keep schema-dependent gates disabled.
+- Verification passed: production build including generated client and strict
+  TypeScript, lint,357 tests/36 files, and an independent frozen-lockfile install.
+  The clean fixture had no generated client; generation and a Prisma type-import
+  probe then passed without database credentials. Exact results saved in `memory.md`.
+
+## Local configuration and continuation — 2026-11-07
+
+- User cancelled staging and selected `.env.local`. Its API keys and both database
+  connections pass credential-safe read-only checks. Supabase's public CA is saved
+  privately and configured for verified TLS in both pg and Prisma migrations.
+- `pnpm audit:local` found eight matching applied migrations, twelve pending,
+  no unfinished/history/checksum problems, correct PostGIS placement and zero
+  malformed historical Didit JSON. Pending hardening covers the reported grants,
+  public media bucket and signup function findings.
+- Automatic approval review rejected applying the twelve migrations because the
+  `.env.local` database is hosted. The user then explicitly chose **Keep the hosted
+  database unchanged**. No hosted changes made; do not apply or re-request these
+  updates. Gates remain off; isolated local fixture tests may continue. See
+  `local-development.md` for the unapplied migration list.
+- Completed one-time hold-to-rental credit and independent safety notice/appeal
+  decisions. Both retain server scopes, immutable records and explicit gates.
+- Added restrictive compliance-docs legacy-policy boundary/private-bucket migration.
+- All twenty migrations, safety/credit/Storage invariants and actual reservation,
+  payment and credit-allocation races passed the isolated local PostGIS harness.
+- Environment files and user settings preserved; filled example backed up privately
+  before restoring placeholders. Source, feature notes and UI registries saved.
+- Final validation: 357 tests/36 files, lint, Next route generation/strict TypeScript,
+  Prisma validation, production build and all 56 responsive browser checks passed.
+  Preview runs at http://localhost:3100; exact handoff recorded in `memory.md`.
 
 ## 2026-11-07 implementation checkpoint
 
@@ -41,7 +65,7 @@
   historical checkboxes below are retained for provenance.
 
 The complete platform is still **in development**. OPay, real refund/payout execution,
-hold credit allocation/default compensation, full live provider/device journeys and
+default compensation, full live provider/device journeys and
 production deployment are not accepted or presented as complete.
 
 Update this file after every completed feature. Any AI agent reading this should immediately know what is done, what is in progress, and what is next.

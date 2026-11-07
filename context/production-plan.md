@@ -1,5 +1,12 @@
 # Rentral Architecture and Delivery Plan
 
+Current environment instruction (2026-11-07): staging was cancelled; use
+`.env.local`. The user explicitly declined the twelve pending migrations to its
+hosted Supabase database: keep that database unchanged and do not re-request the
+update. See `local-development.md` for verified configuration. Continue isolated
+local fixture tests; keep schema-dependent/provider gates off. No hosted update
+was performed.
+
 > Implementation checkpoint 2026-11-07: many proposed entities and screens below
 > now have migration-backed, gated implementations. Read
 > [release readiness](release-readiness.md), [completion plan](completion-plan.md)

@@ -20,12 +20,15 @@ Date: 2026-11-07 (Africa/Lagos).
   availability exclusion and GPS/code inspection check-in.
 - Signed Paystack collection, server reconciliation, strict customer/amount/currency
   binding, duplicate-event protection and deferred balanced append-only ledger.
-- Paid holds block competing activity; flexible holding days and visible reserved
-  status. Holder credit conversion and default payout remain unavailable.
+- Paid holds block competing activity; flexible holding days, visible deadlines and
+  one-time hold-to-rental credit with exact remaining balance and immutable allocation.
+  Provider refund/payout execution and default compensation remain unavailable.
 - Durable private messages, listing attachments, retries/read receipts and optional
   membership-scoped Supabase Realtime. Versioned cookie/bearer API shares services.
 - Booking-linked reviews/reports, staff decisions and immutable admin audit. Reviews
   are evidence from completed bookings, not an automatic consumer-credit rating.
+- Staff-reviewed safety notices, affected-member appeals and independent decisions;
+  fixed public caution text, private evidence and immutable decision history.
 - Private document access, configurable Gemini screening signals, human approval,
   Geoapify/PostGIS address matching and atomic publication prerequisite checks.
 - Notifications, renewal recipient-route/reference submissions, lifecycle expiry,
@@ -35,7 +38,8 @@ Date: 2026-11-07 (Africa/Lagos).
   preferences, deduplication, withdrawal/deletion and minimum ten-person cohorts.
 - Didit signed-envelope freshness, current-session binding, event ordering and
   metadata reconciliation hardening behind an explicit migration gate.
-- Separate-staging launcher, blank credential template and step-by-step setup guide.
+- Local-only configuration checks, verified project CA support and a read-only
+  schema/history audit. Separate-staging tools remain optional archival support.
 
 ## Verification evidence
 
@@ -51,8 +55,13 @@ environment files or contacts hosted Supabase.
 
 ## Required external acceptance
 
-1. Create a separate Supabase staging project and follow `staging-setup.md`.
-   Verify full replay and existing-data upgrades; inspect private bucket cutover.
+1. Current user preference is `.env.local`, with staging cancelled. Its Supabase
+   APIs and both PostgreSQL connections pass read-only checks. Eight migrations
+   match; twelve source updates remain unapplied. After automatic review rejected
+   that mutation, the user explicitly chose **Keep the hosted database unchanged**.
+   Do not apply or re-request the update; keep feature gates off and use isolated
+   local fixtures for database tests. See `local-development.md`. Hosted upgrades
+   and private bucket/API acceptance remain release limitations.
 2. Set up separate Didit test workflows, OAuth/SMTP and real approval/decline/
    revocation fixtures. Enable `DIDIT_ORDERING_ENABLED` only after its migration.
 3. Configure Mux and verify actual ingest, signed playback, failure recovery and
@@ -71,11 +80,11 @@ environment files or contacts hosted Supabase.
 
 - OPay adapter: needs the approved merchant product's collection/virtual-account,
   callback, refund and transfer contracts. No invented endpoint or OPay enable flag.
-- Actual provider-backed refunds, bank recipient onboarding, payout reconciliation,
-  hold-to-rental credit allocation and the 70/30 default settlement pipeline.
+- Actual provider-backed refunds, bank recipient onboarding, payout reconciliation
+  and the 70/30 default settlement pipeline.
   Existing states explicitly remain unpaid/unsettled/requires-review as appropriate.
-- A complete appeal/safety-notice policy, evidence-retention rules and auditable
-  reputation ranking. Reports are not automatically treated as proven wrongdoing.
+- Operational evidence-retention rules and auditable reputation ranking. Safety
+  notices/appeals are implemented; reports never automatically prove wrongdoing.
 - Sponsored-ad billing/ranking and enterprise Insights subscription/entitlement
   management. Current Insights uses server-owned approved-account access.
 - Richer cohort conversion/price-elasticity models once sufficient consented evidence
@@ -85,5 +94,6 @@ environment files or contacts hosted Supabase.
 - Production deployment and live acceptance. No release is declared complete.
 
 Keep feature gates disabled until the corresponding checks pass. Do not use
-`db push`, reset shared databases, or infer staging acceptance from credentials
-being present. The user is currently following the external setup guide.
+`db push`, reset shared databases, or infer provider acceptance from credentials
+being present. Hosted migrations were explicitly declined; leave that database
+unchanged and do not ask again for the same approval.

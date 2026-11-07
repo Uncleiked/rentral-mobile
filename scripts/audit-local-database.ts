@@ -7,7 +7,7 @@ import { Client } from 'pg'
 import { postgresConfig } from '../lib/environment/postgres-config.ts'
 
 export type AuditCheck = { name: string; status: 'PASS' | 'PENDING' | 'FAIL'; detail: string }
-export type LocalMigration = { name: string; checksum: string }
+export type LocalMigration = { name: string; checksum: string; compatibleChecksums?: string[] }
 export type AppliedMigration = { name: string; checksum: string; completed: boolean; rolled_back: boolean }
 
 const privateTables = [
@@ -31,13 +31,16 @@ export function migrationChecks(local: LocalMigration[], applied: AppliedMigrati
   const completedNames = new Set(completed.map(migration => migration.name))
   const failed = applied.filter(migration => !migration.completed && !migration.rolled_back)
   const unknown = completed.filter(migration => !localByName.has(migration.name))
-  const changed = completed.filter(migration => localByName.has(migration.name) && localByName.get(migration.name)?.checksum !== migration.checksum)
+  const changed = completed.filter(migration => {
+    const source = localByName.get(migration.name)
+    return source && source.checksum !== migration.checksum && !source.compatibleChecksums?.includes(migration.checksum)
+  })
   const duplicates = completed.length - completedNames.size
   const lastAppliedIndex = Math.max(-1, ...local.map((migration, index) => completedNames.has(migration.name) ? index : -1))
   const gaps = local.filter((migration, index) => index < lastAppliedIndex && !completedNames.has(migration.name))
   const pending = local.filter(migration => !completedNames.has(migration.name))
   checks.push({ name: 'Migration history', status: applied.length === 0 && existingAppTables > 0 ? 'FAIL' : 'PASS',
-    detail: `${completed.length} completed; ${failed.length} unfinished; ${pending.length} pending; ${existingAppTables} application tables present.` })
+    detail: `${completed.length} completed; ${failed.length} unfinished; ${pending.length} pending; ${existingAppTables} non-extension public tables present.` })
   for (const [label, migrations] of [['Unfinished migrations', failed], ['Unknown completed migrations', unknown], ['Modified applied migrations', changed], ['Migration history gaps', gaps]] as const) {
     checks.push({ name: label, status: migrations.length ? 'FAIL' : 'PASS',
       detail: migrations.length ? migrations.map(migration => safeName(migration.name)).join(', ') : 'None.' })
@@ -47,11 +50,18 @@ export function migrationChecks(local: LocalMigration[], applied: AppliedMigrati
   return checks
 }
 
+export function localMigration(name: string, source: string): LocalMigration {
+  const checksum = (script: string): string => createHash('sha256').update(script).digest('hex')
+  // Match Prisma's LF/CRLF compatibility rather than treating a Windows
+  // checkout's line-ending conversion as an applied SQL edit.
+  return { name, checksum: checksum(source), compatibleChecksums: [checksum(source.replaceAll('\r\n', '\n')), checksum(source.replaceAll('\n', '\r\n'))] }
+}
+
 function sourceMigrations(): LocalMigration[] {
   const directory = resolve('prisma/migrations')
   return readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => {
     if (!/^\d{14}_[a-zA-Z0-9_]+$/.test(entry.name)) throw new Error('Invalid source migration name.')
-    return { name: entry.name, checksum: createHash('sha256').update(readFileSync(resolve(directory, entry.name, 'migration.sql'))).digest('hex') }
+    return localMigration(entry.name, readFileSync(resolve(directory, entry.name, 'migration.sql'), 'utf8'))
   }).sort((first, second) => first.name.localeCompare(second.name))
 }
 
@@ -98,9 +108,16 @@ export async function auditDatabase(client: Client, local: LocalMigration[]): Pr
   const history = availability.history ? await client.query<AppliedMigration>(`
     SELECT migration_name AS name, checksum, finished_at IS NOT NULL AS completed,
       rolled_back_at IS NOT NULL AS rolled_back FROM public._prisma_migrations ORDER BY started_at, migration_name`) : { rows: [] }
-  checks.push(...migrationChecks(local, history.rows, tables.rows.length))
-  checks.push({ name: 'Prisma migration table', status: availability.history ? 'PASS' : tables.rows.length ? 'FAIL' : 'PENDING',
-    detail: availability.history ? 'Present.' : tables.rows.length ? 'Missing with an existing application schema; do not fabricate a baseline.' : 'Absent on an empty application schema.' })
+  const publicTables = await client.query<{ count: number }>(`
+    SELECT count(*)::integer AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relname<>'_prisma_migrations'
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.deptype='e')`)
+  const existingTables = publicTables.rows[0]?.count ?? tables.rows.length
+  const completedNames = new Set(history.rows.filter(migration => migration.completed && !migration.rolled_back).map(migration => migration.name))
+  const missingStatus = local.some(migration => !completedNames.has(migration.name)) ? 'PENDING' : 'FAIL'
+  checks.push(...migrationChecks(local, history.rows, existingTables))
+  checks.push({ name: 'Prisma migration table', status: availability.history ? 'PASS' : existingTables ? 'FAIL' : 'PENDING',
+    detail: availability.history ? 'Present.' : existingTables ? 'Missing with existing non-extension public tables; do not fabricate a baseline.' : 'Absent on an empty application schema.' })
 
   for (const row of tables.rows) {
     const browserReadable = browserTables.includes(row.name)
@@ -110,14 +127,14 @@ export async function auditDatabase(client: Client, local: LocalMigration[]): Pr
       detail: `RLS ${row.rls ? 'enabled' : 'missing'}; effective browser grants ${safeGrants ? 'match' : 'do not match'} the server-owned access contract.` })
   }
   const missingTables = appTables.filter(name => !tables.rows.some(table => table.name === name))
-  if (missingTables.length) checks.push({ name: 'Missing application tables', status: 'PENDING', detail: missingTables.join(', ') })
+  if (missingTables.length) checks.push({ name: 'Missing application tables', status: missingStatus, detail: missingTables.join(', ') })
 
   const extensions = await client.query<{ name: string; schema: string }>(`
     SELECT e.extname AS name,n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid=e.extnamespace
     WHERE e.extname IN ('postgis','btree_gist')`)
   for (const name of ['postgis', 'btree_gist']) {
     const extension = extensions.rows.find(row => row.name === name)
-    checks.push({ name: `Extension ${name}`, status: !extension ? 'PENDING' : extension.schema === 'extensions' ? 'PASS' : 'FAIL',
+    checks.push({ name: `Extension ${name}`, status: !extension ? missingStatus : extension.schema === 'extensions' ? 'PASS' : 'FAIL',
       detail: !extension ? 'Not installed yet.' : extension.schema === 'extensions' ? 'Installed in the required extensions schema.' : 'Installed outside extensions; CREATE EXTENSION IF NOT EXISTS will not relocate it.' })
   }
 
@@ -125,7 +142,7 @@ export async function auditDatabase(client: Client, local: LocalMigration[]): Pr
     SELECT id,public FROM storage.buckets WHERE id=ANY($1::text[]) ORDER BY id`, [['profile-avatars', 'listings-media', 'compliance-docs']])
   for (const name of ['profile-avatars', 'listings-media', 'compliance-docs']) {
     const bucket = buckets.rows.find(row => row.id === name)
-    checks.push({ name: `Bucket ${name}`, status: !bucket ? 'PENDING' : bucket.public === (name === 'profile-avatars') ? 'PASS' : 'FAIL',
+    checks.push({ name: `Bucket ${name}`, status: !bucket ? missingStatus : bucket.public === (name === 'profile-avatars') ? 'PASS' : 'FAIL',
       detail: !bucket ? 'Missing.' : `Public delivery ${bucket.public ? 'enabled' : 'disabled'}.` })
   }
 
@@ -139,12 +156,16 @@ export async function auditDatabase(client: Client, local: LocalMigration[]): Pr
     ['Compliance documents require ownership', 'objects', true],
     ['rentral_conversation_members', 'Conversation', false],
     ['rentral_message_members', 'Message', false],
+    ['rentral_private_conversation_read', 'messages', false],
+    ['rentral_private_conversation_write', 'messages', false],
     ['rentral_private_conversation_read_boundary', 'messages', true],
     ['rentral_private_conversation_write_boundary', 'messages', true],
   ] as const) {
     const policy = policies.rows.find(row => row.name === name && row.table_name === table)
-    const valid = !!policy && policy.roles.includes('authenticated') && (!restrictive || policy.permissive === 'RESTRICTIVE')
-    checks.push({ name: `Policy ${name}`, status: valid ? 'PASS' : 'PENDING', detail: valid ? 'Expected policy metadata exists; hosted API tests still establish behavior.' : 'Expected policy metadata is missing or differs.' })
+    const command = name.includes('_write') ? 'INSERT' : 'SELECT'
+    const valid = !!policy && policy.roles.includes('authenticated') && (table !== 'objects' || policy.roles.includes('anon')) &&
+      policy.command === command && policy.permissive === (restrictive ? 'RESTRICTIVE' : 'PERMISSIVE')
+    checks.push({ name: `Policy ${name}`, status: valid ? 'PASS' : missingStatus, detail: valid ? 'Expected policy metadata exists; hosted API tests still establish behavior.' : 'Expected policy metadata is missing or differs.' })
   }
 
   const signup = await client.query<{ definer: boolean; settings: string[] | null; anon_execute: boolean; authenticated_execute: boolean; trigger: boolean }>(`
@@ -159,23 +180,23 @@ export async function auditDatabase(client: Client, local: LocalMigration[]): Pr
   const signupSafe = !!signupFunction && signupFunction.definer && signupFunction.trigger &&
     !signupFunction.anon_execute && !signupFunction.authenticated_execute &&
     signupFunction.settings?.some(setting => /^search_path=(?:""|)$/.test(setting)) === true
-  checks.push({ name: 'Signup trigger/function', status: signupSafe ? 'PASS' : signupFunction ? 'FAIL' : 'PENDING',
+  checks.push({ name: 'Signup trigger/function', status: signupSafe ? 'PASS' : signupFunction ? 'FAIL' : missingStatus,
     detail: signupSafe ? 'Enabled AFTER INSERT row trigger; restricted definer function with pinned empty search path.' : 'Required trigger/function security metadata is missing or differs.' })
 
   const referencedTriggers = await client.query<{ name: string; enabled: boolean }>(`
     SELECT tgname AS name,tgenabled IN ('O','A') AS enabled FROM pg_trigger
     WHERE tgrelid='storage.objects'::regclass AND tgname IN ('rentral_protect_upload_delete','rentral_protect_upload_move') AND NOT tgisinternal`)
-  checks.push({ name: 'Referenced upload triggers', status: referencedTriggers.rows.length === 2 && referencedTriggers.rows.every(row => row.enabled) ? 'PASS' : 'PENDING',
+  checks.push({ name: 'Referenced upload triggers', status: referencedTriggers.rows.length === 2 && referencedTriggers.rows.every(row => row.enabled) ? 'PASS' : missingStatus,
     detail: `${referencedTriggers.rows.filter(row => row.enabled).length} of 2 enabled guards present.` })
   const publication = await client.query<{ published: boolean }>(`
     SELECT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='Message') AS published`)
-  checks.push({ name: 'Message Realtime publication', status: publication.rows[0]?.published ? 'PASS' : 'PENDING', detail: publication.rows[0]?.published ? 'Present.' : 'Missing; private live messaging is not accepted.' })
+  checks.push({ name: 'Message Realtime publication', status: publication.rows[0]?.published ? 'PASS' : missingStatus, detail: publication.rows[0]?.published ? 'Present.' : 'Missing; private live messaging is not accepted.' })
 
   if (availability.webhook) {
     const columns = await client.query<{ name: string }>(`
       SELECT attname AS name FROM pg_attribute WHERE attrelid='public."WebhookLog"'::regclass
         AND attnum>0 AND NOT attisdropped AND attname IN ('raw_body','event_created_at','metadata_synced_at')`)
-    checks.push({ name: 'Didit ordering columns', status: columns.rows.filter(row => row.name !== 'raw_body').length === 2 ? 'PASS' : 'PENDING',
+    checks.push({ name: 'Didit ordering columns', status: columns.rows.filter(row => row.name !== 'raw_body').length === 2 ? 'PASS' : missingStatus,
       detail: `${columns.rows.filter(row => row.name !== 'raw_body').length} of 2 ordering columns present.` })
     if (columns.rows.some(row => row.name === 'raw_body')) {
       // Only the aggregate count leaves Postgres. No historical payload enters
@@ -209,9 +230,12 @@ async function main(): Promise<void> {
   if (!connection) throw new Error('DIRECT_URL is missing.')
   const target = new URL(connection)
   if (!['postgres:', 'postgresql:'].includes(target.protocol)) throw new Error('DIRECT_URL is not PostgreSQL.')
-  const client = new Client({ ...postgresConfig(connection, environment.SUPABASE_DB_CA_CERT_PATH),
+  target.searchParams.set('sslmode', 'verify-full')
+  const client = new Client({ ...postgresConfig(target.href, environment.SUPABASE_DB_CA_CERT_PATH),
     connectionTimeoutMillis: 12000, query_timeout: 20000, application_name: 'rentral-readonly-local-audit' })
   let connected = false
+  let connectionFailed = false
+  client.on('error', () => { connectionFailed = true })
   try {
     await client.connect()
     connected = true
@@ -219,6 +243,7 @@ async function main(): Promise<void> {
     await client.query("SET LOCAL statement_timeout = '15000ms'")
     await client.query("SET LOCAL lock_timeout = '2000ms'")
     const result = await auditDatabase(client, sourceMigrations())
+    if (connectionFailed) throw new Error('Database connection closed during audit.')
     await client.query('ROLLBACK')
     for (const check of result) console.log(`${check.status} ${check.name}: ${check.detail}`)
     console.log(`Audit complete: ${result.filter(check => check.status === 'PASS').length} passed, ${result.filter(check => check.status === 'PENDING').length} pending, ${result.filter(check => check.status === 'FAIL').length} failed. No database changes were made.`)
