@@ -1,29 +1,6 @@
-import { DashboardCard } from "@/components/profile/DashboardCard";
-import { MOCK_SECURITY } from "@/lib/mock-profile-data";
+import Link from 'next/link'
+import { ShieldCheck, ArrowUpRight } from 'lucide-react'
 
 export function SecurityCard() {
-  return (
-    <DashboardCard id="account-security" title="Security">
-      <div className="flex flex-col gap-3 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-text-secondary">Two-factor authentication</span>
-          <span className="font-semibold text-accent-hover">{MOCK_SECURITY.twoFactorEnabled ? "On" : "Off"}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-text-secondary">Password</span>
-          <span className="font-semibold text-text-primary">{MOCK_SECURITY.passwordChangedLabel}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-text-secondary">Devices</span>
-          <span className="font-semibold text-text-primary">{MOCK_SECURITY.activeDevices} active</span>
-        </div>
-        <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
-          <span className="text-text-secondary">Payout bank · {MOCK_SECURITY.payoutBankLabel}</span>
-          <button type="button" className="font-semibold text-accent-hover hover:text-accent-primary transition-colors">
-            Manage
-          </button>
-        </div>
-      </div>
-    </DashboardCard>
-  );
+  return <section id="account-security" className="scroll-mt-24 rounded-2xl border border-border-subtle bg-surface-card p-6"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-accent-hover" /><h2 className="text-sm font-semibold">Keep your account yours</h2></div><p className="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">Use a unique password and keep your recovery email up to date. You can edit your profile details or sign out from Settings above.</p><Link href="/forgot-password" className="mt-5 inline-flex items-center gap-2 text-xs font-semibold text-accent-hover">Send a password reset link<ArrowUpRight className="h-3.5 w-3.5" /></Link></section>
 }

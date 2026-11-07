@@ -55,9 +55,10 @@ export function SaveDraftButton() {
         return
       }
 
-      toast.success('Draft saved — continue anytime from Your Listings.')
+      const hasSavedWalkthrough = Boolean(media.videoPath)
+      toast.success(hasSavedWalkthrough ? 'Walkthrough saved to your Media Vault.' : 'Draft saved — continue anytime from Your Listings.')
       store.reset()
-      router.push('/marketplace/listing')
+      router.push(hasSavedWalkthrough ? '/marketplace/vault' : '/marketplace/listing')
     } catch {
       setUncertain(true)
       toast.error('Could not confirm the save. Check Your Listings before saving again.')

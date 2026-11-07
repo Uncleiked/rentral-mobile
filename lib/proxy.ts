@@ -5,7 +5,9 @@ import { authRedirect } from '@/lib/auth-policy'
 export async function updateSession(request: NextRequest) {
   // This exact service route authenticates its own bearer secret, not a browser
   // cookie. It must remain reachable by the scheduler when Auth is unavailable.
-  if (request.nextUrl.pathname === '/api/internal/media-worker') {
+  if (request.nextUrl.pathname === '/api/internal/media-worker' ||
+      request.nextUrl.pathname === '/api/internal/lifecycle-worker' ||
+      /^\/api\/v1(?:\/|$)/.test(request.nextUrl.pathname)) {
     return NextResponse.next({ request })
   }
   let supabaseResponse = NextResponse.next({

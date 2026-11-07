@@ -39,6 +39,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
         <span className="absolute top-2 left-2 rounded-full bg-glass-dark backdrop-blur-sm border border-glass-border-light px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-text-primary">
           {isDraft ? 'Draft' : listing.media?.status === 'ready' ? 'Video ready' : 'Walkthrough'}
         </span>
+        <Link href={isDraft ? ownerAction.href : `/marketplace/listing/${listing.id}`} aria-label={`View ${listing.title}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-accent-primary" />
       </div>
 
       <div className="p-3 flex flex-col gap-1">
@@ -46,7 +47,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
           <span className="text-sm font-extrabold text-accent-hover">₦{listing.price}</span>
           <span className="text-[10px] font-medium uppercase text-text-muted">/ {listing.priceDenomination}</span>
         </div>
-        <p className="text-sm font-semibold text-text-primary line-clamp-1">{listing.title}</p>
+        <Link href={isDraft ? ownerAction.href : `/marketplace/listing/${listing.id}`} className="text-sm font-semibold text-text-primary line-clamp-1 hover:text-accent-hover">{listing.title}</Link>
         <div className="flex flex-wrap gap-1.5 mt-1">
           {listing.badges.map((badge) => (
             <span

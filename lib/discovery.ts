@@ -1,0 +1,157 @@
+import { Prisma } from '@prisma/client'
+import prisma from '@/lib/db'
+import { platformEnabled } from '@/lib/platform'
+import { muxEnabled } from '@/lib/media/config'
+import { listingMediaStatuses } from '@/lib/media/status'
+import { listingMediaUrl } from '@/lib/storage'
+import { formatListingPrice, listingPriceDenomination, type ListingMetadataJson } from '@/lib/profile-data'
+import { DISCOVERY_PAGE_SIZE, discoveryLocation, type DiscoveryCursor, type DiscoveryFilters } from '@/lib/discovery-policy'
+
+const listingSelect = {
+  id: true, category: true, text_address: true, base_rent_amount: true,
+  asset_metadata: true, video_path: true, poster_path: true, listing_status: true,
+  createdAt: true, lister_id: true,
+  lister: { select: { username: true, avatar_url: true, kyc_verified: true, account_type: true, bio: true, createdAt: true } },
+} satisfies Prisma.ListingSelect
+
+type ListingRow = Prisma.ListingGetPayload<{ select: typeof listingSelect }>
+export type DiscoveryListing = {
+  id: string; title: string; category: 'house' | 'car' | 'boat'; location: string
+  price: string; priceDenomination: string; posterUrl: string | null; videoUrl: string | null
+  useMux: boolean; username: string; avatarUrl: string | null; isVerified: boolean
+  badges: string[]; saved: boolean; savingAvailable: boolean
+  intent: string
+  holdUntil?: string | null
+}
+export type ListingDetails = DiscoveryListing & {
+  listerId: string; isOwner: boolean; status: string; metadata: ListingMetadataJson
+  hostBio: string | null; hostSince: string; hostAccountType: string; postedOn: string
+}
+export type DiscoveryPage = { listings: DiscoveryListing[]; nextCursor: DiscoveryCursor | null }
+
+function metadataRecord(value: unknown): ListingMetadataJson {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
+    const item: unknown = entry[1]
+    return item === null || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+  }))
+}
+
+function listingTitle(category: string, metadata: ListingMetadataJson): string {
+  if (category === 'house') return String(metadata.bedrooms) === '0' ? 'Studio home' : metadata.bedrooms ? `${metadata.bedrooms}-bedroom home` : 'Home in Lagos'
+  if (category === 'car') return metadata.fuelType ? `${metadata.fuelType} car · ${metadata.transmission || 'Rental'}` : 'Car in Lagos'
+  return typeof metadata.vesselType === 'string' && metadata.vesselType ? metadata.vesselType : 'Boat in Lagos'
+}
+
+function listingBadges(category: string, metadata: ListingMetadataJson): string[] {
+  if (category === 'house') return [metadata.bedrooms ? `${metadata.bedrooms} beds` : '', metadata.bathrooms ? `${metadata.bathrooms} baths` : '', metadata.sizeSqm ? `${metadata.sizeSqm} m²` : ''].filter(Boolean)
+  if (category === 'car') return [typeof metadata.transmission === 'string' ? metadata.transmission : '', metadata.seats ? `${metadata.seats} seats` : '', metadata.mileageKm ? `${Number(metadata.mileageKm).toLocaleString('en-NG')} km` : ''].filter(Boolean)
+  return [metadata.capacityPersons ? `${metadata.capacityPersons} guests` : '', metadata.hasCaptain ? 'Captain included' : ''].filter(Boolean)
+}
+
+async function serializeListings(rows: ListingRow[], userId: string | null): Promise<DiscoveryListing[]> {
+  const useMux = muxEnabled()
+  const media = await listingMediaStatuses(rows.map(row => row.id))
+  const savingAvailable = platformEnabled() && Boolean(userId)
+  const saves = savingAvailable && userId && rows.length ? await prisma.savedListing.findMany({
+    where: { user_id: userId, listing_id: { in: rows.map(row => row.id) } }, select: { listing_id: true },
+  }) : []
+  const savedIds = new Set(saves.map(save => save.listing_id))
+  const holds = platformEnabled() && rows.length ? await prisma.booking.findMany({
+    where: { listing_id: { in: rows.map(row => row.id) }, kind: 'hold', expires_at: { gt: new Date() }, OR: [
+      { status: 'confirmed' }, { status: 'converted', allocated_hold_credit: { rental_booking: { status: 'awaiting_payment', expires_at: { gt: new Date() } } } },
+    ] },
+    select: { listing_id: true, expires_at: true, allocated_hold_credit: { select: { rental_booking: { select: { expires_at: true } } } } }, orderBy: { expires_at: 'desc' }, take: rows.length * 7,
+  }) : []
+  const holdDeadlines = new Map<string, string>()
+  for (const hold of holds) if (hold.expires_at && !holdDeadlines.has(hold.listing_id)) {
+    const paymentDeadline = hold.allocated_hold_credit?.rental_booking.expires_at
+    holdDeadlines.set(hold.listing_id, new Date(Math.min(hold.expires_at.getTime(), paymentDeadline?.getTime() ?? Infinity)).toISOString())
+  }
+  return rows.flatMap(row => {
+    if (!row.lister.username || (row.category !== 'house' && row.category !== 'car' && row.category !== 'boat')) return []
+    // An active listing cannot advertise an unfinished video when Mux is enabled.
+    if (useMux && row.listing_status === 'active' && media.get(row.id)?.status !== 'ready') return []
+    const metadata = metadataRecord(row.asset_metadata)
+    return [{
+      id: row.id, title: listingTitle(row.category, metadata), category: row.category,
+      location: discoveryLocation(row.text_address), price: formatListingPrice(row.base_rent_amount),
+      priceDenomination: typeof metadata.pricePeriod === 'string' && ['year', 'month', 'day', 'trip'].includes(metadata.pricePeriod) ? metadata.pricePeriod : listingPriceDenomination(row.category),
+      posterUrl: row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
+      videoUrl: !useMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
+      useMux: useMux && row.listing_status !== 'draft', username: row.lister.username,
+      avatarUrl: row.lister.avatar_url, isVerified: row.lister.kyc_verified,
+      badges: listingBadges(row.category, metadata), saved: savedIds.has(row.id), savingAvailable,
+      holdUntil: holdDeadlines.get(row.id) ?? null,
+      intent: typeof metadata.rentalIntent === 'string' && ['rent', 'buy', 'squat', 'shortlet'].includes(metadata.rentalIntent) ? metadata.rentalIntent : 'rent',
+    }]
+  })
+}
+
+export async function getDiscoveryListings(filters: DiscoveryFilters, userId: string | null = null): Promise<DiscoveryPage> {
+  const conditions: Prisma.ListingWhereInput[] = [{ listing_status: 'active' }]
+  if (filters.category !== 'all') conditions.push({ category: filters.category })
+  if (filters.q) conditions.push({ text_address: { contains: filters.q, mode: 'insensitive' } })
+  if (filters.intent) conditions.push(filters.intent === 'rent' ? { OR: [
+    { asset_metadata: { path: ['rentalIntent'], equals: 'rent' } },
+    { asset_metadata: { path: ['rentalIntent'], equals: Prisma.AnyNull } },
+  ] } : { asset_metadata: { path: ['rentalIntent'], equals: filters.intent } })
+  if (filters.state) conditions.push({ asset_metadata: { path: ['state'], string_contains: filters.state, mode: 'insensitive' } })
+  const metadataKeys = ['bedrooms', 'bathrooms', 'kitchens', 'transmission', 'seats', 'capacityPersons'] satisfies (keyof DiscoveryFilters)[]
+  for (const key of metadataKeys) {
+    const value = filters[key]
+    if (typeof value === 'string' && value) conditions.push({ asset_metadata: { path: [key], equals: value } })
+  }
+  if (filters.captain) conditions.push({ asset_metadata: { path: ['hasCaptain'], equals: filters.captain === 'yes' } })
+  if (filters.minPrice || filters.maxPrice) conditions.push({ base_rent_amount: {
+    ...(filters.minPrice ? { gte: filters.minPrice } : {}), ...(filters.maxPrice ? { lte: filters.maxPrice } : {}),
+  } })
+  if (filters.cursor) conditions.push({ OR: [
+    { createdAt: { lt: new Date(filters.cursor.createdAt) } },
+    { createdAt: new Date(filters.cursor.createdAt), id: { lt: filters.cursor.id } },
+  ] })
+  const rows = await prisma.listing.findMany({
+    where: { AND: conditions }, select: listingSelect,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: DISCOVERY_PAGE_SIZE + 1,
+  })
+  const pageRows = rows.slice(0, DISCOVERY_PAGE_SIZE)
+  const last = pageRows.at(-1)
+  return {
+    listings: await serializeListings(pageRows, userId),
+    nextCursor: rows.length > DISCOVERY_PAGE_SIZE && last ? { id: last.id, createdAt: last.createdAt.toISOString() } : null,
+  }
+}
+
+export async function getListingDetails(id: string, userId: string | null): Promise<ListingDetails | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null
+  const row = await prisma.listing.findFirst({
+    where: { id, OR: [{ listing_status: 'active' }, ...(userId ? [{ lister_id: userId }] : [])] }, select: listingSelect,
+  })
+  if (!row) return null
+  const [listing] = await serializeListings([row], userId)
+  if (!listing) return null
+  return {
+    ...listing, listerId: row.lister_id, isOwner: row.lister_id === userId,
+    status: row.listing_status, metadata: metadataRecord(row.asset_metadata),
+    hostBio: row.lister.bio, hostSince: row.lister.createdAt.toISOString(),
+    hostAccountType: row.lister.account_type === 'organization' ? 'Organization' : 'Individual', postedOn: row.createdAt.toISOString(),
+  }
+}
+
+export async function getSavedListings(userId: string): Promise<DiscoveryListing[]> {
+  if (!platformEnabled()) return []
+  const saves = await prisma.savedListing.findMany({
+    where: { user_id: userId, listing: { listing_status: 'active' } },
+    orderBy: { createdAt: 'desc' }, take: 100, select: { listing: { select: listingSelect } },
+  })
+  return serializeListings(saves.map(save => save.listing), userId)
+}
+
+export async function getProfileReviews(subjectId: string): Promise<{ id: string; rating: number; comment: string; author: string; date: string }[]> {
+  if (!platformEnabled()) return []
+  const rows = await prisma.review.findMany({
+    where: { subject_id: subjectId, booking: { status: 'completed' } }, orderBy: { createdAt: 'desc' }, take: 20,
+    select: { id: true, rating: true, comment: true, createdAt: true, author: { select: { username: true } } },
+  })
+  return rows.map(row => ({ id: row.id, rating: row.rating, comment: row.comment, author: row.author.username ?? 'Rentral member', date: row.createdAt.toISOString() }))
+}

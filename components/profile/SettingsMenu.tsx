@@ -14,11 +14,12 @@ export function SettingsMenu({ onEditProfile }: SettingsMenuProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (containerRef.current && event.target instanceof Node && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     }
@@ -33,16 +34,24 @@ export function SettingsMenu({ onEditProfile }: SettingsMenuProps) {
 
   async function handleSignOut() {
     setIsSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/sign-in");
-    router.refresh();
+    setError(null);
+    try {
+      const supabase = createClient();
+      const result = await supabase.auth.signOut();
+      if (result.error) throw result.error;
+      router.push("/sign-in");
+      router.refresh();
+    } catch {
+      setError("We could not sign you out. Please try again.");
+      setIsSigningOut(false);
+    }
   }
 
   return (
     <div className="relative" ref={containerRef}>
       <button
         type="button"
+        aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all"
       >
@@ -63,7 +72,7 @@ export function SettingsMenu({ onEditProfile }: SettingsMenuProps) {
               setIsOpen(false);
               onEditProfile();
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-[#262626] transition-all text-left"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left"
           >
             <UserCog className="h-4 w-4 text-text-muted" />
             Edit profile
@@ -71,7 +80,7 @@ export function SettingsMenu({ onEditProfile }: SettingsMenuProps) {
           <button
             type="button"
             onClick={handleAccountSecurity}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-[#262626] transition-all text-left border-t border-border-subtle"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle"
           >
             <ShieldCheck className="h-4 w-4 text-text-muted" />
             Account security
@@ -80,13 +89,14 @@ export function SettingsMenu({ onEditProfile }: SettingsMenuProps) {
             type="button"
             onClick={handleSignOut}
             disabled={isSigningOut}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-trust-flagged hover:bg-[#262626] transition-all text-left border-t border-border-subtle disabled:opacity-70"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-trust-flagged hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle disabled:opacity-70"
           >
             <LogOut className="h-4 w-4" />
             {isSigningOut ? "Signing out..." : "Sign out"}
           </button>
         </div>
       )}
+      {error && <p role="alert" className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-border-subtle bg-surface-card p-3 text-xs text-trust-flagged">{error}</p>}
     </div>
   );
 }

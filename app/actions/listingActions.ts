@@ -18,6 +18,8 @@ import { LISTING_STATUS } from '@/lib/listing-status'
 import { captureServerEvent } from '@/lib/posthog'
 import { muxConfigured, muxEnabled } from '@/lib/media/config'
 import { processListingMedia } from '@/lib/media/processing'
+import { platformEnabled } from '@/lib/platform'
+import { addressFingerprint } from '@/lib/listings/spatial'
 
 const METADATA_SCHEMAS = {
   house: houseMetadataSchema,
@@ -312,17 +314,30 @@ export async function updateListing(input: unknown): Promise<UpdateListingResult
 
     // Category, video, GPS, and documents are padlocked (Item 11) — only the
     // describable attributes are editable.
-    await prisma.listing.update({
-      where: { id: row.id },
-      data: {
-        text_address: address,
-        base_rent_amount: basePrice,
-        asset_metadata: metadata.data,
-      },
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Listing" WHERE id=${row.id} AND lister_id=${userId} FOR UPDATE`
+      const current = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId, listing_status: { not: LISTING_STATUS.DRAFT } },
+        select: { text_address: true } })
+      if (!current) throw new Error('Listing is no longer editable.')
+      const addressChanged = addressFingerprint(current.text_address ?? '') !== addressFingerprint(address)
+      if (addressChanged && platformEnabled()) {
+        const reservations = await tx.booking.count({ where: { listing_id: row.id, status: { in: ['confirmed', 'completed', 'disputed'] } } })
+        if (reservations) throw new Error('Address changes are unavailable after a confirmed booking.')
+        await tx.documentReview.updateMany({ where: { listing_id: row.id }, data: { status: 'needs_review', reviewed_by: null } })
+      }
+      await tx.listing.update({
+        where: { id: row.id, lister_id: userId },
+        data: {
+          text_address: address, base_rent_amount: basePrice, asset_metadata: metadata.data,
+          // A changed address cannot retain an earlier spatial/document approval.
+          ...(addressChanged ? { listing_status: LISTING_STATUS.PENDING_VERIFICATION } : {}),
+        },
+      })
     })
 
     revalidatePath('/marketplace')
     revalidatePath('/marketplace/listing')
+    revalidatePath(`/marketplace/listing/${row.id}`)
     revalidateProfilePaths(row.lister.username)
 
     after(() => captureServerEvent(userId, 'listing_updated', { category: row.category }))
@@ -330,6 +345,9 @@ export async function updateListing(input: unknown): Promise<UpdateListingResult
     return { success: true }
   } catch (error) {
     console.error('[actions/listingActions] updateListing failed:', error)
+    if (error instanceof Error && error.message === 'Address changes are unavailable after a confirmed booking.') {
+      return { success: false, error: 'This asset already has a confirmed booking. Its address cannot be changed.' }
+    }
     return { success: false, error: 'We could not update your listing. Please try again.' }
   }
 }

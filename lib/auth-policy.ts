@@ -11,11 +11,16 @@ function matchesRoute(pathname: string, route: string): boolean {
 }
 
 export function authRedirect(pathname: string, user: AuthIdentity): string | null {
-  const publicPages = ['/', '/sign-in', '/forgot-password', '/reset-password', '/auth/callback']
+  const publicPages = ['/', '/sign-in', '/forgot-password', '/reset-password', '/auth/callback', '/help', '/terms', '/privacy', '/insights']
   if (publicPages.includes(pathname) || matchesRoute(pathname, '/api/webhooks')) return null
+  // Versioned APIs perform bearer/cookie authorization and return JSON errors.
+  if (matchesRoute(pathname, '/api/v1')) return null
   // This media route returns its own non-cacheable 401/404, never an HTML login page.
   if (/^\/api\/listings\/[^/]+\/source$/.test(pathname)) return null
   if (!user) return '/sign-in'
+  // Redress must stay available to authenticated accounts after KYC revocation.
+  // This exact workspace performs its own subject-scoped authorization.
+  if (matchesRoute(pathname, '/marketplace/appeals')) return null
   const isOnboarding = matchesRoute(pathname, '/onboarding')
   if (!onboardingComplete(user) && !isOnboarding && !matchesRoute(pathname, '/api/verify')) {
     return '/onboarding'

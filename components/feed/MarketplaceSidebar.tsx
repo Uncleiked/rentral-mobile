@@ -1,91 +1,45 @@
-"use client";
+'use client'
 
-import clsx from "clsx";
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-import {
-  Home,
-  MessageCircle,
-  Search,
-  Bell,
-  PlusSquare,
-  BarChart2,
-  User,
-  Menu
-} from "lucide-react";
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { Bell, MessageCircle, Plus, ArrowUpRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
+const navigation = [
+  { label: 'Discover', href: '/marketplace' },
+  { label: 'My bookings', href: '/marketplace/bookings' },
+  { label: 'Saved', href: '/marketplace/saved' },
+  { label: 'My assets', href: '/marketplace/listing' },
+  { label: 'Dashboard', href: '/marketplace/dashboard' },
+]
+
+// Compatibility name: existing imports now receive a top navigation, never a sidebar.
 export function MarketplaceSidebar() {
-  const pathname = usePathname();
-
-  const navItems = [
-    { icon: Home, label: "Home", href: "/marketplace" },
-    { icon: Search, label: "Search", href: "#" },
-    { icon: MessageCircle, label: "Inbox", href: "#" },
-    { icon: Bell, label: "Alerts", href: "#" },
-    { icon: PlusSquare, label: "Listing", href: "/marketplace/listing" },
-    { icon: BarChart2, label: "Dashboard", href: "#" },
-    { icon: User, label: "Profile", href: "/marketplace/profile" },
-  ];
-
+  const pathname = usePathname()
   return (
-    <aside className={clsx(
-      'hidden md:flex', 
-      'flex-col', 
-      'w-64 lg:w-[244px]', 
-      'h-[100dvh]', 
-      'border-r border-border-subtle', 
-      'px-3 py-6', 
-      'bg-background-app',
-      'fixed left-0 top-0 z-40'
-    )}>
-      <div className="px-4 mb-8">
-        {/* Branding */}
-        <Link href="/">
-          <Image 
-            src="/Rentral.svg" 
-            alt="Rentral" 
-            width={490}
-            height={509}
-            className="h-10 w-auto invert brightness-0"
-          />
+    <header className="sticky top-0 z-50 border-b border-border-subtle bg-background-app/95 backdrop-blur-xl">
+      <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Rentral home">
+          <Image src="/Rentral.svg" alt="" width={30} height={32} className="h-8 w-auto brightness-0 invert" />
+          <span className="text-xl font-bold tracking-tight">rentral<span className="text-accent-hover">.</span></span>
         </Link>
-      </div>
-
-      <nav className="flex-1 flex flex-col gap-2">
-        {navItems.map((item) => {
-          const isActive =
-            item.href !== "#" &&
-            (pathname === item.href || (item.href !== "/marketplace" && pathname.startsWith(`${item.href}/`)));
-
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={clsx(
-                'flex items-center gap-4 px-3 py-3 rounded-lg transition-all',
-                'hover:bg-[#1a1a1a] active:scale-95',
-                isActive ? 'font-bold' : 'font-medium'
-              )}
-            >
-              <item.icon className={clsx(
-                'h-6 w-6 text-text-primary',
-                isActive ? 'stroke-[2.5px]' : 'stroke-[1.5px]'
-              )} />
-              <span className="text-[15px] text-text-primary">
-                {item.label}
-              </span>
+        <nav aria-label="Main navigation" className="hidden items-center gap-1 lg:flex">
+          {navigation.map(item => {
+            const active = pathname === item.href || (item.href !== '/marketplace' && pathname.startsWith(`${item.href}/`))
+            return <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined}
+              className={cn('rounded-full px-3.5 py-2.5 text-xs font-medium transition-colors hover:bg-glass-light hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-primary', active ? 'bg-glass-light text-text-primary' : 'text-text-muted')}>
+              {item.label}
             </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto">
-        <button className="flex items-center gap-4 px-3 py-3 rounded-lg transition-all hover:bg-[#1a1a1a] active:scale-95 w-full">
-          <Menu className="h-6 w-6 stroke-[1.5px] text-text-primary" />
-          <span className="text-[15px] font-medium text-text-primary">More</span>
-        </button>
+          })}
+        </nav>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <Link href="/marketplace/messages" aria-label="Inbox" className="flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-glass-light focus-visible:outline-2 focus-visible:outline-accent-primary"><MessageCircle className="h-[19px] w-[19px]" /></Link>
+          <Link href="/marketplace/notifications" aria-label="Notifications" className="hidden h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-glass-light focus-visible:outline-2 focus-visible:outline-accent-primary sm:flex"><Bell className="h-[19px] w-[19px]" /></Link>
+          <Link href="/marketplace/listing/create" className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-3 py-2.5 text-xs font-bold text-text-inverse transition-all hover:bg-accent-hover active:scale-95 sm:px-4"><Plus className="h-4 w-4" /><span className="hidden sm:inline">List an asset</span><span className="sr-only sm:hidden">List an asset</span></Link>
+          <Link href="/marketplace/profile" className="hidden h-10 items-center gap-1 rounded-full border border-border-subtle px-3 text-xs font-semibold transition-colors hover:bg-glass-light lg:inline-flex">Profile<ArrowUpRight className="h-3.5 w-3.5" /></Link>
+        </div>
       </div>
-    </aside>
-  );
+    </header>
+  )
 }

@@ -505,3 +505,23 @@ Supabase Auth Trigger Synchronization: The initial INSERT into the profiles tabl
 Row Level Security (RLS) Dominance: The profiles table must have an absolute RLS policy enforced. Users can only SELECT or UPDATE their own rows (auth.uid() = id). All public profile fetches (for viewing a lister's reputation) must be explicitly handled via restricted, read-only database views or specific edge functions, stripping out PII (like account_number and id_number).
 
 No Client-Side KYC Mutations: A frontend client MUST NEVER pass a payload to update the kyc_status or is_business_verified columns. These columns are mathematically protected and can only be updated by the SUPABASE_SERVICE_ROLE_KEY operating in secure backend routes after receiving validated payloads from Didit or the Gemini AI engine.
+
+### 2026-11-07 implementation contracts
+
+- GSAP3.14.2 is approved for scoped homepage animation with cleanup and reduced-motion.
+- New domain services live in lib/bookings, payments, messaging, operations, listings,
+  identity and analytics; web actions and /api/v1 reuse them. New table access gates
+  on RENTRAL_PLATFORM_ENABLED until migration acceptance.
+- Didit ordering requires DIDIT_ORDERING_ENABLED after migration160000. Signed
+  body/header timestamp agreement and created_at ordering replace unsigned freshness.
+- Paystack collection uses native REST and verified signed callbacks; exact provider,
+  user, reference, currency and kobo must bind. Actual refunds/payouts are not implemented.
+- Gemini REST model is explicit configuration; structured signals never auto-approve.
+  Geoapify address results require precise high-confidence building matches, then PostGIS.
+- Native consented Insights uses coarse enums and minimum ten-person groups; no raw
+  search strings, identity details or coordinates. PostHog is optional and off in staging.
+- Lifecycle POST worker authenticates a separate bearer secret, expires holds without
+  inventing payouts, creates idempotent reminders, optionally uses Resend and prunes
+  native search events90days. Reconcile uncertain email outcomes deliberately.
+- Use pnpm staging for explicit .env.staging isolation; keep the example blank.
+  See staging-setup.md, identity-review.md, mobile-api.md and release-readiness.md.

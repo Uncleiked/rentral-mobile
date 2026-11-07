@@ -1,63 +1,16 @@
-import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
-import { VerifiedBadge } from "@/components/profile/VerifiedBadge";
-import { ShareMenu } from "@/components/profile/ShareMenu";
-import type { ProfileRecord, TrustSummary } from "@/lib/profile-data";
+import Link from 'next/link'
+import { MessageCircle } from 'lucide-react'
+import { ProfileAvatar } from '@/components/profile/ProfileAvatar'
+import { VerifiedBadge } from '@/components/profile/VerifiedBadge'
+import { ShareMenu } from '@/components/profile/ShareMenu'
+import type { ProfileRecord } from '@/lib/profile-data'
 
-interface VisitorProfileHeaderProps {
-  profile: ProfileRecord;
-  stats: TrustSummary;
-}
+type Props = { profile: ProfileRecord; listingsCount: number; listingId?: string }
 
-export function VisitorProfileHeader({ profile, stats }: VisitorProfileHeaderProps) {
-  const isOrganization = profile.accountType === "organization";
-
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-start gap-6">
-      <ProfileAvatar username={profile.username} avatarUrl={profile.avatarUrl} accountType={profile.accountType} />
-
-      <div className="flex-1 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-bold text-text-primary">{profile.username}</h1>
-          {profile.kycVerified && <VerifiedBadge size="md" />}
-          {isOrganization && (
-            <span className="rounded-full border border-glass-border-light bg-glass-light px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-text-secondary">
-              Licensed Agent
-            </span>
-          )}
-
-          <div className="flex items-center gap-2 sm:ml-auto">
-            <button
-              type="button"
-              className="px-5 py-2 rounded-lg text-sm font-bold bg-accent-primary text-text-inverse hover:bg-accent-hover active:scale-95 transition-all shadow-lg"
-            >
-              Follow
-            </button>
-            <button
-              type="button"
-              className="px-5 py-2 rounded-lg text-sm font-semibold bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all"
-            >
-              Message
-            </button>
-            <ShareMenu username={profile.username} />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-text-secondary">
-          <span>
-            <strong className="text-text-primary">{stats.listingsCount}</strong> listings
-          </span>
-          <span>
-            <strong className="text-text-primary">{stats.handshakesCount}</strong> verified handshakes
-          </span>
-          <span>
-            <strong className="text-text-primary">{stats.followersCount.toLocaleString()}</strong> followers
-          </span>
-        </div>
-
-        {profile.bio && <p className="text-sm text-text-secondary leading-relaxed max-w-lg">{profile.bio}</p>}
-
-        <p className="text-sm text-text-primary font-semibold">{profile.displayName}</p>
-      </div>
-    </div>
-  );
+export function VisitorProfileHeader({ profile, listingsCount, listingId }: Props) {
+  return <div className="flex flex-col gap-6 border-b border-border-subtle pb-8 sm:flex-row sm:items-start">
+    <ProfileAvatar username={profile.username} avatarUrl={profile.avatarUrl} accountType={profile.accountType} />
+    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="break-words text-2xl font-semibold tracking-tight">@{profile.username}</h1>{profile.kycVerified && <VerifiedBadge size="md" />}{profile.accountType === 'organization' && <span className="rounded-full border border-border-subtle px-3 py-1 text-[10px] text-text-muted">Organization</span>}</div><p className="mt-2 text-sm text-text-secondary">{profile.displayName}</p>{profile.bio && <p className="mt-3 max-w-lg text-sm leading-relaxed text-text-muted">{profile.bio}</p>}<p className="mt-4 text-xs text-text-muted"><strong className="font-semibold text-text-primary">{listingsCount}</strong> published listing{listingsCount === 1 ? '' : 's'} · Member since {profile.memberSince.getUTCFullYear()}</p></div>
+    <div className="flex flex-wrap items-center gap-2">{listingId && <Link href={`/marketplace/messages?listing=${listingId}`} className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-4 py-3 text-xs font-semibold text-text-inverse transition-all hover:bg-accent-hover active:scale-95"><MessageCircle className="h-4 w-4" />Message host</Link>}<ShareMenu username={profile.username} /></div>
+  </div>
 }

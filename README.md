@@ -6,10 +6,22 @@ Prisma/Postgres/PostGIS, Didit identity verification and PostHog.
 
 ## Current State
 
-Authentication, onboarding, profiles, recording, listing drafts and editing exist.
-The complete marketplace is still in development. Mux, document auditing, real
-payments, bookings, messaging and administration are not complete. Some dashboard
-cards remain mock UI. Pending listings do not appear in public discovery.
+The responsive web implementation now includes a GSAP homepage, advanced discovery,
+grid/walkthrough views, listing details and saves, a cross-device Media Vault,
+booking requests and GPS/code check-in, Paystack collection and payment history,
+private messaging, reviews/disputes, human document review, notifications/renewals,
+staff operations and consent-based aggregate insights. Active dashboards no longer
+use fabricated financial/lease data. New domains remain disabled until migrations
+and provider acceptance have passed in a separate staging environment.
+
+This is not a production-complete financial service. OPay integration, actual
+refund/payout execution, hold-credit conversion and automatic default splits still
+need approved provider contracts and implementation/acceptance. Squat-Mates AI is
+explicitly deferred. See [release readiness](context/release-readiness.md).
+
+Start with the [step-by-step staging guide](context/staging-setup.md) and the blank
+[staging template](.env.staging.example). Keep credentials in the ignored
+`.env.staging` file and use `pnpm staging ...` to avoid mixing project credentials.
 
 Read [the architecture and delivery plan](context/production-plan.md) and
 [the progress tracker](context/progress-tracker.md) before starting a task.
@@ -38,7 +50,7 @@ on the device. A plain HTTP LAN address cannot grant camera/geolocation permissi
 | Server administration | SUPABASE_SERVICE_ROLE_KEY |
 | Database runtime/migrations | DATABASE_URL, DIRECT_URL |
 | Callback origin | NEXT_PUBLIC_APP_URL |
-| Identity verification | DIDIT_API_KEY, DIDIT_WEBHOOK_SECRET, DIDIT_KYC_WORKFLOW_ID, DIDIT_KYB_WORKFLOW_ID |
+| Identity verification | DIDIT_API_KEY, DIDIT_WEBHOOK_SECRET, DIDIT_KYC_WORKFLOW_ID, DIDIT_KYB_WORKFLOW_ID, DIDIT_ORDERING_ENABLED |
 | Analytics | NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, NEXT_PUBLIC_POSTHOG_HOST |
 | Optional local analytics | NEXT_PUBLIC_POSTHOG_ENABLED=true (local default is disabled) |
 | Video processing | MUX_ENABLED, MUX_TOKEN_ID, MUX_TOKEN_SECRET, MUX_WEBHOOK_SECRET, MUX_SIGNING_KEY_ID, MUX_SIGNING_PRIVATE_KEY |
@@ -63,6 +75,7 @@ are in the media staging runbook.
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:database
 pnpm exec prisma validate
 pnpm build
 ```
@@ -82,6 +95,26 @@ pnpm test:e2e
 Set `PLAYWRIGHT_BASE_URL` for a different preview URL. Checks cover desktop, tablet,
 390px and 320px mobile viewports; screenshots/traces go into ignored `test-results/`.
 Unit tests mock external services and do not prove live database/provider behavior.
+
+`pnpm test:database` replays migrations and exercises actual PostgreSQL availability,
+ledger, private-chat/Realtime and Storage constraints in a labelled, isolated Docker
+container. It never imports `.env` or contacts the configured Supabase database.
+See `scripts/test-platform-database.ts` for its ownership and reset guards.
+
+For a fresh local test environment, create the isolated container without exposing
+any database ports, then run the suite (the password is only a local disposable fixture):
+
+```sh
+docker run --detach --name rentral-platform-test --label rentral.task=platform-verification --env POSTGRES_PASSWORD=rentral_local_test_only postgis/postgis:17-3.5
+pnpm test:database
+```
+
+If that task-owned container already exists but is stopped, use
+`docker start rentral-platform-test` instead of creating another one.
+
+The mobile-ready versioned JSON boundary is documented in
+[the API contract](context/mobile-api.md). Web Server Actions and API routes share
+domain services; no mobile app or authentication-provider rewrite was introduced.
 
 `pnpm test:storage` runs the media-bucket migration and RLS assertions against an
 isolated temporary local PostgreSQL fixture. Requires `initdb`, `pg_ctl` and `psql`.

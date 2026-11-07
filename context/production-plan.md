@@ -1,5 +1,12 @@
 # Rentral Architecture and Delivery Plan
 
+> Implementation checkpoint 2026-11-07: many proposed entities and screens below
+> now have migration-backed, gated implementations. Read
+> [release readiness](release-readiness.md), [completion plan](completion-plan.md)
+> and [staging setup](staging-setup.md) for the current code and acceptance state.
+> Provider custody, OPay, actual refunds/payouts and hold-credit conversion remain
+> incomplete. Historical milestone descriptions are not production acceptance.
+
 Reviewed: 2026-09-24. This plan distinguishes current code from the target product.
 It supersedes conflicting implementation examples in older context documents.
 It is an engineering plan, not a claim of certification or production readiness.

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { CategorySelector } from '@/components/listing/CategorySelector'
 import { CaptureCanvas } from '@/components/listing/CaptureCanvas'
 import { MetadataForm } from '@/components/listing/MetadataForm'
@@ -105,6 +105,7 @@ export function CreateListingWizard({ draft }: { draft: DraftPayload | null }) {
 
   return (
     <div className="min-h-screen bg-background-app px-4 py-10 sm:px-6">
+      <div className="mx-auto mb-7 w-full max-w-md"><Link href="/marketplace/vault" className="inline-flex min-h-11 items-center gap-2 text-xs text-text-muted transition-colors hover:text-text-primary"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your Media Vault</Link></div>
       <WizardStepper />
 
       {step !== 'done' && (

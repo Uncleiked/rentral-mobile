@@ -4,24 +4,48 @@ import { folderIdFromPath } from '@/lib/storage'
 export const LISTING_CATEGORIES = ['house', 'car', 'boat'] as const
 export type ListingCategory = (typeof LISTING_CATEGORIES)[number]
 
-export type HouseMetadata = {
+export type SharedListingMetadata = {
+  listingTitle?: string
+  description?: string
+  rentalIntent?: 'rent' | 'buy' | 'squat' | 'shortlet' | ''
+  hostCapacity?: 'owner' | 'agent' | 'tenant' | 'organization' | ''
+  pricePeriod?: 'year' | 'month' | 'day' | 'trip' | ''
+  state?: string
+  neighborhood?: string
+  agencyFee?: string
+  legalFee?: string
+  cautionFee?: string
+  serviceCharge?: string
+}
+
+export type HouseMetadata = SharedListingMetadata & {
   bedrooms: string
   bathrooms: string
   sizeSqm: string
   amenities: string
+  propertyType?: 'apartment' | 'studio' | 'room' | 'bungalow' | 'duplex' | 'terrace' | 'detached' | 'semi-detached' | 'other' | ''
+  kitchens?: string
+  floors?: string
+  landlordPreferences?: string
 }
 
-export type CarMetadata = {
+export type CarMetadata = SharedListingMetadata & {
   transmission: 'automatic' | 'manual' | ''
   mileageKm: string
   seats: string
   fuelType: string
+  bodyType?: string
+  engineType?: string
+  insuranceStatus?: 'insured' | 'not-insured' | 'not-provided' | ''
+  insuranceDetails?: string
 }
 
-export type BoatMetadata = {
+export type BoatMetadata = SharedListingMetadata & {
   vesselType: string
   capacityPersons: string
   hasCaptain: boolean
+  lifeJackets?: boolean
+  safetyEquipment?: string
 }
 
 export type ListingMetadata = {
@@ -74,10 +98,15 @@ const initialCapture: CaptureState = {
   isComplete: false,
 }
 
+const initialSharedMetadata: SharedListingMetadata = {
+  listingTitle: '', description: '', rentalIntent: 'rent', hostCapacity: 'owner', state: '', neighborhood: '',
+  agencyFee: '', legalFee: '', cautionFee: '', serviceCharge: '',
+}
+
 const initialMetadata: ListingMetadata = {
-  house: { bedrooms: '', bathrooms: '', sizeSqm: '', amenities: '' },
-  car: { transmission: '', mileageKm: '', seats: '', fuelType: '' },
-  boat: { vesselType: '', capacityPersons: '', hasCaptain: false },
+  house: { ...initialSharedMetadata, pricePeriod: 'year', bedrooms: '', bathrooms: '', sizeSqm: '', amenities: '', propertyType: '', kitchens: '', floors: '', landlordPreferences: '' },
+  car: { ...initialSharedMetadata, pricePeriod: 'day', transmission: '', mileageKm: '', seats: '', fuelType: '', bodyType: '', engineType: '', insuranceStatus: '', insuranceDetails: '' },
+  boat: { ...initialSharedMetadata, pricePeriod: 'day', vesselType: '', capacityPersons: '', hasCaptain: false, lifeJackets: false, safetyEquipment: '' },
 }
 
 type RentralStore = {

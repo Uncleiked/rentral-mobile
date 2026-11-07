@@ -1,6 +1,8 @@
 -- Minimal local model of Storage's RLS surface. Never run on a shared database.
-CREATE ROLE anon NOLOGIN;
-CREATE ROLE authenticated NOLOGIN;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+END $$;
 CREATE SCHEMA auth;
 CREATE SCHEMA storage;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
@@ -22,7 +24,13 @@ GRANT USAGE ON SEQUENCE storage.objects_id_seq TO authenticated;
 -- Simulate a dashboard-added broad read policy: the new restrictive boundary
 -- must still prevent someone else's originals from becoming readable.
 CREATE POLICY "Legacy broad reads" ON storage.objects FOR SELECT TO anon, authenticated USING (true);
+-- Upgrade fixture: the original INSERT ... ON CONFLICT intentionally keeps
+-- this public setting until the additive compliance boundary repairs it.
+INSERT INTO storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+VALUES ('compliance-docs','compliance-docs',true,10485760,ARRAY['application/pdf','image/jpeg','image/png']);
 INSERT INTO storage.objects (bucket_id, name) VALUES
   ('listings-media', '11111111-1111-4111-8111-111111111111/folder/video.mp4'),
   ('listings-media', '22222222-2222-4222-8222-222222222222/folder/poster.jpg'),
+  ('compliance-docs', '11111111-1111-4111-8111-111111111111/folder/title.pdf'),
+  ('compliance-docs', '22222222-2222-4222-8222-222222222222/folder/title.pdf'),
   ('profile-avatars', 'public-avatar.jpg');

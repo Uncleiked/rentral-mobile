@@ -1,8 +1,66 @@
 ## Progress Tracker
 
+## Staging verification and continuation — 2026-11-07
+
+- Added `pnpm check:staging` and a credential-safe read-only `--remote` check.
+  Configuration points to a separate staging project; Supabase Auth accepts the
+  publishable key and Storage accepts the server key. No credential values printed.
+- Both configured database endpoints are IPv6-only and cannot resolve through this
+  machine's connection path. Requested Session pooler5432 for DIRECT_URL and
+  Transaction pooler6543 for DATABASE_URL, copied from staging's Connect panel.
+  No hosted migration has run while this connection issue remains unresolved.
+- Continuing one-time hold-to-rental credit allocation and staff-reviewed safety
+  notice/appeal workflows, with additive migrations and financial gates preserved.
+- Hosted-readiness review found compliance-docs also needs a restrictive legacy
+  policy boundary and an explicit private-bucket cutover; an additive migration
+  and fixture regressions are being prepared.
+- User edits in ignored .env.staging are preserved; examples stay credential-free.
+
+## 2026-11-07 implementation checkpoint
+
+- Replaced the homepage with responsive local photography, scoped GSAP motion,
+  reduced-motion handling, native category/location search and working navigation.
+- Unified marketplace top/mobile navigation; added validated parametric search,
+  cursor pagination, grid/walkthrough views, details, persisted saves and real reviews.
+- Added a private Media Vault and expanded backward-compatible category metadata,
+  transparent optional fee inputs, studios, rental intents and marine safety fields.
+- Added migration-backed reservations, bounded GPS/OTP check-in, exact integer-kobo
+  price snapshots, signed Paystack collection and append-only balanced ledger.
+- Added participant-only messaging/listing shares/read state, opt-in private Realtime,
+  booking reviews/reports, notifications, renewal review, staff audit/document queues.
+- Added consent-based first-party coarse search analytics, privacy controls,
+  thresholded Insights, lifecycle expiry/reminders/retention worker and a versioned API.
+- Fixed address edits retaining obsolete publication approvals. A changed address
+  returns to review; confirmed bookings prevent relocation of that listing.
+- Hardened Didit ordering/revocation in a separately gated migration. Current signed
+  envelope and stored-session checks precede transactional identity decisions.
+- Added the staging template, guarded `pnpm staging` launcher and detailed provider
+  setup guide. No remote migration, live provider activation or credential change.
+- Validation and remaining release blockers are recorded in
+  [release-readiness.md](release-readiness.md). Continue from that document; the
+  historical checkboxes below are retained for provenance.
+
+The complete platform is still **in development**. OPay, real refund/payout execution,
+hold credit allocation/default compensation, full live provider/device journeys and
+production deployment are not accepted or presented as complete.
+
 Update this file after every completed feature. Any AI agent reading this should immediately know what is done, what is in progress, and what is next.
 
 ## Current Status
+
+### Compliance Document Storage Boundary - 2026-11-07
+
+- Added `20261107190000_compliance_storage_boundary` without changing prior
+  migrations. It explicitly makes an existing `compliance-docs` bucket private
+  and restricts anonymous/authenticated reads to the exact owner's folder even
+  when a legacy permissive Storage policy grants broad reads.
+- Owner uploads, document previews and orphan cleanup keep their existing
+  behavior. Referenced document deletion/moving remains blocked by the earlier
+  committed-upload guard. Unrelated public avatar reads remain available.
+- Local full migration replay and concurrency checks passed with the new policy.
+  Focused fixtures cover an existing public compliance bucket, broad legacy
+  reads, anonymous/cross-owner denial and owner upload/cleanup. Hosted Storage
+  API/blob acceptance is still required before treating the cutover as accepted.
 
 ### Private Media Previews - Code Complete, Storage Cutover Pending
 

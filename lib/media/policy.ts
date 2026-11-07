@@ -24,7 +24,7 @@ export function mediaDecision(asset: {
   const duration = asset.duration
   if (!playback || asset.playback_ids?.some(item => item.policy !== 'signed') ||
       !asset.tracks?.some(track => track.type === 'video') ||
-      !duration || !Number.isFinite(duration) || duration > 125 || duration <= 0) {
+      !duration || !Number.isFinite(duration) || duration > 120 || duration <= 0) {
     return { status: 'errored', playback_id: null, duration: null, error_code: 'invalid_output' }
   }
   return { status: 'ready', playback_id: playback.id, duration, error_code: null }

@@ -36,20 +36,18 @@ export function ListingEditForm({ listing }: { listing: EditableListing }) {
   const onSubmit = async (data: ListingFieldValues) => {
     setIsSaving(true)
     const { address, basePrice, ...metadata } = data
-    const result = await updateListing({
-      listingId: listing.id,
-      address: String(address),
-      basePrice: String(basePrice),
-      metadata,
-    })
-    setIsSaving(false)
-
-    if (!result.success) {
-      toast.error(result.error)
-      return
+    try {
+      const result = await updateListing({
+        listingId: listing.id, address: String(address), basePrice: String(basePrice), metadata,
+      })
+      if (!result.success) { toast.error(result.error); return }
+      toast.success('Listing updated.')
+      router.push('/marketplace/listing')
+    } catch {
+      toast.error('The connection was interrupted. Check your listing and try again.')
+    } finally {
+      setIsSaving(false)
     }
-    toast.success('Listing updated.')
-    router.push('/marketplace/listing')
   }
 
   return (
@@ -69,6 +67,7 @@ export function ListingEditForm({ listing }: { listing: EditableListing }) {
         </p>
       </div>
 
+      <p className="mb-5 text-xs leading-relaxed text-text-muted">Address corrections return the listing to review. Addresses cannot change once a booking has been confirmed.</p>
       <ListingFields category={listing.category} register={register} errors={errors} />
 
       <div className="mt-6 flex gap-3">

@@ -1,59 +1,33 @@
-import clsx from "clsx";
-import Link from "next/link";
-import { connection } from "next/server";
-import { PlusSquare } from "lucide-react";
-import { MarketplaceHeader } from "@/components/feed/MarketplaceHeader";
-import { MarketplaceFeedCard } from "@/components/feed/MarketplaceFeedCard";
-import { MarketplaceSidebar } from "@/components/feed/MarketplaceSidebar";
-import { MarketplaceSuggestions } from "@/components/feed/MarketplaceSuggestions";
-import { MarketplaceBottomNav } from "@/components/feed/MarketplaceBottomNav";
-import { getMarketplaceFeed } from "@/lib/listing-data";
+import Link from 'next/link'
+import { ArrowRight, MapPin } from 'lucide-react'
+import { connection } from 'next/server'
+import { MarketplaceShell } from '@/components/layout/MarketplaceShell'
+import { MarketplaceHeader } from '@/components/feed/MarketplaceHeader'
+import { MarketplaceFeedCard } from '@/components/feed/MarketplaceFeedCard'
+import { ListingGridCard } from '@/components/feed/ListingGridCard'
+import { DiscoveryEmptyState } from '@/components/feed/DiscoveryEmptyState'
+import { DiscoveryTelemetry } from '@/components/analytics/DiscoveryTelemetry'
+import { coarseNeighborhood } from '@/lib/analytics/policy'
+import { requireUserId } from '@/lib/action-helpers'
+import { getDiscoveryListings } from '@/lib/discovery'
+import { parseDiscoveryFilters, discoveryHref, discoveryHasFilters, type DiscoverySearchParams } from '@/lib/discovery-policy'
 
-export default async function MarketplacePage() {
-  await connection();
-  const listings = await getMarketplaceFeed();
+type Props = { searchParams: Promise<DiscoverySearchParams> }
 
-  return (
-    <main className={clsx('bg-background-app', 'min-h-[100dvh]', 'w-full', 'flex', 'text-text-primary')}>
-      {/* Left Sidebar (Desktop/Tablet) */}
-      <MarketplaceSidebar />
-
-      {/* Center Main Content */}
-      <div className={clsx('flex-1', 'flex', 'justify-center', 'md:ml-64', 'lg:ml-[244px]')}>
-        <div className={clsx('w-full', 'max-w-[470px]', 'flex', 'flex-col', 'pb-16', 'md:pb-0')}>
-          <MarketplaceHeader />
-
-          {listings.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 py-20 text-center">
-              <p className="text-sm font-semibold text-text-primary">No listings yet</p>
-              <p className="max-w-xs text-sm text-text-muted">
-                Listings appear here after verification and publication are complete.
-              </p>
-              <Link
-                href="/marketplace/listing/create"
-                className="glass-btn inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98"
-              >
-                <PlusSquare className="h-4 w-4" />
-                Create Listing
-              </Link>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-6 mt-2">
-              {listings.map((listing) => (
-                <MarketplaceFeedCard key={listing.id} {...listing} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right Suggestions Sidebar (Desktop only) */}
-      <MarketplaceSuggestions />
-
-      {/* Bottom Navigation (Mobile only) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
-        <MarketplaceBottomNav />
-      </div>
-    </main>
-  );
+export default async function MarketplacePage({ searchParams }: Props) {
+  await connection()
+  const filters = parseDiscoveryFilters(await searchParams)
+  const userId = await requireUserId()
+  const { listings, nextCursor } = await getDiscoveryListings(filters, userId)
+  const filtered = discoveryHasFilters(filters)
+  return <MarketplaceShell>
+    <MarketplaceHeader filters={filters} />
+    {filters.category !== 'all' && <DiscoveryTelemetry category={filters.category} intent={filters.intent || 'rent'}
+      neighborhood={coarseNeighborhood(filters.q)} bedrooms={filters.bedrooms ? Number(filters.bedrooms) : undefined}
+      budgetBand={!filters.maxPrice ? 'unspecified' : Number(filters.maxPrice) < 1000000 ? 'under-1m' : Number(filters.maxPrice) <= 3000000 ? '1m-3m' : Number(filters.maxPrice) <= 5000000 ? '3m-5m' : '5m-plus'} />}
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">{filters.q ? `Discover ${filters.q}` : 'Find a little more Lagos'}</h2><p className="flex items-center gap-1.5 text-[11px] text-text-muted"><MapPin className="h-3.5 w-3.5" />Neighborhood locations protect host privacy</p></div>
+    {listings.length === 0 ? <DiscoveryEmptyState filtered={filtered} /> : filters.view === 'grid' ? <div className="grid grid-cols-1 gap-x-5 gap-y-9 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">{listings.map(listing => <ListingGridCard key={listing.id} listing={listing} />)}</div> : <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 lg:grid-cols-2">{listings.map(listing => <MarketplaceFeedCard key={listing.id} listing={listing} />)}</div>}
+    {nextCursor && <div className="mt-10 flex justify-center"><Link href={discoveryHref(filters, { cursor: nextCursor })} className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-card px-6 py-3 text-sm font-medium hover:bg-glass-light">Explore more<ArrowRight className="h-4 w-4" /></Link></div>}
+    <section className="mt-12 border-t border-border-subtle pt-7"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="text-sm font-semibold">Find your corner of the city</h2><p className="mt-1 text-xs text-text-muted">Start with a neighborhood. See where it takes you.</p></div><div className="flex flex-wrap gap-2">{['Lekki', 'Ikoyi', 'Victoria Island', 'Yaba'].map(area => <Link key={area} href={discoveryHref(filters, { q: area, cursor: null })} className="rounded-full border border-border-subtle px-4 py-2 text-xs text-text-secondary transition-colors hover:border-accent-primary hover:text-accent-hover">{area}</Link>)}</div></div></section>
+  </MarketplaceShell>
 }

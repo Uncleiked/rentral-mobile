@@ -1,5 +1,9 @@
 # Rentral UI Registry
 
+### Responsive marketplace and profiles (2026-11-07)
+
+Canonical details are in `context/ui-registry.md`. `MarketplaceShell` uses one top navigation and a safe-area-aware mobile bottom navigation. Grid previews use `rounded-2xl border-border-subtle bg-surface-card`; actions use semantic emerald pills. Search is URL driven and filter panels stay within the viewport. Protected media remains unoptimized and walkthrough playback is explicit. Profiles use actual assets and completed-booking reviews; fabricated financial, followers and security counts are removed from rendered views.
+
 This registry enforces UI consistency across the project. It documents the visual patterns that matter for consistency.
 
 ## Baseline — Established 2026-06-27
@@ -16,27 +20,27 @@ Last updated: 2026-06-27
 | Z-Index          | `relative isolate overflow-hidden` (container), `relative z-10` (content) |
 
 **Pattern notes:**
-This pattern is used for the main landing page hero section and any other page (like auth pages) that require the brand's premium immersive green background with the illustrative graphic lines.
+This legacy wrapper remains available for auth pages. The 2026-11-07 homepage uses the scoped cinematic patterns in the canonical `context/ui-registry.md` instead.
 
 ### Glass Button Primary
-File: `app/page.tsx`
-Last updated: 2026-06-27
+File: `components/home/*`, `app/page.tsx`
+Last updated: 2026-11-07
 
 | Property         | Class           |
 | ---------------- | --------------- |
-| Background       | `bg-accent-primary` / `bg-accent-warm` |
-| Text             | `text-text-inverse`, `text-xs font-bold uppercase tracking-wider` |
-| Interactive      | `glass-btn hover:bg-accent-hover active:scale-95 transition-all shadow-lg` |
+| Background       | `bg-accent-primary` |
+| Text             | `text-text-inverse`, 12px semibold |
+| Interactive      | `home-button-primary`, emerald hover, 0.98 active scale; 54px minimum height, rounded pill |
 
 ### Glass Button Secondary
-File: `app/page.tsx`
-Last updated: 2026-06-27
+File: `components/home/HomeNavigation.tsx`
+Last updated: 2026-11-07
 
 | Property         | Class           |
 | ---------------- | --------------- |
-| Background       | `bg-glass-light border border-glass-border-medium backdrop-blur-md` |
-| Text             | `text-text-primary`, `text-xs font-bold uppercase tracking-wider` |
-| Interactive      | `glass-btn hover:bg-glass-light-hover active:scale-95 transition-all` |
+| Background       | `home-nav-signin`: `bg-text-primary`, glass-medium border |
+| Text             | `text-text-inverse`, 13px semibold |
+| Interactive      | Rounded pill, secondary-text hover surface, visible emerald focus |
 
 ### Marketplace Feed Card (Instagram Style)
 File: `components/feed/MarketplaceFeedCard.tsx`
@@ -216,3 +220,56 @@ File: `components/profile/AvatarUploadButton.tsx`
 
 **Pattern notes:**
 Wraps `ProfileAvatar` with a small floating camera-icon badge, only ever rendered on the owner's own header. The file input itself is visually hidden (`className="hidden"`) and triggered via a ref — never render a raw unstyled `<input type="file">`.
+
+### Platform workspaces and privacy controls (2026-11-07)
+
+Files: components/messaging/ChatPanel.tsx, components/admin/ReviewControls.tsx,
+components/trust/BookingFeedback.tsx, components/notifications/NotificationItem.tsx,
+components/privacy/AnalyticsPreferences.tsx, components/renewals/RenewalForm.tsx.
+
+- Surface: bg-surface-card, border border-border-subtle, rounded-2xl, p-5/p-6.
+- Primary action: bg-accent-primary text-text-inverse rounded-xl px-5 py-3;
+  pending controls disabled:opacity-50, visible inline status/error copy.
+- Inputs: bg-background-app border-border-subtle rounded-xl p-3 text-sm;
+  labels text-text-secondary, help text-text-muted, error text-trust-flagged.
+- Chat: sender bg-accent-muted, other participant bg-background-app, rounded-2xl;
+  bounded scrolling, wrap long messages, preserve drafts on failed delivery.
+- Scope: staff controls render after server authorization; provider/configuration
+  gaps are honest unavailable states. No fabricated scores, balances or payment success.
+- Public guidance uses PublicPage with the same tokens; privacy consent defaults off.
+- Listing address edits return to review and confirmed bookings prevent relocation.
+
+### Holding status and booking availability (2026-11-07)
+
+Files: components/listing/ListingBookingActions.tsx, components/feed/ListingGridCard.tsx.
+Cards show a semantic-accent on-hold badge. Details show the deadline and pause
+new booking controls while preserving walkthrough, save and contact access. Only
+the deadline is public; the holder identity is never projected. Flexible holding
+days and original quoted fees stay visible in booking details; actual credit or
+compensation is never presented as settled before provider execution.
+
+### Reviewed safety notices and appeals (2026-11-07)
+
+Files: components/trust/SafetyNoticeBanner.tsx, SafetyAppealForm.tsx,
+SafetyNoticeControls.tsx, SafetyAppealControls.tsx, SafetyNoticeAdminQueue.tsx.
+
+| Property | Class |
+| --- | --- |
+| Review surfaces | bg-surface-card border border-border-subtle rounded-2xl p-5 |
+| Public caution | bg-glass-warning border border-glass-border-warning rounded-2xl px-4 py-4 text-text-primary |
+| Body / help | text-sm text-text-secondary leading-relaxed / text-xs text-text-muted |
+| Fields | bg-background-app border-border-subtle rounded-xl p-3 text-sm |
+| Field focus | focus:border-accent-primary focus:ring-1 focus:ring-accent-primary |
+| Primary action | min-h-11 bg-accent-primary text-text-inverse rounded-xl px-5 py-3 hover:bg-accent-hover |
+| Button focus | focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover |
+| Pending controls | disabled:opacity-50 and visible role=status feedback |
+
+Pattern notes: mobile forms stack with full-width actions, widening at sm; long
+statements wrap and preserve newlines. Warning copy is fixed, never a raw report.
+Public warnings require an active staff-reviewed finding; rating averages alone
+must not create a warning. Member and staff forms share the same tokens and
+preserve text after network failures. No animation or icon conveys status alone.
+# Holding credit pattern — 2026-11-07
+
+Booking credit notices and balances follow `context/ui-registry.md` → **Holding credit and rental balance**. Reuse the existing semantic booking cards, `min-h-11` controls, muted financial labels and integer-kobo formatting. Gross total, applied hold and additional payment must remain distinct; allocation does not imply provider settlement.
+

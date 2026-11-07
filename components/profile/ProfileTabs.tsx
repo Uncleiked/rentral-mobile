@@ -18,19 +18,23 @@ export function ProfileTabs({ reviewsCount, listingsContent, reviewsContent, led
   const tabs: { key: TabKey; label: string }[] = [
     { key: "listings", label: "Listings" },
     { key: "reviews", label: `Reviews · ${reviewsCount}` },
-    { key: "ledger", label: "Trust Ledger" },
+    { key: "ledger", label: "Verification" },
   ];
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-6 border-b border-border-subtle">
+      <div role="tablist" aria-label="Profile sections" className="flex items-center gap-4 overflow-x-auto border-b border-border-subtle sm:gap-6">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`profile-panel-${tab.key}`}
+            id={`profile-tab-${tab.key}`}
             onClick={() => setActiveTab(tab.key)}
             className={clsx(
-              "pb-3 text-xs font-bold uppercase tracking-wider transition-all",
+              "shrink-0 pb-3 text-xs font-bold uppercase tracking-wider transition-all focus-visible:outline-2 focus-visible:outline-accent-primary",
               activeTab === tab.key
                 ? "text-text-primary border-b-2 border-text-primary"
                 : "text-text-muted hover:text-text-secondary"
@@ -41,9 +45,11 @@ export function ProfileTabs({ reviewsCount, listingsContent, reviewsContent, led
         ))}
       </div>
 
-      {activeTab === "listings" && listingsContent}
-      {activeTab === "reviews" && reviewsContent}
-      {activeTab === "ledger" && ledgerContent}
+      <div role="tabpanel" id={`profile-panel-${activeTab}`} aria-labelledby={`profile-tab-${activeTab}`}>
+        {activeTab === "listings" && listingsContent}
+        {activeTab === "reviews" && reviewsContent}
+        {activeTab === "ledger" && ledgerContent}
+      </div>
     </div>
   );
 }

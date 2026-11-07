@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DRAFT_WIZARD_STEPS, LISTING_CATEGORIES } from '@/store/useRentralStore'
+import { validOptionalListingFee } from '@/lib/listing-fees'
 
 // Validate phone formatting; output escaping remains the renderer's responsibility.
 const phoneRegex = /^\+?[0-9]+$/
@@ -55,24 +56,56 @@ const basePriceField = z.string()
   .regex(/^[1-9][0-9]*$/, "Base price must be a whole number above zero")
   .max(10, "Base price is too large")
 
+const optionalDigits = (label: string) => digits(label).or(z.literal('')).optional()
+const optionalFee = z.string().trim().max(13).refine(validOptionalListingFee, {
+  message: 'Enter a non-negative NGN amount with up to 2 decimal places within the platform fee limit.',
+}).optional()
+
+const sharedListingMetadata = {
+  listingTitle: z.string().trim().max(100, 'Title must be 100 characters or fewer.').optional(),
+  description: z.string().trim().max(1500, 'Description must be 1,500 characters or fewer.').optional(),
+  rentalIntent: z.enum(['rent', 'buy', 'squat', 'shortlet', '']).optional(),
+  hostCapacity: z.enum(['owner', 'agent', 'tenant', 'organization', '']).optional(),
+  pricePeriod: z.enum(['year', 'month', 'day', 'trip', '']).optional(),
+  state: z.string().trim().max(80).optional(),
+  neighborhood: z.string().trim().max(80).optional(),
+  agencyFee: optionalFee,
+  legalFee: optionalFee,
+  cautionFee: optionalFee,
+  serviceCharge: optionalFee,
+}
+
 export const houseMetadataSchema = z.object({
+  ...sharedListingMetadata,
   bedrooms: digits("Bedrooms"),
   bathrooms: digits("Bathrooms"),
   sizeSqm: digits("Size"),
   amenities: z.string().max(280, "Amenities must be 280 characters or fewer."),
+  propertyType: z.enum(['apartment', 'studio', 'room', 'bungalow', 'duplex', 'terrace', 'detached', 'semi-detached', 'other', '']).optional(),
+  kitchens: optionalDigits('Kitchens'),
+  floors: optionalDigits('Floors'),
+  landlordPreferences: z.string().trim().max(800, 'Preferences must be 800 characters or fewer.').optional(),
 })
 
 export const carMetadataSchema = z.object({
+  ...sharedListingMetadata,
   transmission: z.enum(['automatic', 'manual'], { message: "Select a transmission type" }),
   mileageKm: digits("Mileage"),
   seats: digits("Seat count"),
   fuelType: z.string().min(1, "Fuel type is required"),
+  bodyType: z.string().trim().max(60).optional(),
+  engineType: z.string().trim().max(80).optional(),
+  insuranceStatus: z.enum(['insured', 'not-insured', 'not-provided', '']).optional(),
+  insuranceDetails: z.string().trim().max(300).optional(),
 })
 
 export const boatMetadataSchema = z.object({
+  ...sharedListingMetadata,
   vesselType: z.string().min(1, "Vessel type is required"),
   capacityPersons: digits("Capacity"),
   hasCaptain: z.boolean(),
+  lifeJackets: z.boolean().optional(),
+  safetyEquipment: z.string().trim().max(300).optional(),
 })
 
 export const listingDetailsSchema = z.object({

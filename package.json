@@ -2,7 +2,13 @@
   "name": "rentral",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
+    "check:staging": "node --experimental-strip-types scripts/check-staging.ts",
+    "check:local": "node --experimental-strip-types scripts/check-staging.ts --local",
+    "setup:local:ca": "node --experimental-strip-types scripts/setup-local-ca.ts",
+    "audit:local": "node --experimental-strip-types scripts/audit-local-database.ts",
+    "staging": "node --experimental-strip-types scripts/with-staging.ts",
     "dev": "next dev",
     "dev:https": "next dev --experimental-https",
     "build": "next build",
@@ -11,7 +17,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:storage": "node scripts/test-storage-policies.mjs"
+    "test:storage": "node scripts/test-storage-policies.mjs",
+    "test:database": "node --experimental-strip-types scripts/test-platform-database.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.2.1",
@@ -25,6 +32,7 @@
     "@supabase/supabase-js": "^2.108.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "gsap": "3.14.2",
     "lucide-react": "^1.21.0",
     "next": "16.2.7",
     "next-themes": "^0.4.6",

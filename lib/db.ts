@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { postgresConfig } from './environment/postgres-config'
 
 const prismaClientSingleton = () => {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(postgresConfig(process.env.DATABASE_URL ?? '', process.env.SUPABASE_DB_CA_CERT_PATH))
   return new PrismaClient({ adapter })
 }
 

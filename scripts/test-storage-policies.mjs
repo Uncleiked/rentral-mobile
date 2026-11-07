@@ -28,6 +28,7 @@ try {
   sql(readFileSync(join(root, 'tests/database/storage-fixture.sql'), 'utf8'))
   sql(readFileSync(join(root, 'prisma/migrations/20260724100500_add_listing_storage_buckets/migration.sql'), 'utf8'))
   sql(readFileSync(join(root, 'prisma/migrations/20260924170000_private_listing_media/migration.sql'), 'utf8'))
+  sql(readFileSync(join(root, 'prisma/migrations/20261107190000_compliance_storage_boundary/migration.sql'), 'utf8'))
   process.stdout.write(sql(readFileSync(join(root, 'tests/database/storage-assertions.sql'), 'utf8')))
   process.stdout.write('Local Storage RLS checks passed. Hosted Storage acceptance is still required.\n')
 } finally {

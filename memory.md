@@ -1,124 +1,66 @@
-# Memory - Private Media and Staging Boundary
+# Memory — Rentral responsive platform implementation
 
-Last updated: 2026-09-24
+Last updated: 2026-11-07 (Africa/Lagos).
 
-## What Was Built
+## What was built
 
-- Latest slice: protected GET `/api/listings/[id]/source?kind=video|poster`,
-  same-origin saved previews, five-minute signed redirects and owner/active queries.
-  Non-owner original video is denied when Mux is enabled. Compliance documents are
-  excluded. No public URL fallback; every response is private/no-store.
-- Profile posters use unoptimized Next Image. Native and Mux playback have accessible
-  retry states; CaptureCanvas previews remain visible after live-camera denial.
-- Prepared `20260924170000_private_listing_media` (unapplied remotely). It changes
-  the existing bucket to private, replaces broad reads with owner SELECT and adds
-  a restrictive SELECT boundary against legacy permissive policies. Paths unchanged.
-- `pnpm test:storage` creates a disposable local PostgreSQL cluster and replays the
-  Storage migrations against minimal fixtures. Actual RLS assertions passed; it never
-  uses the app database/environment. Requires local initdb/pg_ctl/psql and escalation
-  on this Mac for shared memory. Hosted Storage/API/CDN acceptance remains open.
-- Added `context/private-media-plan.md`; updated registry, tracker, library docs,
-  media/production plans and README. No dependency, credential or feature-flag changes.
-- Previous slice: `lib/media/worker.ts`, `worker-auth.ts`, and protected POST
-  `/api/internal/media-worker`. It dispatches queued media and reconciles known
-  Mux asset IDs after missed callbacks, with two-row batches per phase and a
-  five-minute cooldown. Stale submitting jobs become uncertain after ten minutes.
-- Queue claims compare the observed attempt count; reconciliation claims and applies
-  state with updatedAt compare-and-swap. Ambiguous submissions never automatically
-  create a second asset. Webhook changes win over stale polling responses.
-- Exact worker path bypasses browser-session middleware; its own server-only bearer
-  secret is mandatory before DB/provider access. No broad /api bypass was added.
-- Worker requires MEDIA_WORKER_ENABLED=true, MUX_ENABLED=true, all Mux keys, and
-  MEDIA_WORKER_SECRET (minimum 32 characters, no whitespace). Nothing enabled locally.
-- Added `context/media-worker-plan.md`; expanded `context/media-staging.md` with
-  deployment, scheduling, alerting and secret instructions. Updated tracker,
-  registry, production plan, library docs and README. No new UI styling this pass.
+- Replaced the landing page with local photography, Inter, cinematic scoped GSAP/ScrollTrigger motion, responsive category/location search and reduced-motion handling.
+- Added the shared top/mobile marketplace shell; URL-driven advanced search, stable cursors, grid/walkthrough views, details, saved listings and truthful profiles/dashboard.
+- Added owner-scoped Media Vault drafts and backward-compatible metadata: studios, beds/baths/kitchens, state, intents, host capacity, structural/vehicle/marine safety and exact optional fee inputs.
+- Added booking models/UI/services, price snapshots, participant authorization, GPS+OTP dual check-in, flexible1–7day holds, global hold guards and visible hold deadlines.
+- Added guarded Paystack collection/reconciliation, listing-fee checkout, signed callbacks, exact binding and append-only balanced ledger. No fabricated custody/refund/payout success.
+- Added durable participant-only messages, listing attachments, rate/idempotency controls, read receipts, optional private Realtime and /api/v1 cookie/bearer routes sharing domain services.
+- Added completed-booking reviews/reports, notification/renewal views, human/AI document queues, Geoapify/PostGIS matching, publication gates and immutable staff audit.
+- Added consented native coarse search analytics, monthly HMAC subjects, ten-person cohorts, deletion controls, and lifecycle expiry/reminder/email/90-day retention worker.
+- Hardened Didit signed-envelope freshness/order/revocation and bounded metadata reconciliation. New receiver is deliberately503 until DIDIT_ORDERING_ENABLED=true after migration.
+- Added staging guide/template, guarded pnpm staging launcher, isolated PostgreSQL harness, environment-template recovery helper and credential-free template regression.
 
-## Existing Implementation
+## Decisions made
 
-- Gated Mux ingestion, SDK-verified callbacks, signed playback, owner status/retry
-  controls, atomic MediaAsset job creation and MediaWebhookReceipt deduplication.
-  API credentials are Video-scoped; the local Mux CLI may need System Read access.
-- Upload cleanup waits for in-flight uploads; ambiguous save responses retain files
-  and direct users to Your Listings. Post-commit refresh errors preserve success.
-- Auth recovery/callback/redirect-cookie repairs, allowlisted login errors, keyboard
-  submission and live OAuth-provider availability are implemented. Login worked in
-  runtime logs; this does not prove the full authenticated/provider journey.
-- Current-database KYC gates protect listing mutations. Pending inventory is hidden
-  from public discovery. Fake payment confirmations were removed; no auto-publication.
-- Didit events bind to the stored user/session/workflow. Username-based KYC bypass
-  is removed. Same-session ordering and real approval/revocation still need work.
+- Preserve Next16/React19 modular monolith, Prisma/Supabase/PostGIS, existing Supabase Auth/Didit, strict TypeScript and pnpm10.28.2. Do not replace them with older Clerk/SmileID/Stripe sketches.
+- Latest Gemini history: universal account, pay-per-post, OPay/Paystack, mobile capture+desktop continuation, first-party Insights; AI Squat-Mates visible but explicitly later.
+- New domains gated by RENTRAL_PLATFORM_ENABLED. No shared database migration or provider activation was performed. Current environment flags remain untouched.
+- Camera/GPS are user-controlled evidence; AI is a review signal. No guarantees of ownership, unspoofable hardware, fraud elimination or consumer credit.
+- Posted address changes return to review; confirmed bookings prevent relocation. Paid hold expiry marks settlement requires_review and notifies participants from worker and opportunistic paths.
+- Keep financial/identity private data off public responses. New native analytics is optional, coarse and cohort-limited; optional historical PostHog retained disabled in staging.
 
-## Decisions
+## Problems solved
 
-- Follow `context/production-plan.md`; historical tracker checkboxes and provider
-  examples are not production acceptance. Preserve existing Next/Prisma boundaries,
-  strict TypeScript and semantic UI tokens. Use pnpm, not npm/yarn/bun.
-- Milestone 08 is still partial. Finish inventory acceptance before Gemini/payment
-  publication checks. AI analysis is a review signal, never proof of ownership.
-- Do not apply migrations to the current shared database or turn on Mux from a
-  statement that CLI forwarding works. A separate staging target is still required.
-- External scheduling is not deployed. The worker is a POST endpoint, not a
-  GET-only hosting cron. No provider calls run inside DB transactions. Host timeout
-  can leave dispatch uncertain; operator reconciliation remains deliberate.
+- Installed locked dependencies and pinned GSAP3.14.2. Prisma now loads .env.local or explicitly RENTRAL_ENV_FILE; TS targetES2020 and allowJsfalse.
+- Added migrations120000domains,123000integrity,130000privacy/spatial/Realtime,140000price snapshots,143000disputed availability,160000Didit ordering (all dated20261107). Earlier pending migrations also remain unapplied remotely.
+- Real SQL checks caught/covered disputed inventory release, concurrent reservation exclusion and duplicate settlement, committed object deletion/move and permissive-policy leakage.
+- pnpm/Corepack broad lint sometimes stalled; direct installed CLI diagnosed tooling, subsequent complete pnpm lint/typecheck passed. No architectural workaround introduced.
+- Existing user dev server is localhost3001, PID17148 when observed. Reused it; failed3100 launch was not kept. Production build used RENTRAL_BUILD_DIR=.next-verify so preview was preserved.
+- User began putting credentials in .env.staging.example. Preserved entries in ignored .env.staging and sanitized example. Told user to edit only .env.staging and replace the exposed server key. Never repeat key values. DIRECT_URL had an application HTTP URL and still needs an actual PostgreSQL connection. Do not inspect/print secret file contents.
 
-## Verification
+## Final verification
 
-- Latest: 159 unit regressions, 28 Playwright route/browser checks across
-  320/390/768/1440px, local PostgreSQL RLS checks, lint, TypeScript, production build
-  and whitespace checks passed. Earlier Prisma validation remains unchanged.
-- New checks cover source authorization, path validation, short-lived no-store
-  signing, failure handling and static error/poster rendering. Browser tests cover
-  public/auth compatibility and anonymous guards, not authenticated media playback.
-- New tests cover bearer-secret gates, exact proxy exception, default-disabled DB
-  isolation, bounded scheduling, stale claims, missed callbacks, asset binding,
-  partial failure, and webhook/poller races using mocks. They do NOT prove live SQL
-  concurrency, deployed scheduling, Mux ingestion or actual HLS playback.
-- Browser tests require escalation for Chrome/localhost access; build requires
-  network for the configured Geist font. Sandbox failures were environmental,
-  and approved reruns passed. Existing dev server on localhost:3000 was reused.
-- Supabase Storage info() uses camel-cased contentType. Mux SDK 15 unwrap() is async;
-  await it. Signed-only output requires a video track and duration 0 < n <= 125.
+- pnpm test: 293 tests passed across30 files.
+- pnpm lint: passed.
+- pnpm typecheck: passed (next typegen + strict tsc).
+- Prisma validate/generate: passed.
+- Production build: passed, separate .next-verify output.
+- Playwright:56 checks passed across320/390/768/1440px, public/auth/guidance, reduced motion, search/menu, private-route and JSON/worker guards. Mobile+desktop homepage screenshots inspected.
+- Isolated Docker PostgreSQL/PostGIS:17 migrations replayed; RLS/private Realtime, referenced uploads, exact receipt uniqueness, disputed/overlap availability, actual concurrent reservations and duplicate settlements, balanced/append-only ledger and Insights cohort threshold passed.
+- Unit mocks/browser guards do not prove live providers or authenticated device journeys. No remote SQL/provider payment was executed.
 
-## Current State
+## Current state
 
-- User reports Mux CLI connection now works. Presence-only local check confirms all
-  five Mux credentials present, but MUX_ENABLED=false. Gemini key remains missing.
-  The exposed CLI webhook secret should have been replaced; rotation not verified.
-- No remote database writes, assets, credentials or feature flags changed this pass.
-  The user was asked asynchronously whether separate staging migrations are verified;
-  no answer was received before the implementation checks finished.
-- Pending migrations remain unverified here:
-  `20260924130000_harden_profile_access`, `20260924150000_add_mux_media_pipeline`,
-  `20260924170000_private_listing_media` (local SQL/RLS verified only).
-  Do not assume they were applied based on the user's CLI setup confirmation.
-- One private-bucket migration and no dependency were added. Existing worktree is heavily dirty with
-  earlier auth/media work and unrelated user changes. Do not revert or auto-commit.
-- Website preview: http://localhost:3000. Do not run a second Next dev process in
-  the same working directory or stop the user's existing server unnecessarily.
+- Source saved; no commit/push made. User is actively configuring ignored staging values. Do not stage secret files or overwrite that work.
+- Complete setup: context/staging-setup.md and .env.staging.example. Command wrapper: pnpm staging prisma migrate status/deploy/validate/generate/diff; pnpm staging dev --port3101.
+- Current release status and exact incomplete work: context/release-readiness.md. Main technical reviews: context/security-review.md, identity-review.md, reservations-implementation.md, discovery-implementation.md, vault-implementation.md, homepage-implementation.md, mobile-api.md.
+- Local task-owned Docker container rentral-platform-test has no published ports and label rentral.task=platform-verification. pnpm test:database resets only its marker-protected fixture, never app env/DB.
 
-## Next Session Starts With
+## Next session starts with
 
-1. Confirm separate Supabase staging configuration and migration verification.
-   Follow `context/media-staging.md` before enabling Mux or its worker. Read-only
-   `scripts/audit-database.ts` exists; do not run db push against shared databases.
-2. Follow `private-media-plan.md` for staged bucket cutover. Code is ready but the
-   currently public Storage originals are NOT protected by signed Mux playback.
-   Existing submitted listings need an approved backfill before enabling Mux.
-3. Deploy/test the worker schedule in staging. Verify actual callbacks/playback,
-   missed-event recovery, current KYC gating and races. Investigate unknown assets
-   by passthrough; never blindly reset uncertain/submitting jobs to queued.
-4. Add committed-object deletion protection and durable orphan cleanup; current
-   owner DELETE policies still permit deleting referenced files. Finish camera/GPS
-   device acceptance. Browser GPS is
-   spoofable evidence, not hardware attestation. Preserve coordinate privacy.
-5. Continue document review and payment milestones only after inventory acceptance;
-   check current Gemini/provider APIs and obtain sandbox credentials locally.
+1. User completes .env.staging (including real Postgres URLs, publishable key and rotated server key). Do not copy values into chat or source. Use guarded staging launcher to verify the separate target.
+2. Apply/test all migrations in staging only; verify hosted Storage/RLS and existing-data cutover, then staged identity/media/provider acceptance per guide. Enable individual gates only after acceptance.
+3. Obtain OPay approved merchant contracts. OPay adapter, bank-recipient onboarding, real refunds/payout reconciliation, hold-credit allocation and70/30 compensation execution still require implementation.
+4. Complete authenticated provider/device/accessibility/load/backup/monitoring acceptance and deployment. Finalize operating/privacy agreements.
+5. Remaining product work: safety-notice/appeal policy, reputation ranking, sponsored ads/enterprise billing, richer evidence-based Insights models. Squat-Mates AI stays later.
 
-## Open Risks
+## Open questions
 
-- Private profile-table grants still require the security migration and staging audit.
-- Didit concurrency, revocation, real provider fixtures and SMTP/OAuth acceptance.
-- Mux ready assets do not auto-publish listings or satisfy document/payment checks.
-- Owner financial/lease cards remain mock; bookings, payments, messaging and admin
-  are incomplete. Do not present the website as production-complete.
+- Staging keys/connections are not yet verified. No live sandbox identities, provider events, external schedules or approved custody arrangements were accepted.
+- Financial collection alone is not escrow. Keep payments disabled until settlement/refund/hold-credit obligations are implemented and accepted.
+- Arbitrary offline bank references cannot be validated by generic Paystack verification. Renewal submissions stay pending evidence review; never turn text into verified fact data or a credit score.

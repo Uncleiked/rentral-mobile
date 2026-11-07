@@ -1,5 +1,28 @@
 # UI Registry
 
+### Holding credit and rental balance
+
+Updated 2026-11-07. Files: `components/bookings/BookingRequestForm.tsx`, `BookingControls.tsx`, `ListingBookingActions.tsx`, booking details/new routes.
+
+- Credit summaries match booking surfaces: `rounded-2xl border border-border-subtle bg-surface-card p-5 sm:p-7`; compact notices use `rounded-xl bg-background-app p-4`.
+- Financial labels use `text-sm text-text-muted`, values use `font-semibold`; format all amounts from integer kobo with `formatKobo`. Display gross total separately from paid hold credit and additional payment.
+- Conversion actions use existing `min-h-11 rounded-xl` controls, `bg-accent-primary text-text-inverse`; supporting links use `text-accent-primary underline underline-offset-4`.
+- A holding notice remains `border-glass-border-warning bg-glass-warning text-text-secondary`. Its continuation link resolves the current user's own hold on the server without displaying another renter's identity.
+- Same-date conversion fields are disabled and seeded from the original server dates. Sending a request consumes no credit. Cancellation/expiry language explains settlement review without claiming a provider refund or payout.
+
+### Responsive marketplace, listing detail and profile surfaces
+
+Updated 2026-11-07. Files: `components/layout/MarketplaceShell.tsx`, `components/feed/*`, listing detail and profile views.
+
+- Top navigation: `bg-background-app/95 backdrop-blur-xl border-b border-border-subtle`; mobile navigation includes safe-area padding. No reserved left gutter or fabricated suggestions.
+- Editorial titles: `text-3xl sm:text-4xl font-semibold tracking-tight`; eyebrow: `text-[10px] uppercase tracking-[0.2em] text-accent-hover`.
+- Grid previews: `rounded-2xl border border-border-subtle bg-surface-card`; protected posters are `unoptimized`. Hover uses `duration-700 group-hover:scale-105`.
+- Search uses semantic surface pills, explicit labels and viewport-bounded filter popovers. Controls retain `min-h-11` touch targets.
+- Primary actions: `rounded-full bg-accent-primary px-5 py-3 text-xs font-semibold text-text-inverse hover:bg-accent-hover`; secondary: `border-border-subtle hover:bg-glass-light`.
+- Saved hearts reflect persisted results. Unavailable controls explain why. Walkthrough playback is user initiated. Native/copy sharing reports failure.
+- Detail fee rows, host records and reviews display projected real data. Neighborhoods obscure street addresses; identity badges never guarantee ownership/condition.
+- Owner profiles show actual assets plus bookings/saved/activity shortcuts. No fabricated balance, lease, credit, license, followers or device count is rendered.
+
 Living document. Updated after every component is built. Read this before building any new component — match existing patterns exactly before inventing new ones.
 
 ---
@@ -81,12 +104,22 @@ This is the canonical registry required by AGENTS.md. The root `ui-registry.md` 
 
 ### Navigation & Header
 
-- **File Path**: [app/page.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/app/page.tsx)
-- **Menu Container**: `hidden lg:flex items-center gap-1 rounded-full border border-glass-border-medium bg-glass-dark p-1.5 text-[11px] font-bold uppercase tracking-wider text-text-secondary backdrop-blur-lg`
-- **Auth Pill Container**: `relative z-20 flex items-center gap-2 rounded-full border border-glass-border-medium bg-glass-dark p-1 text-[11px] font-bold uppercase tracking-wider backdrop-blur-lg`
-- **Logo Image**: `h-8 w-8 object-contain brightness-0 invert` (renders black paths as white)
+- **Files**: `components/home/HomeNavigation.tsx`, scoped `.rentral-home` CSS; updated 2026-11-07.
+- **Header**: full-width transparent hero header with `border-glass-border-light`, Inter wordmark, restrained `text-sm font-medium text-text-secondary` links.
+- **Sign-in**: `home-nav-signin`, using `bg-text-primary text-text-inverse`, rounded pill, 13px semibold.
+- **Mobile menu**: `bg-surface-card border-border-subtle`, 20px radius, 52px-high links, native button expanded state, Escape/outside dismissal. Desktop navigation starts at `lg`.
+- **Logo Image**: `h-8 w-auto brightness-0 invert`; intrinsic dimensions preserve its aspect ratio.
 
 ### Hero Layout
+
+- **Current files/pattern (2026-11-07)**: `app/page.tsx`, `components/home/HomeMotion.tsx`; full-bleed local illustrative image with semantic brand/background gradient. Inter 44-128px fluid title, medium/light weights, tight tracking, small uppercase eyebrow.
+- **Current motion**: GSAP image-mask expansion, heading entrance, modest parallax, section reveals. Scoped context/media cleanup; reduced-motion users receive visible static content.
+- **Search**: brand-vault-muted surface, glass-medium border, 24px radius, 17px padding. Labelled category radios and native GET search. Active radio uses glass-light; submit uses accent-primary/inverse.
+- **Category cards**: 18px image radius, glass-dark labels/arrows, 21px medium title, 13px muted copy. Photos are explicitly illustrative.
+- **CTA**: `home-button-primary`, semantic emerald/inverse, 12px semibold, 54px minimum height, rounded pill, emerald hover and 0.98 active scale.
+- **Sections/footer**: app surface for editorial sections, brand-vault-muted trust section, subtle dividers. Current details in `context/homepage-implementation.md`.
+
+Historical hero observations below are superseded by the current patterns above.
 
 - **File Path**: [app/page.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/app/page.tsx)
 - **Hero Wrapper**: `hero-section relative isolate overflow-hidden bg-brand-vault px-6 pb-20 pt-6 sm:px-10 lg:px-16 lg:pb-24`
@@ -175,3 +208,55 @@ This is the canonical registry required by AGENTS.md. The root `ui-registry.md` 
 - **Listings Grid / Empty State**: reuses `components/profile/ListingsGrid.tsx` + `components/profile/ListingCard.tsx` verbatim — do not fork these for the hub; both profile (visitor view) and this hub must stay visually identical since they render the same data shape (`ListingSummary[]`)
 
 **Pattern notes:** This is the first place `ListingsGrid` renders for the *owner's own* listings (previously only used on visitor profile views) — its empty state intentionally has no built-in CTA, so every page embedding it must supply its own "Create Listing" / routing action per `ui-rules.md`'s Empty States rule. Sidebar and bottom-nav both route their "Listing" item here, never straight to the wizard.
+
+### Platform workspaces and privacy controls (2026-11-07)
+
+Files: components/messaging/ChatPanel.tsx, components/admin/ReviewControls.tsx,
+components/trust/BookingFeedback.tsx, components/notifications/NotificationItem.tsx,
+components/privacy/AnalyticsPreferences.tsx, components/renewals/RenewalForm.tsx.
+
+- Surface: bg-surface-card, border border-border-subtle, rounded-2xl, p-5/p-6.
+- Primary action: bg-accent-primary text-text-inverse rounded-xl px-5 py-3;
+  pending controls disabled:opacity-50, visible inline status/error copy.
+- Inputs: bg-background-app border-border-subtle rounded-xl p-3 text-sm;
+  labels text-text-secondary, help text-text-muted, error text-trust-flagged.
+- Chat: sender bg-accent-muted, other participant bg-background-app, rounded-2xl;
+  bounded scrolling, wrap long messages, preserve drafts on failed delivery.
+- Scope: staff controls render after server authorization; provider/configuration
+  gaps are honest unavailable states. No fabricated scores, balances or payment success.
+- Public guidance uses PublicPage with the same tokens; privacy consent defaults off.
+- Listing address edits return to review and confirmed bookings prevent relocation.
+
+### Holding status and booking availability (2026-11-07)
+
+Files: components/listing/ListingBookingActions.tsx, components/feed/ListingGridCard.tsx.
+Cards show a semantic-accent on-hold badge. Details show the deadline and pause
+new booking controls while preserving walkthrough, save and contact access. Only
+the deadline is public; the holder identity is never projected. Flexible holding
+days and original quoted fees stay visible in booking details; actual credit or
+compensation is never presented as settled before provider execution.
+
+### Reviewed safety notices and appeals (2026-11-07)
+
+Files: components/trust/SafetyNoticeBanner.tsx, SafetyAppealForm.tsx,
+SafetyNoticeControls.tsx, SafetyAppealControls.tsx, SafetyNoticeAdminQueue.tsx.
+
+- Review surfaces: bg-surface-card, border-border-subtle, rounded-2xl, p-5/p-6.
+- Caution banner: bg-glass-warning, border-glass-border-warning, rounded-2xl,
+  px-4 py-4, text-text-primary. Fixed copy only; never expose report/evidence text.
+- Fields: bg-background-app, border-border-subtle, rounded-xl, p-3, text-sm;
+  focus:border-accent-primary focus:ring-1 focus:ring-accent-primary.
+- Actions: min-h-11 rounded-xl px-5 py-3, primary bg-accent-primary
+  text-text-inverse, hover:bg-accent-hover, disabled:opacity-50. Visible focus
+  outlines and inline role=status feedback. Full width mobile; sm:w-auto.
+- Text: text-text-secondary body; text-text-muted help; whitespace-pre-wrap and
+  break-words for member submissions. Stack forms/cards on narrow viewports.
+- Staff review creates notices; low ratings and report submission alone never
+  render caution banners. Affected accounts can appeal even after KYC revocation.
+
+### Compliance document privacy boundary (2026-11-07)
+
+Backend-only Storage hardening introduces no new UI component or visual pattern.
+Existing document upload/preview controls retain their established semantic tokens.
+Documents stay owner-private; private originals must never gain a public fallback
+when an authorization or preview request fails.

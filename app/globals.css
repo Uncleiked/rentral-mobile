@@ -585,3 +585,168 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
+/* Rentral's editorial landing page. Keep these rules scoped to the homepage. */
+.rentral-home { overflow: clip; }
+.rentral-home .home-container { width: min(1360px, calc(100% - 96px)); margin-inline: auto; }
+.rentral-home a:focus-visible, .rentral-home button:focus-visible, .rentral-home input:focus-visible { outline: 2px solid var(--color-accent-hover); outline-offset: 5px; }
+.rentral-home .home-skip-link { position: fixed; z-index: 100; left: 24px; top: 16px; padding: 12px 20px; background: var(--color-accent-primary); color: var(--color-text-inverse); border-radius: 12px; transform: translateY(-180%); }
+.rentral-home .home-skip-link:focus { transform: translateY(0); }
+.rentral-home .home-header { position: absolute; inset-inline: 0; top: 0; z-index: 30; border-bottom: 1px solid var(--color-glass-border-light); }
+.rentral-home .home-navigation { position: relative; display: flex; height: 92px; justify-content: space-between; align-items: center; gap: 24px; }
+.rentral-home .home-wordmark { display: inline-flex; align-items: center; gap: 9px; font-size: 29px; font-weight: 650; letter-spacing: -1.7px; }
+.rentral-home .home-nav-signin { display: inline-flex; align-items: center; justify-content: center; gap: 20px; border: 1px solid var(--color-glass-border-medium); border-radius: 9999px; padding: 13px 23px; background: var(--color-text-primary); color: var(--color-text-inverse); font-size: 13px; font-weight: 650; transition: background 180ms; }
+.rentral-home .home-nav-signin:hover { background: var(--color-text-secondary); }
+.rentral-home .home-menu-toggle { align-items: center; justify-content: center; height: 44px; width: 44px; border: 1px solid var(--color-glass-border-medium); border-radius: 50%; background: var(--color-glass-dark); }
+.rentral-home .home-mobile-menu { position: absolute; top: 76px; inset-inline: 0; padding: 12px; background: var(--color-surface-card); border: 1px solid var(--color-border-subtle); border-radius: 20px; box-shadow: 0 20px 60px var(--color-glass-dark); }
+.rentral-home .home-mobile-menu a { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 12px; border-radius: 10px; font-size: 14px; }
+.rentral-home .home-mobile-menu a:hover { background: var(--color-glass-light); }
+.rentral-home .home-hero { position: relative; display: flex; align-items: center; min-height: min(860px, 100svh); min-height: max(720px, min(860px, 100svh)); padding-top: 110px; padding-bottom: 120px; background: var(--color-brand-vault-muted); }
+.rentral-home .home-hero-mask { position: absolute; inset: 0; overflow: hidden; }
+.rentral-home .home-hero-photo { object-position: 62% center; }
+.rentral-home .home-hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in oklch, var(--color-brand-vault-muted) 92%, transparent) 0%, color-mix(in oklch, var(--color-background-app) 50%, transparent) 48%, color-mix(in oklch, var(--color-background-app) 10%, transparent) 100%), linear-gradient(0deg, color-mix(in oklch, var(--color-background-app) 80%, transparent), transparent 32%, transparent 72%, color-mix(in oklch, var(--color-background-app) 65%, transparent)); }
+.rentral-home .home-hero-content { position: relative; z-index: 2; padding-top: 35px; }
+.rentral-home .home-eyebrow { display: flex; align-items: center; gap: 10px; font-size: 10px; font-weight: 650; letter-spacing: 0.17em; text-transform: uppercase; line-height: 1.8; }
+.rentral-home .home-status-dot { display: inline-block; height: 6px; width: 6px; flex: 0 0 6px; background: var(--color-accent-hover); border-radius: 50%; box-shadow: 0 0 0 4px var(--color-accent-muted); }
+.rentral-home .home-title { margin-top: 29px; font-size: clamp(64px, 8.2vw, 128px); font-weight: 500; letter-spacing: -0.07em; line-height: 1.025; }
+.rentral-home .home-title-line { display: block; overflow: hidden; padding-bottom: 0.09em; margin-bottom: -0.09em; }
+.rentral-home .home-title-word { display: inline-block; transform-origin: left bottom; }
+.rentral-home .home-title-soft { font-weight: 350; color: var(--color-text-secondary); }
+.rentral-home .home-hero-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 37px; max-width: 840px; }
+.rentral-home .home-hero-bottom p { font-size: 15px; line-height: 1.8; color: var(--color-text-secondary); }
+.rentral-home .home-round-link { display: inline-flex; height: 54px; width: 54px; flex: 0 0 54px; align-items: center; justify-content: center; border: 1px solid var(--color-glass-border-medium); background: var(--color-glass-light); backdrop-filter: blur(12px); border-radius: 50%; transition: transform 200ms, background 200ms; }
+.rentral-home .home-round-link:hover { transform: translateY(4px); background: var(--color-glass-light-hover); }
+.rentral-home .home-hero-caption { position: absolute; right: 48px; bottom: 105px; display: flex; align-items: center; gap: 36px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--color-text-secondary); }
+.rentral-home .home-search-section { position: relative; z-index: 3; margin-top: -55px; }
+.rentral-home .home-search { display: flex; align-items: center; gap: 30px; padding: 17px; background: var(--color-brand-vault-muted); border: 1px solid var(--color-glass-border-medium); border-radius: 24px; box-shadow: 0 20px 45px var(--color-glass-dark); }
+.rentral-home .home-search-categories { display: flex; gap: 4px; flex: 0 0 auto; min-width: 0; }
+.rentral-home .home-search-category { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 66px; padding: 14px 20px; border-radius: 14px; color: var(--color-text-muted); font-size: 13px; cursor: pointer; transition: background 180ms, color 180ms; }
+.rentral-home .home-search-category:hover { color: var(--color-text-primary); }
+.rentral-home .home-search-category-active { background: var(--color-glass-light); color: var(--color-text-primary); }
+.rentral-home .home-search-category:focus-within { outline: 2px solid var(--color-accent-hover); outline-offset: 2px; }
+.rentral-home .home-search-main { display: flex; flex: 1; min-width: 0; align-items: center; gap: 18px; }
+.rentral-home .home-search-location { display: flex; flex: 1; min-width: 0; gap: 14px; align-items: center; border-left: 1px solid var(--color-glass-border-medium); padding-left: 28px; }
+.rentral-home .home-search-submit { display: flex; align-items: center; justify-content: space-between; gap: 26px; min-height: 64px; flex: 0 0 auto; border-radius: 14px; padding: 18px 24px; background: var(--color-accent-primary); color: var(--color-text-inverse); font-size: 13px; font-weight: 650; transition: background 180ms; }
+.rentral-home .home-search-submit:hover, .rentral-home .home-button-primary:hover { background: var(--color-accent-hover); }
+.rentral-home .home-search-footnote { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 5px; font-size: 11px; color: var(--color-text-muted); }
+.rentral-home .home-search-footnote span { display: inline-flex; align-items: center; gap: 8px; }
+.rentral-home .home-categories { padding-top: 96px; padding-bottom: 106px; scroll-margin-top: 35px; }
+.rentral-home .home-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin-bottom: 42px; }
+.rentral-home .home-section-heading h2, .rentral-home .home-host-copy h2 { margin-top: 14px; font-size: clamp(36px, 4.4vw, 66px); font-weight: 450; line-height: 1.12; letter-spacing: -0.055em; }
+.rentral-home .home-text-link { display: inline-flex; align-items: center; gap: 18px; font-size: 12px; font-weight: 550; padding-bottom: 8px; border-bottom: 1px solid var(--color-glass-border-medium); transition: color 180ms, border-color 180ms; }
+.rentral-home .home-text-link:hover { color: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.rentral-home .home-category-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; }
+.rentral-home .home-category-card { display: block; min-width: 0; }
+.rentral-home .home-category-photo { position: relative; aspect-ratio: 4 / 4.4; overflow: hidden; border-radius: 18px; background: var(--color-surface-card); }
+.rentral-home .home-category-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, var(--color-glass-dark), transparent 35%, transparent 65%, var(--color-glass-dark)); pointer-events: none; }
+.rentral-home .home-category-label { position: absolute; z-index: 1; top: 20px; left: 20px; padding: 9px 14px; border: 1px solid var(--color-glass-border-medium); border-radius: 9999px; background: var(--color-glass-dark); backdrop-filter: blur(12px); font-size: 11px; font-weight: 550; }
+.rentral-home .home-category-arrow { position: absolute; z-index: 1; right: 20px; bottom: 20px; display: flex; align-items: center; justify-content: center; height: 43px; width: 43px; border: 1px solid var(--color-glass-border-medium); border-radius: 50%; backdrop-filter: blur(12px); background: var(--color-glass-dark); transition: background 200ms, transform 200ms; }
+.rentral-home .home-category-card:hover .home-category-arrow { background: var(--color-accent-primary); color: var(--color-text-inverse); transform: rotate(45deg); }
+.rentral-home .home-category-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-top: 24px; }
+.rentral-home .home-category-heading h3 { font-size: 21px; font-weight: 500; letter-spacing: -0.04em; }
+.rentral-home .home-category-heading span { font-size: 10px; color: var(--color-text-muted); }
+.rentral-home .home-category-card > p { margin-top: 11px; max-width: 330px; color: var(--color-text-muted); font-size: 13px; line-height: 1.8; }
+.rentral-home .home-trust-section { background: var(--color-brand-vault-muted); padding-block: 100px; border-block: 1px solid var(--color-glass-border-light); scroll-margin-top: 25px; }
+.rentral-home .home-trust-heading h2 { max-width: 1000px; margin-top: 22px; font-size: clamp(35px, 4.3vw, 65px); font-weight: 450; letter-spacing: -0.055em; line-height: 1.16; }
+.rentral-home .home-trust-description { margin-top: 24px; max-width: 470px; color: var(--color-text-muted); font-size: 14px; line-height: 1.85; }
+.rentral-home .home-trust-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 42px; margin-top: 60px; }
+.rentral-home .home-trust-step { border-top: 1px solid var(--color-glass-border-medium); padding-top: 24px; }
+.rentral-home .home-trust-step-top { display: flex; align-items: center; justify-content: space-between; }
+.rentral-home .home-trust-step-top span { font-size: 11px; color: var(--color-text-muted); }
+.rentral-home .home-trust-step h3 { max-width: 270px; margin-top: 32px; font-size: 22px; font-weight: 450; letter-spacing: -0.03em; line-height: 1.35; }
+.rentral-home .home-trust-step > p { max-width: 340px; margin-top: 16px; color: var(--color-text-muted); font-size: 13px; line-height: 1.85; }
+.rentral-home .home-host-section { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 8%; padding-block: 110px; }
+.rentral-home .home-host-photo { position: relative; overflow: hidden; height: 520px; border-radius: 22px; background: var(--color-surface-card); }
+.rentral-home .home-host-copy > p:not(.home-eyebrow) { max-width: 415px; margin-top: 28px; color: var(--color-text-muted); font-size: 14px; line-height: 1.85; }
+.rentral-home .home-button-primary { display: inline-flex; align-items: center; justify-content: space-between; gap: 30px; min-height: 54px; margin-top: 33px; padding: 16px 24px; background: var(--color-accent-primary); color: var(--color-text-inverse); border-radius: 9999px; font-size: 12px; font-weight: 650; transition: background 180ms, transform 180ms; }
+.rentral-home .home-button-primary:active { transform: scale(0.98); }
+.rentral-home .home-host-note { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: var(--color-text-muted); font-size: 10px; }
+.rentral-home .home-final-section { padding-block: 85px 115px; border-top: 1px solid var(--color-border-subtle); }
+.rentral-home .home-final-section h2 { margin-top: 20px; font-size: clamp(39px, 6vw, 86px); font-weight: 450; letter-spacing: -0.065em; line-height: 1.12; }
+.rentral-home .home-footer { border-top: 1px solid var(--color-border-subtle); padding-top: 54px; }
+.rentral-home .home-footer-top { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 35px; align-items: start; padding-bottom: 58px; }
+.rentral-home .home-footer-wordmark { font-size: clamp(44px, 7vw, 96px); font-weight: 550; letter-spacing: -0.08em; line-height: 1; }
+.rentral-home .home-footer-top > p { padding-top: 8px; color: var(--color-text-muted); font-size: 14px; line-height: 1.8; }
+.rentral-home .home-footer-top nav { display: flex; flex-direction: column; gap: 16px; align-items: flex-end; padding-top: 9px; font-size: 12px; }
+.rentral-home .home-footer-top nav a { display: inline-flex; align-items: center; gap: 16px; }
+.rentral-home .home-footer nav a:hover, .rentral-home .home-footer-bottom a:hover { color: var(--color-accent-hover); }
+.rentral-home .home-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-block: 25px; border-top: 1px solid var(--color-border-subtle); color: var(--color-text-muted); font-size: 10px; }
+.rentral-home .home-footer-bottom > span { display: flex; align-items: center; gap: 7px; }
+.rentral-home .home-footer-bottom > div { display: flex; gap: 22px; }
+
+@media (min-width: 1600px) {
+  .rentral-home .home-hero-caption { right: max(48px, calc((100% - 1360px) / 2)); }
+}
+@media (max-width: 1100px) {
+  .rentral-home .home-search { gap: 18px; }
+  .rentral-home .home-search-category { padding-inline: 13px; }
+  .rentral-home .home-search-location { padding-left: 18px; }
+  .rentral-home .home-search-submit { gap: 14px; padding-inline: 18px; }
+  .rentral-home .home-host-photo { height: 440px; }
+  .rentral-home .home-category-heading h3 { font-size: 18px; }
+}
+@media (max-width: 767px) {
+  .rentral-home .home-container { width: calc(100% - 40px); }
+  .rentral-home .home-navigation { height: 78px; gap: 12px; }
+  .rentral-home .home-wordmark { font-size: 25px; gap: 7px; }
+  .rentral-home .home-wordmark img { height: 27px; }
+  .rentral-home .home-nav-signin { padding: 11px 17px; font-size: 12px; }
+  .rentral-home .home-menu-toggle { display: flex; }
+  .rentral-home .home-hero { min-height: 650px; min-height: max(600px, 82svh); padding-top: 90px; padding-bottom: 125px; }
+  .rentral-home .home-hero-photo { object-position: 68% center; }
+  .rentral-home .home-hero-shade { background: linear-gradient(90deg, color-mix(in oklch, var(--color-brand-vault-muted) 89%, transparent), color-mix(in oklch, var(--color-background-app) 20%, transparent)), linear-gradient(0deg, color-mix(in oklch, var(--color-background-app) 85%, transparent), transparent 65%); }
+  .rentral-home .home-hero-content { padding-top: 25px; }
+  .rentral-home .home-title { margin-top: 30px; font-size: clamp(44px, 10.5vw, 78px); letter-spacing: -0.065em; }
+  .rentral-home .home-eyebrow { font-size: 9px; letter-spacing: 0.12em; }
+  .rentral-home .home-hero-bottom { margin-top: 26px; gap: 15px; }
+  .rentral-home .home-hero-bottom p { font-size: 13px; max-width: 275px; }
+  .rentral-home .home-round-link { width: 44px; height: 44px; flex-basis: 44px; }
+  .rentral-home .home-hero-caption { right: 20px; bottom: 92px; font-size: 8px; }
+  .rentral-home .home-hero-caption span:first-child { display: none; }
+  .rentral-home .home-search-section { margin-top: -72px; }
+  .rentral-home .home-search { display: block; padding: 12px; border-radius: 20px; }
+  .rentral-home .home-search-categories { justify-content: space-between; gap: 6px; }
+  .rentral-home .home-search-category { flex: 1; min-height: 52px; padding: 11px 9px; gap: 7px; font-size: 12px; }
+  .rentral-home .home-search-category svg { width: 18px; height: 18px; }
+  .rentral-home .home-search-main { margin-top: 14px; gap: 12px; padding: 8px 0 0; border-top: 1px solid var(--color-glass-border-light); }
+  .rentral-home .home-search-location { border: 0; padding-left: 4px; gap: 10px; }
+  .rentral-home .home-search-location input { font-size: 12px; }
+  .rentral-home .home-search-submit { min-height: 53px; padding: 14px; gap: 0; font-size: 0; }
+  .rentral-home .home-search-submit svg { width: 21px; height: 21px; }
+  .rentral-home .home-search-footnote { padding: 15px 1px; font-size: 9px; gap: 10px; }
+  .rentral-home .home-search-footnote > span:last-child { text-align: right; }
+  .rentral-home .home-categories { padding-top: 65px; padding-bottom: 70px; }
+  .rentral-home .home-section-heading { align-items: flex-start; margin-bottom: 29px; gap: 16px; }
+  .rentral-home .home-section-heading h2 { font-size: 40px; }
+  .rentral-home .home-section-heading > .home-text-link { margin-top: 30px; max-width: 125px; gap: 7px; font-size: 10px; line-height: 1.7; }
+  .rentral-home .home-section-heading > .home-text-link svg { flex: 0 0 15px; }
+  .rentral-home .home-category-grid { grid-template-columns: 1fr; gap: 35px; }
+  .rentral-home .home-category-photo { aspect-ratio: 4 / 3.5; border-radius: 16px; }
+  .rentral-home .home-category-heading { margin-top: 18px; }
+  .rentral-home .home-category-heading h3 { font-size: 23px; }
+  .rentral-home .home-category-card > p { margin-top: 8px; max-width: 100%; }
+  .rentral-home .home-trust-section { padding-block: 67px; }
+  .rentral-home .home-trust-heading h2 { font-size: 37px; }
+  .rentral-home .home-trust-description { font-size: 13px; }
+  .rentral-home .home-trust-grid { grid-template-columns: 1fr; gap: 30px; margin-top: 40px; }
+  .rentral-home .home-trust-step { padding-top: 20px; }
+  .rentral-home .home-trust-step h3 { margin-top: 18px; max-width: 100%; font-size: 22px; }
+  .rentral-home .home-trust-step > p { margin-top: 12px; max-width: 100%; }
+  .rentral-home .home-host-section { grid-template-columns: 1fr; padding-block: 70px; gap: 38px; }
+  .rentral-home .home-host-photo { height: 380px; border-radius: 18px; }
+  .rentral-home .home-host-copy h2 { font-size: 45px; }
+  .rentral-home .home-host-copy > p:not(.home-eyebrow) { font-size: 13px; margin-top: 22px; }
+  .rentral-home .home-final-section { padding-block: 65px 75px; }
+  .rentral-home .home-final-section h2 { font-size: 40px; }
+  .rentral-home .home-footer { padding-top: 35px; }
+  .rentral-home .home-footer-top { grid-template-columns: 1fr 1fr; gap: 25px; padding-bottom: 38px; }
+  .rentral-home .home-footer-wordmark { font-size: 65px; }
+  .rentral-home .home-footer-top > p { grid-column: 1; font-size: 12px; padding-top: 0; }
+  .rentral-home .home-footer-top nav { grid-column: 2; grid-row: 1 / 3; font-size: 11px; }
+  .rentral-home .home-footer-bottom { flex-wrap: wrap; gap: 16px; padding-block: 22px; font-size: 9px; }
+  .rentral-home .home-footer-bottom > p { flex: 0 0 100%; }
+  .rentral-home .home-footer-bottom > div { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rentral-home *, .rentral-home *::before, .rentral-home *::after { scroll-behavior: auto; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

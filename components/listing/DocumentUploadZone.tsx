@@ -7,15 +7,15 @@ import { useRentralStore } from '@/store/useRentralStore'
 const DOCUMENT_COPY: Record<string, { title: string; description: string }> = {
   house: {
     title: 'Certificate of Occupancy / Deed of Assignment',
-    description: 'Upload proof of ownership so Gemini can run a forensic authenticity check.',
+    description: 'Upload the title deed, Certificate of Occupancy, or signed authority to list. Tenants and agents must include permission from the person entitled to let the property.',
   },
   car: {
     title: 'Vehicle Particulars',
-    description: 'Upload the vehicle logbook or registration so Gemini can verify authenticity.',
+    description: 'Upload current vehicle registration / particulars and proof that you are entitled to list the vehicle. Include relevant insurance documents in the same PDF if available.',
   },
   boat: {
     title: 'Boat Registration',
-    description: 'Upload the vessel registration or captain license for verification.',
+    description: 'Upload vessel registration and authority to operate or list it. Include the captain’s licence and relevant safety permits in the same PDF when a captain is provided.',
   },
 }
 
@@ -50,6 +50,10 @@ export function DocumentUploadZone() {
       setFileError('That file type is not supported — upload a PDF, JPG, or PNG.')
       return
     }
+    if (file.size === 0) {
+      setFileError('That document is empty. Choose a PDF, JPG, or PNG.')
+      return
+    }
     if (file.size > MAX_DOCUMENT_BYTES) {
       setFileError('That file is too large — documents must be 10MB or smaller.')
       return
@@ -62,12 +66,21 @@ export function DocumentUploadZone() {
     <div className="w-full max-w-md mx-auto">
       <div className="mb-8 text-center">
         <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
-          Verify ownership
+          Ownership and listing authority
         </h2>
         <p className="text-sm text-text-secondary">{copy.title}</p>
       </div>
 
-      <div
+      <input
+        ref={inputRef}
+        type="file"
+        aria-label="Proof of ownership and listing authority"
+        accept=".pdf,.jpg,.jpeg,.png"
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      <button
+        type="button"
         onDragOver={(e) => {
           e.preventDefault()
           setIsDragging(true)
@@ -79,18 +92,10 @@ export function DocumentUploadZone() {
           handleFiles(e.dataTransfer.files)
         }}
         onClick={() => inputRef.current?.click()}
-        className={`flex cursor-pointer flex-col items-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center transition-all ${
+        className={`flex w-full cursor-pointer flex-col items-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center transition-all focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-primary ${
           isDragging ? 'border-accent-primary bg-accent-muted' : 'border-border-subtle bg-surface-card'
         }`}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-
         {hasDocument ? (
           <>
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-muted">
@@ -105,17 +110,17 @@ export function DocumentUploadZone() {
               <UploadCloud className="h-6 w-6 text-text-muted" />
             </span>
             <p className="text-sm font-medium text-text-secondary">{copy.description}</p>
-            <p className="text-xs font-medium text-text-muted">PDF, JPG, or PNG</p>
+            <p className="text-xs font-medium text-text-muted">PDF, JPG, or PNG · up to 10 MB</p>
           </>
         )}
-      </div>
+      </button>
 
-      {fileError && <p className="mt-3 text-center text-xs text-trust-flagged">{fileError}</p>}
+      {fileError && <p role="alert" className="mt-3 text-center text-xs text-trust-flagged">{fileError}</p>}
 
       <div className="mt-4 flex items-center gap-2 rounded-xl border border-glass-border-success bg-accent-muted px-4 py-3">
         <ShieldCheck className="h-4 w-4 shrink-0 text-accent-hover" />
         <p className="text-xs font-medium text-text-secondary">
-          AI Forgery Check — documents are screened for tampering before your listing goes live.
+          Documents are required before submission. Automated checks, when available, support review; they do not establish ownership or replace a legal check. Uncertain documents need manual review.
         </p>
       </div>
 
