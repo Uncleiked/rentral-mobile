@@ -25,7 +25,7 @@ beforeEach(() => {
   fixtures.set.mockReset().mockImplementation(async (item: string, value: string) => { fixtures.stored.set(item, value) })
   fixtures.remove.mockReset().mockImplementation(async (item: string) => { fixtures.stored.delete(item) })
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
 it('coalesces parallel expiry refreshes and persists the rotated token once', async () => {
   fixtures.stored.set(key, JSON.stringify(session(true)))
@@ -68,6 +68,35 @@ it('treats malformed persisted state as signed out without contacting a server',
   expect(await auth.getSession()).toBeNull()
   expect(fixtures.stored.has(key)).toBe(false)
   expect(fixtures.fetch).not.toHaveBeenCalled()
+})
+
+it('times out registration once and identifies the validated backend origin without replaying it', async () => {
+  const auth = await import('../apps/mobile/src/lib/auth')
+  vi.useFakeTimers()
+  fixtures.fetch.mockImplementation((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+  }))
+  const request = auth.authRequest('/register', { email: 'member@example.test', password: 'fixture-password' })
+  const failed = expect(request).rejects.toThrow('Rentral took too long to respond at http://127.0.0.1:3000.')
+  await vi.advanceTimersByTimeAsync(19999)
+  expect(fixtures.fetch).toHaveBeenCalledTimes(1)
+  expect((fixtures.fetch.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  await failed
+  expect(fixtures.fetch).toHaveBeenCalledTimes(1)
+  expect(fixtures.stored.has(key)).toBe(false)
+})
+
+it('identifies the backend on network failure without exposing credentials or queries', async () => {
+  const auth = await import('../apps/mobile/src/lib/auth')
+  const { config } = await import('../apps/mobile/src/lib/config')
+  fixtures.fetch.mockRejectedValue(new TypeError('Connection refused'))
+  await expect(auth.authRequest('/register', {})).rejects.toThrow('Could not reach Rentral at http://127.0.0.1:3000.')
+  config.apiUrl = 'https://user:secret@example.test?token=private'
+  try {
+    await expect(auth.authRequest('/register', {})).rejects.toThrow('Could not reach Rentral. Check the backend address and your connection.')
+  } finally { config.apiUrl = 'http://127.0.0.1:3000' }
+  expect(fixtures.fetch).toHaveBeenCalledTimes(2)
 })
 
 it('serializes an in-flight refresh keychain write before logout and never publishes its late result', async () => {

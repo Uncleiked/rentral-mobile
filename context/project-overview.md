@@ -20,8 +20,10 @@ MongoDB must support transactions through a replica set and pass explicit index/
 validator readiness setup. Private GPS lives in a separate collection; shared
 services enforce overlap protection, exact kobo accounting and one-use hold
 credit. Private files use scoped signed URLs; development reset codes remain in
-the private backend email outbox. No old data was imported or hosted database
-written. Real devices and optional providers still need separate acceptance.
+the private backend email outbox. Initial isolated delivery made no hosted writes;
+later user-authorized Atlas preparation is recorded in [runtime troubleshooting](local-development.md).
+No old data was imported and the original PostgreSQL database remains untouched.
+Real devices and optional providers still need separate acceptance.
 
 ## Historical product brief below
 

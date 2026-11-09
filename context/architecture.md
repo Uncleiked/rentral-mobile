@@ -31,9 +31,12 @@
   records; cross-document balance/allocation constraints remain service-owned.
   This is not protection against privileged raw database administration.
 
-The user selected local operation. Setup preserves existing nonempty environment
-values; no legacy data import, hosted write, provider activation or deployment
-ran. Supabase has no active role. Historical PostgreSQL migrations are archived
+The app/backend run locally; the user subsequently selected the saved Atlas
+database. Setup preserves existing nonempty environment values. Initial isolated
+delivery made no hosted writes; later authorized Atlas preparation and current
+account-flow status are recorded in [runtime troubleshooting](local-development.md).
+No legacy-data import, provider activation or deployment ran; the original
+PostgreSQL database remains untouched. Supabase has no active role. Its migrations are archived
 source and must not be replayed into Mongo. Existing financial/provider gates
 and acceptance requirements remain in force. See [API](mobile-api.md),
 [implementation](expo-implementation.md), and [setup](../README.md).

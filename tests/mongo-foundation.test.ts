@@ -34,6 +34,70 @@ it('bounds repeated database conflicts to five attempts', async () => {
   expect(mocks.transaction).toHaveBeenCalledTimes(5)
 })
 
+it('lets a six-second transaction finish without replaying timed-out transactions', async () => {
+  vi.useFakeTimers()
+  const expired = { code: 'P2028' }
+  mocks.transaction.mockImplementation(async (operation: (tx: Prisma.TransactionClient) => Promise<unknown>, options: { timeout: number }) => {
+    let expiry: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<never>((_, reject) => { expiry = setTimeout(() => reject(expired), options.timeout) })
+    try {
+      // The operation uses no delegate; only the mocked database deadline matters.
+      return await Promise.race([operation({} as Prisma.TransactionClient), timedOut])
+    } finally { clearTimeout(expiry) }
+  })
+  const operation = withTransaction(async () => {
+    await new Promise<void>(resolve => setTimeout(resolve, 6000))
+    return 'committed'
+  })
+  const completed = expect(operation).resolves.toBe('committed')
+  await vi.runAllTimersAsync()
+  await completed
+  expect(mocks.transaction).toHaveBeenCalledOnce()
+
+  mocks.transaction.mockRejectedValue(expired)
+  await expect(withTransaction(async () => 'must not replay')).rejects.toBe(expired)
+  expect(mocks.transaction).toHaveBeenCalledTimes(2)
+})
+
+it('caps acquisition and execution by the time left after a conflict and retry delay', async () => {
+  vi.useFakeTimers()
+  const started = Date.now()
+  const limits: { elapsed: number; maxWait: number; timeout: number }[] = []
+  mocks.transaction.mockImplementation(async (_operation: unknown, options: { maxWait: number; timeout: number }) => {
+    limits.push({ elapsed: Date.now() - started, ...options })
+    if (limits.length === 1) {
+      await new Promise<void>(resolve => setTimeout(resolve, 6000))
+      throw { code: 'P2034' }
+    }
+    return 'committed'
+  })
+  const completed = expect(withTransaction(async () => 'committed')).resolves.toBe('committed')
+  await vi.runAllTimersAsync()
+  await completed
+  expect(limits).toHaveLength(2)
+  for (const limit of limits) {
+    expect(limit.maxWait).toBeGreaterThan(0)
+    expect(limit.maxWait).toBeLessThanOrEqual(5000)
+    expect(limit.timeout).toBeGreaterThan(0)
+    expect(limit.timeout).toBeLessThanOrEqual(10000)
+    expect(limit.maxWait + limit.timeout).toBeLessThanOrEqual(15000 - limit.elapsed)
+  }
+  expect(limits[1].elapsed).toBeGreaterThan(6000)
+  expect(limits[1].maxWait + limits[1].timeout).toBeLessThan(limits[0].maxWait + limits[0].timeout)
+})
+
+it('does not open another transaction when a scheduled retry resumes after the total deadline', async () => {
+  vi.useFakeTimers()
+  const conflict = { code: 'P2034' }
+  mocks.transaction.mockRejectedValueOnce(conflict).mockResolvedValue('unexpected late attempt')
+  const completed = expect(withTransaction(async () => 'committed')).rejects.toBe(conflict)
+  await vi.advanceTimersByTimeAsync(0)
+  vi.setSystemTime(Date.now() + 15000)
+  await vi.runAllTimersAsync()
+  await completed
+  expect(mocks.transaction).toHaveBeenCalledOnce()
+})
+
 it('locks by an actual revision increment and reports missing documents', async () => {
   const update = vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
   // This isolated test supplies only the delegate used at the transaction boundary.

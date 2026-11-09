@@ -1,21 +1,14 @@
 import 'react-native-url-polyfill/auto'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
+import { resolveApiConfiguration } from './api-config'
 
-function localBackend(): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') return `http://${window.location.hostname}:3000`
-  let host: string | undefined
-  try { const uri = Constants.expoConfig?.hostUri; if (uri) host = new URL(uri.includes('://') ? uri : `http://${uri}`).hostname } catch { host = undefined }
-  if (Platform.OS === 'android' && (!host || host === 'localhost' || host === '127.0.0.1')) host = '10.0.2.2'
-  return `http://${host || 'localhost'}:3000`
-}
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? localBackend() : '')).replace(/\/+$/, '')
-function validOrigin(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return !url.username && !url.password && !url.search && !url.hash && url.pathname === '/'
-      && (url.protocol === 'https:' || (__DEV__ && url.protocol === 'http:'))
-  } catch { return false }
-}
-export const config = { apiUrl }
-export const configurationError = validOrigin(apiUrl) ? null : 'Add the Rentral backend address to EXPO_PUBLIC_API_URL, then restart Expo.'
+let hostUri: string | undefined
+try { hostUri = Constants.expoConfig?.hostUri } catch { hostUri = undefined }
+const resolved = resolveApiConfiguration({
+  apiUrl: process.env.EXPO_PUBLIC_API_URL,
+  development: __DEV__, platform: Platform.OS, hostUri,
+  webHostname: typeof window === 'undefined' ? undefined : window.location.hostname,
+})
+export const config = { apiUrl: resolved.apiUrl }
+export const configurationError = resolved.configurationError

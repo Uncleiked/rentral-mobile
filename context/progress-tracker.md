@@ -1,5 +1,35 @@
 ## Progress Tracker
 
+## Phone runtime follow-up — verified 2026-11-09
+
+- User-selected Atlas is preserved. Corrected public-IP drift; native TLS,
+  replica-set checks and direct Prisma reads PASS. Authorized preparation:
+  29 collections/73 indexes, no reset/import, original PostgreSQL untouched.
+- Backend fixed to port3000/LAN and Expo kept separately on8081. Native config
+  rejects guessed loopback/tunnel backends and reports actionable origins.
+- Fixed failed readiness-client caching and safe auth-error redaction. Cold
+  transactions now use up to5s acquire/10s execution within15s total; P2028 is
+  never replayed.
+- Registration after fresh backend restart201 in12.4s; JWT profile/listings and
+  sign-in200. Concurrent phone background traffic means no isolated cold-only
+  startup benchmark is claimed.
+  Guarded cleanup removed only the owned diagnostic User and two sessions;
+  diagnostic accounts remaining0. The original real account is preserved.
+- Real phone sign-in200 (6.4s), profile/listings200, profile PATCH200 (6.6s), and
+  subsequent messages/bookings/saves/category/location discovery200. Live member
+  use confirms the prior account-flow failure is resolved.
+- Latest npm test636/61 PASS; owned Mongo16/16 PASS after the timeout fix;
+  foundation11 PASS; lint and root/mobile typechecks PASS. Android dev bundle
+  (~6.4MB) contains the correct origin/diagnostics. No actual addresses or secrets
+  are saved in tracked files.
+- Next and Expo intentionally remain running; revalidate saved tool references
+  before interacting. Real capture/GPS/permissions/provider acceptance is separate.
+  Normal automated suites remain isolated; the owned Atlas probe used guarded
+  cleanup within the authorized account-flow repair.
+- Runtime source fixes are ready for the already-authorized commit/push to
+  Uncleiked/rentral-mobile. Git history and the final delivery response identify
+  the delivered revision.
+
 ## Current local Expo / MongoDB / JWT delivery — 2026-11-09
 
 - User authority: Android+iOS Expo app, no KYC onboarding, npm 11.19.1 workspaces,
@@ -25,8 +55,9 @@
   objects. Private outbox/metadata/tombstones cannot be served as uploads.
 - Added setup:local (preserves existing nonempty private values) and persistent
   loopback-only Mongo replica-set compose source. No persistent dev container was
-  started automatically. No historical data import, hosted writes, provider activation,
-  deployment or EAS/store build/submission was performed. The user authorized
+  started automatically. Initial isolated delivery made no hosted writes. The later
+  authorized Atlas setup is recorded above; no historical data import, provider
+  activation, deployment or EAS/store build/submission was performed. The user authorized
   source commit/push delivery to https://github.com/Uncleiked/rentral-mobile.git;
   verify Git history/remote and the coordinating agent's final delivery result.
 - Historical PostgreSQL migrations, including source-only QuickTime bucket SQL,
@@ -34,7 +65,7 @@
 - Root/mobile READMEs, mobile-api.md, expo-implementation.md and memory.md describe
   current setup, contracts, evidence and remaining work.
 
-### Final verification record
+### Initial delivery verification record, before the phone-runtime follow-up
 
 - npm test: 583 tests/58 files PASS; 16 fixture integration tests skipped in the
   normal run and executed separately against the owned local replica fixture.

@@ -31,8 +31,10 @@ development email outbox, metadata or tombstone markers.
 
 Keep real-provider/device acceptance separate from unit, mock-browser and fixture
 evidence. Use only explicitly owned disposable databases in automated integration
-tests; never select or reset the configured application database. No hosted writes
-or data imports are part of this implementation.
+tests; never select or reset the configured application database for those tests.
+The user selected saved Atlas for application use and explicitly authorized its
+setup; follow [current runtime scope](local-development.md). Do not reset/import
+legacy data or apply historical PostgreSQL migrations.
 
 ### Historical standards below
 

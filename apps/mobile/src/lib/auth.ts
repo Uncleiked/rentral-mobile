@@ -1,6 +1,7 @@
 import { config, configurationError } from './config'
 import { sessionStorage } from './session-storage'
 import type { AuthSession } from './auth-types'
+import { validatedApiOrigin } from './api-config'
 
 const SESSION_KEY = 'rentral.jwt.session'
 const listeners = new Set<(session: AuthSession | null) => void>()
@@ -29,7 +30,11 @@ export async function authRequest<T>(path: string, body: unknown): Promise<T> {
     return payload.data as T
   } catch (error) {
     if (error instanceof AuthRequestError) throw error
-    throw new Error(controller.signal.aborted ? 'Rentral took too long to respond. Check that your local backend is running.' : 'Could not reach Rentral. Check the backend address and your connection.')
+    const origin = validatedApiOrigin(config.apiUrl, true)
+    const target = origin ? ` at ${origin}` : ''
+    throw new Error(controller.signal.aborted
+      ? `Rentral took too long to respond${target}. Keep the backend running and check that this device can reach it.`
+      : `Could not reach Rentral${target}. Check the backend address and your connection.`)
   } finally { clearTimeout(timeout) }
 }
 function isSession(value: unknown): value is AuthSession {

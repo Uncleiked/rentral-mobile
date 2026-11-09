@@ -14,7 +14,10 @@ uploads, signed private Range/HEAD file serving and public raster avatars.
 
 Local sequence: npm install, npm run setup:local, start the supplied Mongo replica
 set, npm run db:setup, npm run dev, then npm run mobile in another terminal.
-Setup preserves nonempty environment values; no old data import or hosted writes.
+Setup preserves nonempty environment values. Initial isolated delivery made no
+hosted writes; later user-authorized saved Atlas preparation and pending runtime
+verification are recorded in [local-development.md](local-development.md). No old
+data import or reset ran; the original PostgreSQL database remains untouched.
 
 Final verification covers unit regressions, type/lint, native bundles, production
 compilation and uniquely owned Mongo/localhost HTTP fixtures. Complete real

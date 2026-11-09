@@ -11,7 +11,7 @@
     "mobile:android": "npm run android --workspace @rentral/mobile",
     "mobile:ios": "npm run ios --workspace @rentral/mobile",
     "mobile:typecheck": "npm run typecheck --workspace @rentral/mobile",
-    "dev": "next dev",
+    "dev": "next dev --hostname 0.0.0.0 --port 3000",
     "dev:https": "next dev --experimental-https",
     "build": "prisma generate && next build",
     "start": "next start",

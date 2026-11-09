@@ -19,7 +19,25 @@ npm run setup:local
 
 `setup:local` fills missing local settings in the ignored `.env.local`: a MongoDB URL, a random backend JWT secret, `NEXT_PUBLIC_APP_URL=http://localhost:3000`, `AUTH_DEV_EMAIL_OUTBOX=true`, and `RENTRAL_PLATFORM_ENABLED=true`. It preserves existing nonempty values. Never put database connections or JWT secrets in Expo public variables.
 
-MongoDB must run as a replica set because reservations, payments, messages, and password resets use transactions. For a new local database:
+Keep the saved `MONGODB_URL` unless you deliberately choose a different database.
+MongoDB must support replica-set transactions. Choose the setup for that connection:
+
+**Saved MongoDB Atlas:** allow the backend computer's current public IP in the
+Atlas project's Network Access list. This is the computer network's public egress
+IP, not the phone's or computer's private LAN address. Follow
+[Atlas IP access-list instructions](https://www.mongodb.com/docs/atlas/security/ip-access-list/).
+After network/TLS access works and you intend to prepare that saved database, run:
+
+~~~powershell
+npm run db:setup -- --allow-remote
+~~~
+
+This explicitly prepares indexes, validators and the readiness marker in the
+selected database. It does not import, reset or replace existing data. Keep TLS
+certificate verification enabled. The current phone/Atlas troubleshooting status
+is in [local development](context/local-development.md).
+
+**New local MongoDB, if selected:**
 
 ~~~powershell
 docker compose -f compose.mongodb.yml up -d
@@ -32,24 +50,36 @@ This binds MongoDB to `127.0.0.1:27017`, uses replica set `rs0`, and keeps data 
 mongodb://127.0.0.1:27017/rentral?replicaSet=rs0&directConnection=true
 ~~~
 
-If `.env.local` already contains a different `MONGODB_URL`, setup preserves it. Choose the local connection explicitly for an entirely local installation. No existing database is imported, reset, or replaced automatically.
-
-Then prepare indexes/validators and start the backend:
+`setup:local` preserves an existing nonempty connection. If you chose this local
+replica set, prepare it with:
 
 ~~~powershell
 npm run db:setup
+~~~
+
+Runtime database operations fail closed until preparation succeeds; enabling the
+platform flag alone is insufficient. Do not use `prisma db push` or replay the
+historical SQL migrations.
+
+**Terminal 1 — keep the backend running:**
+
+~~~powershell
 npm run dev
 ~~~
 
-Open http://localhost:3000. `db:setup` requires a local database by default. A remote setup requires a separate explicit manual override and is outside this local workflow. Runtime database operations fail closed until the current setup marker exists; enabling the platform flag alone is insufficient. Do not use `prisma db push` or replay the historical SQL migrations.
+The backend listens on `0.0.0.0:3000`; open http://localhost:3000 on the computer.
+Keep port 3000 available because the native app uses that API address.
 
-In a second terminal:
+**Terminal 2 — keep Expo running:**
 
 ~~~powershell
 npm run mobile
 ~~~
 
-Scan the Expo QR code with an SDK-compatible Expo Go app, or use the Android emulator. The iOS simulator requires macOS/Xcode. See [mobile setup](apps/mobile/README.md).
+Expo normally serves the JavaScript bundle on port 8081. It does not start the
+backend on port 3000. Scan its QR code with SDK-compatible Expo Go, or use an
+Android emulator. The iOS simulator requires macOS/Xcode. See
+[mobile setup](apps/mobile/README.md).
 
 ## Configuration
 
@@ -63,7 +93,22 @@ Scan the Expo QR code with an SDK-compatible Expo Go app, or use the Android emu
 | `AUTH_DEV_EMAIL_OUTBOX` | Opt-in development password-reset codes in private `storage/mail-outbox`. |
 | `OLUSO_ENABLED`, `OLUSO_API_KEY` | Optional monitoring; starts only with explicit `OLUSO_ENABLED=true` and a key. Neither is required for local startup. |
 
-The mobile app normally discovers the Expo development computer and uses its backend on port 3000. The only optional public mobile setting is `EXPO_PUBLIC_API_URL`, an origin without `/api/v1`. Android-emulator fallback is `http://10.0.2.2:3000`; iOS simulator/web fallback is localhost. A physical phone needs the computer's reachable LAN address and firewall access. See [API contracts](context/mobile-api.md).
+Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env.local` to an origin without
+`/api/v1`, then restart Expo:
+
+| Device | Explicit API address |
+| --- | --- |
+| Physical Android/iPhone | `http://YOUR_COMPUTER_LAN_IP:3000` on the same reachable network. |
+| Android emulator | `http://10.0.2.2:3000` |
+| iOS simulator | `http://localhost:3000` |
+| Web preview on this computer | `http://localhost:3000` |
+
+A usable local Expo host may be detected in development. Native loopback,
+missing-host and tunnel configurations require an explicit device-reachable API
+address; there is no automatic emulator fallback. An Expo tunnel forwards the
+app bundle, not the separate API on port 3000. A phone's localhost is the phone.
+See [network/Atlas troubleshooting](context/local-development.md) and
+[API contracts](context/mobile-api.md).
 
 Oluso monitoring is optional and disabled without both an explicit enable flag
 and its backend key. An unconfigured monitoring service must not prevent the app
@@ -85,9 +130,13 @@ Native Explore/search/filtering, listing details/video, saved listings, booking 
 
 Booking cards open the local web app for existing host actions, inspection check-in, and optional provider checkout. Existing web drafts can be resumed on web. Native booking requests and listing submissions must be refreshed after ambiguous failures before retrying; message UUID retries are idempotent.
 
-Publication still requires the existing asset-document, location, media, staff, and payment checks. Provider integrations remain separately gated. Collection receipts do not prove custody, refunds, payouts, escrow, or default compensation. No provider was activated, historical data imported, hosted database modified, deployment performed, or store build/submission run.
+Publication still requires the existing asset-document, location, media, staff, and payment checks. Provider integrations remain separately gated. Collection receipts do not prove custody, refunds, payouts, escrow, or default compensation. The initial isolated delivery made no hosted database writes. A later user-authorized Atlas setup prepared indexes/validators without a reset or legacy-data import; current account-flow status is in [runtime troubleshooting](context/local-development.md). The original PostgreSQL database remains untouched. No provider activation, deployment or store build/submission was run.
 
 ## Verification
+
+Registration after a fresh backend restart completed in12.4 seconds. Real phone
+sign-in, profile editing and marketplace/member requests now succeed against the
+user-selected Atlas database. See [runtime evidence](context/local-development.md).
 
 ~~~powershell
 npm test
@@ -102,11 +151,11 @@ npm run build
 
 `test:mongo` creates and destroys its own labeled, loopback-only MongoDB replica fixture; it never selects the application's database. Final verification results and device/provider limits are recorded in [the implementation record](context/expo-implementation.md) and [progress tracker](context/progress-tracker.md). Real Android/iOS camera, GPS, permissions, playback, and device acceptance remain required. Next.js 16.4.5 includes the reviewed security update; this local implementation is not a production release certification.
 
-Confirmed checks: 583 tests across 58 files, 16 real Mongo integration checks, 34
-localhost HTTP checks, clean lint, native typecheck/compatibility, Expo Doctor 20/20,
-and Android/iOS/web export. Production build passed with strict TypeScript and
-48 generated static pages. The configured Inter font requires network access
-during a fresh web build.
+Latest checks:636 tests across61 files,16 owned local Mongo integration checks
+after the timeout fix, clean lint and root/mobile typechecks. Initial delivery
+also passed34 localhost HTTP checks, Expo Doctor20/20, Android/iOS/web export and
+production build with48 static pages. The configured Inter font requires network
+access during a fresh web build. Camera/GPS and provider acceptance remain separate.
 
 `npm audit --omit=dev` still reports eight toolchain dependency advisories:
 three high in Prisma CLI/config/deepmerge paths and five moderate in Expo

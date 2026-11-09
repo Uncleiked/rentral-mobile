@@ -28,12 +28,22 @@ export async function assertMongoReady(): Promise<void> {
       await native?.client.close()
       native = { uri, client: new MongoClient(uri, { serverSelectionTimeoutMS: 3000, connectTimeoutMS: 3000 }) }
     }
+    const connection = native
     let marker: SetupMarker | null
     try {
-      marker = await native.client.db(mongoDatabaseName(uri)).collection<SetupMarker>(MONGO_SETUP_COLLECTION).findOne({ _id: MONGO_SETUP_ID }, { projection: { schemaVersion: 1 } })
-    } catch { throw new MongoReadinessError('DATABASE_UNAVAILABLE') }
+      marker = await connection.client.db(mongoDatabaseName(uri)).collection<SetupMarker>(MONGO_SETUP_COLLECTION).findOne({ _id: MONGO_SETUP_ID }, { projection: { schemaVersion: 1 } })
+    } catch {
+      // A failed initial driver connection retains a closed topology. Discard
+      // that client so a later request can recover after connectivity returns.
+      if (native === connection) {
+        native = null
+        if (cached?.uri === uri) cached = null
+      }
+      await connection.client.close().catch(() => undefined)
+      throw new MongoReadinessError('DATABASE_UNAVAILABLE')
+    }
     if (marker?.schemaVersion !== MONGO_SCHEMA_VERSION) throw new MongoReadinessError('DATABASE_SETUP_REQUIRED')
-    cached = { uri, until: Date.now() + READY_CACHE_MS }
+    if (native === connection) cached = { uri, until: Date.now() + READY_CACHE_MS }
   })()
   pending = { uri, promise }
   try { await promise } finally { if (pending?.promise === promise) pending = null }

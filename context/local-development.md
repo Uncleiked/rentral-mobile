@@ -1,4 +1,75 @@
-# Local development checkpoint — 2026-11-07
+# Current runtime troubleshooting — 2026-11-09
+
+The application/backend run locally; the user has now selected **keep the saved
+MongoDB Atlas connection**. Preserve that ignored MONGODB_URL. The old Supabase/
+PostgreSQL audit below is historical and does not describe current setup.
+
+## Required processes and phone address
+
+Keep two repository-root terminals open: `npm run dev` starts Next on
+`0.0.0.0:3000`; `npm run mobile` starts Expo/Metro, normally port 8081. Expo serves
+the app bundle and does not start the API. Set apps/mobile/.env.local to the
+device-reachable EXPO_PUBLIC_API_URL and restart Expo after changes.
+
+Use `http://YOUR_COMPUTER_LAN_IP:3000` on a physical phone,
+`http://10.0.2.2:3000` for an Android emulator, or `http://localhost:3000` for an
+iOS simulator.
+The phone needs a route to that computer/port. Native loopback, missing-host and
+Expo-tunnel configurations require an explicit API origin; a bundle tunnel does
+not forward the API. See [mobile setup](../apps/mobile/README.md).
+
+To separate reachability from database access, open
+`http://YOUR_COMPUTER_LAN_IP:3000/api/v1/auth/web-session` in the phone browser.
+An unauthenticated JSON response establishes API reachability, not Atlas
+readiness or successful signup.
+
+## Saved Atlas preparation
+
+Atlas only permits connections from its project's IP access list. Add the
+backend computer network's **current public egress IP**, not its private LAN IP
+or the phone's IP; see [official Atlas instructions](https://www.mongodb.com/docs/atlas/security/ip-access-list/).
+Keep TLS certificate/hostname verification enabled. Once connectivity works and
+preparation of that saved database is intended, explicitly run:
+
+~~~powershell
+npm run db:setup -- --allow-remote
+~~~
+
+This prepares reviewed indexes, validators and the readiness marker; it does
+not reset/import application data or change the saved connection. Account flows
+remain unavailable until database connectivity and preparation both succeed.
+
+## Verified Atlas and phone account flow — 2026-11-09
+
+- Restored the missing backend and kept Expo separate. Both API and Metro serve
+  the LAN; the Android development bundle contains the verified API origin and
+  diagnostics. Actual addresses remain only in ignored configuration.
+- Corrected confirmed Atlas public-IP drift after the user updated the active
+  /32 entry. Native TLS/replica-set checks and Prisma reads now pass.
+- Under the user-authorized account-flow repair, remote preparation succeeded:
+  29 collections/73 indexes checked or prepared, including validators/readiness.
+  No reset or legacy-data import occurred; original PostgreSQL/Supabase is untouched.
+- Fixed cached closed readiness clients and safe auth-error redaction. Cold Atlas
+  transactions now have bounded acquisition/execution of up to5s/10s within15s
+  total, with no P2028 replay.
+- Registration after a fresh backend restart returned201 in12.4s, below the native
+  20s request limit. Its JWT profile/listings requests and subsequent sign-in
+  returned200. Guarded cleanup removed only that owned diagnostic User and its
+  two sessions; a read-only check found no diagnostic accounts remaining. Live
+  phone background requests were concurrent; this is not a cold-only benchmark.
+- Actual phone sign-in returned200 in6.4s, profile/listings reads returned200,
+  and profile editing returned200 in6.6s. Subsequent messages, bookings, saved
+  listings and category/location-filtered discovery requests all returned200.
+  The real account is preserved and member use is confirmed through live traffic.
+- Latest checks:636 tests/61 files PASS; owned local Mongo fixture16/16 PASS
+  after the budget fix; foundation checks11 PASS; root/mobile typechecks and
+  lint PASS. Normal automated suites use owned local fixtures. The controlled
+  Atlas diagnostic above used owned temporary records and guarded cleanup.
+- The backend and Expo are intentionally left running. This verifies the account/
+  member flow; real camera/GPS/permissions/playback and provider acceptance remain
+  separate work. Earlier fixture checks alone were not phone acceptance.
+
+## Historical Supabase checkpoint — 2026-11-07 (superseded)
 
 The user cancelled staging setup. Continue with `.env.local`; do not require a
 separate staging project to resume local development. The app runs on this machine,

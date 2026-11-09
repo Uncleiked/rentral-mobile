@@ -4,6 +4,8 @@ import prisma from '@/lib/db'
 export type LockModel = 'user' | 'listing' | 'booking' | 'paymentIntent' | 'mediaAsset' | 'dispute' | 'safetyNotice' | 'safetyAppeal'
 const TRANSACTION_ATTEMPTS = 5
 const TRANSACTION_BUDGET_MS = 15000
+const TRANSACTION_MAX_WAIT_MS = 5000
+const TRANSACTION_TIMEOUT_MS = 10000
 
 function retryableTransaction(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034'
@@ -12,10 +14,13 @@ function retryableTransaction(error: unknown): boolean {
 /** Retry only database conflicts. Keep network calls and external side effects outside the callback. */
 export async function withTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   const deadline = Date.now() + TRANSACTION_BUDGET_MS
+  let lastConflict: unknown
   for (let attempt = 0; ; attempt += 1) {
-    const remaining = Math.max(2, deadline - Date.now())
-    const maxWait = Math.min(1000, Math.floor(remaining / 2))
-    const timeout = Math.min(5000, remaining - maxWait)
+    const remaining = deadline - Date.now()
+    // A delayed retry must not start another transaction after its total budget.
+    if (remaining < 2) throw lastConflict ?? new Error('TRANSACTION_DEADLINE_EXCEEDED')
+    const maxWait = Math.min(TRANSACTION_MAX_WAIT_MS, Math.floor(remaining / 2))
+    const timeout = Math.min(TRANSACTION_TIMEOUT_MS, remaining - maxWait)
     try {
       return await prisma.$transaction(tx => {
         // This query-only extension changes no delegates, inputs or results. Erase
@@ -25,6 +30,7 @@ export async function withTransaction<T>(operation: (tx: Prisma.TransactionClien
     }
     catch (error) {
       if (!retryableTransaction(error) || attempt + 1 >= TRANSACTION_ATTEMPTS) throw error
+      lastConflict = error
       const pause = 100 * 2 ** attempt + Math.floor(Math.random() * 50)
       if (Date.now() + pause >= deadline) throw error
       await new Promise<void>(resolve => setTimeout(resolve, pause))

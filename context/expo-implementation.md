@@ -24,7 +24,7 @@ Private capture GPS is stored in `ListingLocation`, separate from default public
 
 Mongo setup creates reviewed indexes, partial nullable-unique indexes, validators and a final readiness marker. Runtime operations fail closed before preparation. Cross-document financial invariants live in services; central Prisma guards reject direct/nested mutation of immutable records. Raw privileged Mongo access is outside that application guard.
 
-Historical PostgreSQL migrations, including the source QuickTime bucket migration, are retained as historical evidence and are not active Mongo setup. No old data was imported, hosted database written, provider activated, deployment performed, or EAS/store build/submission run. The user authorized source commit/push delivery to [Uncleiked/rentral-mobile](https://github.com/Uncleiked/rentral-mobile); Git history/remote and the final delivery response record its outcome.
+Historical PostgreSQL migrations, including the source QuickTime bucket migration, are retained as historical evidence and are not active Mongo setup. Initial isolated delivery made no hosted database writes. The subsequent phone-runtime follow-up used user-authorized Atlas index/validator/readiness setup; see [current runtime status](local-development.md). No reset or legacy-data import ran; the original PostgreSQL database remains untouched. No provider activation, deployment or EAS/store build/submission was run. The user authorized source commit/push delivery to [Uncleiked/rentral-mobile](https://github.com/Uncleiked/rentral-mobile); Git history/remote and the final delivery response record its outcome.
 
 ## Local workflow
 
@@ -38,7 +38,15 @@ Development reset codes are in the private storage email outbox with explicit op
 
 ## Verification record
 
-Confirmed at the final verification checkpoint:
+Current phone-runtime follow-up:636 tests/61 files, owned local Mongo16/16 after
+the timeout fix, root/mobile typechecks and lint PASS. Registration after a fresh
+backend restart returned201 in12.4s; concurrent live phone activity was present,
+so this is not an isolated cold-start benchmark. Actual phone sign-in, profile
+edits and discovery/messages/bookings/saved requests returned200. Narrowly owned
+Atlas diagnostic records were cleaned; the real account and old PostgreSQL
+database remain untouched. See [runtime details](local-development.md).
+
+Initial delivery verification, before the phone-runtime follow-up:
 
 - `npm test`: 583 tests across 58 files passed. The 16 fixture integration tests are skipped by the ordinary run and were executed separately.
 - Isolated local MongoDB replica fixture: 16/16 passed. Coverage includes reservation/payment/hold/message races, balanced immutable ledgers, private GPS, monthly privacy thresholds, readiness/nested guards and actual JWT account/rotation/reset/revocation behavior.
