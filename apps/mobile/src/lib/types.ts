@@ -15,7 +15,7 @@ export type Booking = {
   role: 'renter' | 'host'; listing: { id: string; category: string; location: string }
   renter: { username: string | null }; host: { username: string | null }; settlementStatus: string
 }
-export type Conversation = { id: string; listingId: string; updatedAt: string; otherName: string; lastMessage: string | null }
+export type Conversation = { id: string; listingId: string; updatedAt: string; otherName: string; lastMessage: string | null; unread?: boolean }
 export type Message = { id: string; senderId: string; body: string; sentAt: string; sharedListing: { id: string; category: string } | null }
 export type Thread = { id: string; userId: string; listingId: string; otherName: string; otherReadAt: string | null; hasMore: boolean; messages: Message[] }
 export type Profile = { id: string; email: string; username: string | null; bio: string | null; avatarUrl: string | null; accountType: string | null; memberSince: string }

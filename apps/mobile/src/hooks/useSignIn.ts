@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { authRequest, signIn } from '../lib/auth'
 import { useAuth } from '../providers/AuthProvider'
+import { passwordResetNotice } from '../lib/reset-delivery'
 
 type Mode = 'login' | 'signup' | 'recover' | 'reset'
 export function useSignIn() {
@@ -12,7 +13,7 @@ export function useSignIn() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  function changeMode(next: Mode): void { setMode(next); setError(null); setNotice(null); setPassword(''); clearError() }
+  function changeMode(next: Mode): void { setMode(next); setError(null); setNotice(null); setPassword(''); setResetToken(''); clearError() }
   async function submit(): Promise<void> {
     if (busy) return
     if (mode !== 'reset' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Enter a valid email address.'); return }
@@ -21,8 +22,8 @@ export function useSignIn() {
     setBusy(true); setError(null); setNotice(null); clearError()
     try {
       if (mode === 'recover') {
-        await authRequest('/password-reset', { email: email.trim() })
-        setNotice('If your account exists, its reset code is in the private email outbox on the computer running Rentral. Copy it and choose “Use reset code”.')
+        const result = await authRequest<unknown>('/password-reset', { email: email.trim() })
+        setNotice(passwordResetNotice(result))
       } else if (mode === 'reset') {
         await authRequest('/reset-password', { token: resetToken.trim(), password })
         setMode('login'); setPassword(''); setResetToken(''); setNotice('Password updated. Sign in with your new password.')

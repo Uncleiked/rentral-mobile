@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { folderIdFromPath } from '@/lib/storage'
+import { DRAFT_WIZARD_STEPS, LISTING_CATEGORIES } from '../lib/contracts/listings'
+export { DRAFT_WIZARD_STEPS, LISTING_CATEGORIES } from '../lib/contracts/listings'
 
-export const LISTING_CATEGORIES = ['house', 'car', 'boat'] as const
 export type ListingCategory = (typeof LISTING_CATEGORIES)[number]
 
 export type SharedListingMetadata = {
@@ -87,7 +88,6 @@ export type DraftPayload = {
 
 // Steps a draft can be saved at — 'done' means the listing is posted, so it
 // is deliberately absent here and appended for the full wizard order below.
-export const DRAFT_WIZARD_STEPS = ['category', 'capture', 'details', 'documents', 'checkout'] as const
 export const WIZARD_STEPS = [...DRAFT_WIZARD_STEPS, 'done'] as const
 export type WizardStep = (typeof WIZARD_STEPS)[number]
 

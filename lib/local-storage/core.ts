@@ -3,9 +3,9 @@ import { lstat, mkdir, open, realpath, readdir, unlink, link } from 'node:fs/pro
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
-import { StorageError, storagePath, storagePrefix, uploadPolicy, verifyUploadBytes, type StorageBucket } from './policy'
+import { StorageError, storagePath, storagePrefix, uploadPolicy, verifyUploadBytes, type StorageBucket } from './policy.ts'
 
-type ObjectMetadata = { contentType: string; size: number; createdAt: string; digest: string }
+export type ObjectMetadata = { contentType: string; size: number; createdAt: string; digest: string }
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0
 const METADATA_SUFFIX = '.metadata.json'
 
@@ -54,6 +54,8 @@ export function createLocalStorage(rootDirectory: string) {
     } catch (error) { if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error }
   }
   async function metadata(bucket: StorageBucket, path: string): Promise<{ path: string; info: ObjectMetadata }> {
+    try { await rejectDeleted(bucket, path) }
+    catch (error) { if (error instanceof StorageError && error.code === 'FILE_NAME_USED') throw new StorageError(404, 'NOT_FOUND', 'This file is unavailable.'); throw error }
     const full = await objectPath(bucket, path)
     await regular(full); await regular(full + METADATA_SUFFIX)
     const handle = await open(full + METADATA_SUFFIX, constants.O_RDONLY | NOFOLLOW)
@@ -144,13 +146,15 @@ export function createLocalStorage(rootDirectory: string) {
       return Readable.toWeb(handle.createReadStream({ start: range?.start ?? 0, ...(range ? { end: range.end } : {}), autoClose: true })) as ReadableStream<Uint8Array>
     },
     async remove(bucket: StorageBucket, path: string): Promise<void> {
+      // A private, hashed tombstone prevents delete/re-upload from replacing a
+      // walkthrough. Create it even when an expired upload has not linked its
+      // final file yet, so a late writer cannot resurrect the deleted path.
+      storagePath(bucket, path)
+      try { const marker = await open(await deletedMarker(bucket, path, true), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, 0o600); await marker.close() }
+      catch (error) { if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) throw error }
       let full: string
       try { full = await objectPath(bucket, path); await regular(full) }
       catch (error) { if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return; throw error }
-      // A private, hashed tombstone prevents delete/re-upload from replacing a
-      // walkthrough while its old listing/GPS reference remains unchanged.
-      try { const marker = await open(await deletedMarker(bucket, path, true), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, 0o600); await marker.close() }
-      catch (error) { if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) throw error }
       await safeUnlink(full); await safeUnlink(full + METADATA_SUFFIX)
     },
     async list(bucket: StorageBucket, prefix = '', limit = 100): Promise<{ name: string; id: string | null; metadata: { size: number; mimetype: string } | null; created_at?: string }[]> {

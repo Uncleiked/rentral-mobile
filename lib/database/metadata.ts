@@ -1,3 +1,13 @@
 export const MONGO_SCHEMA_VERSION = 1
+export const STORAGE_CLAIMS_VERSION = 1
+export const FINANCIAL_VERSION = 1
+export const LIFECYCLE_VERSION = 1
+export const MUTATION_VERSION = 1
+export const AUTH_SECURITY_VERSION = 1
+export const MATCHING_VERSION = 1
+export const MEDIA_UPLOAD_VERSION = 1
+export const COMMERCIAL_VERSION = 1
+export const MESSAGING_ACTIVITY_VERSION = 1
+export const PUSH_VERSION = 1
 export const MONGO_SETUP_COLLECTION = '_RentralSetup'
 export const MONGO_SETUP_ID = 'rentral-schema'

@@ -7,7 +7,7 @@ import { apiRateLimiter } from './rate-limit'
 
 // `verified` is the legacy option name: it now checks account existence only.
 type Options = { mutation?: boolean; verified?: boolean; platform?: boolean }
-export type ApiIdentity = { userId: string; email?: string; mode: 'cookie' | 'bearer' }
+export type ApiIdentity = { userId: string; email?: string; sessionId?: string; mode: 'cookie' | 'bearer' }
 
 export async function requireApiIdentity(request: Request, options: Options = {}): Promise<ApiIdentity> {
   if (options.platform && !platformEnabled()) throw new ApiError(503, 'PLATFORM_UNAVAILABLE', PLATFORM_UNAVAILABLE)
@@ -18,6 +18,7 @@ export async function requireApiIdentity(request: Request, options: Options = {}
   }
   let userId: string
   let email: string | undefined
+  let sessionId: string | undefined
   try {
     const client = await createClient()
     const { data, error } = authorization.mode === 'bearer' ? await client.auth.getUser(authorization.token) : await client.auth.getUser()
@@ -25,10 +26,15 @@ export async function requireApiIdentity(request: Request, options: Options = {}
     if (error || !data.user || data.user.is_anonymous) throw new ApiError(401, 'UNAUTHORIZED', 'A valid sign-in is required.')
     userId = data.user.id
     email = data.user.email
+    if ('sessionId' in data && typeof data.sessionId === 'string') sessionId = data.sessionId
   } catch (error) {
     if (error instanceof ApiError) throw error
     throw new ApiError(503, 'AUTH_UNAVAILABLE', 'Sign-in verification is temporarily unavailable.')
   }
+  // A client rendered for account A must not send an old form into account B
+  // after another tab changes ambient cookies. This header only restricts access.
+  const expectedAccount = request.headers.get('x-rentral-account')
+  if (expectedAccount !== null && expectedAccount !== userId) throw new ApiError(409, 'ACCOUNT_CHANGED', 'The signed-in account changed. Refresh this page before continuing.')
   if (!apiRateLimiter.allow(`${userId}:${options.mutation ? 'write' : 'read'}`, options.mutation ? 20 : 120)) {
     throw new ApiError(429, 'RATE_LIMITED', 'You are making requests quickly. Please wait a moment.')
   }
@@ -36,5 +42,5 @@ export async function requireApiIdentity(request: Request, options: Options = {}
     const account = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
     if (!account) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Your account is unavailable. Please sign in again.')
   }
-  return { userId, email, mode: authorization.mode }
+  return { userId, email, ...(sessionId ? { sessionId } : {}), mode: authorization.mode }
 }

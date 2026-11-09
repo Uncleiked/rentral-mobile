@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
+import { activeAccountWhere } from './availability'
 
 export const accountSelect = {
   id: true, email: true, username: true, account_type: true, bio: true,
@@ -20,15 +21,15 @@ export function defaultAccountHandle(userId: string, attempt = 0): string {
 
 /** Fill only a missing handle; existing accounts and identity decisions stay intact. */
 export async function ensureAccountHandle(userId: string): Promise<AccountRecord | null> {
-  const account = await prisma.user.findUnique({ where: { id: userId }, select: accountSelect })
+  const account = await prisma.user.findUnique({ where: { id: userId, ...activeAccountWhere }, select: accountSelect })
   if (!account || account.username) return account
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       await prisma.user.updateMany({
-        where: { id: userId, username: null },
+        where: { id: userId, username: null, ...activeAccountWhere },
         data: { username: defaultAccountHandle(userId, attempt), ...(account.account_type ? {} : { account_type: 'individual' }) },
       })
-      return prisma.user.findUnique({ where: { id: userId }, select: accountSelect })
+      return prisma.user.findUnique({ where: { id: userId, ...activeAccountWhere }, select: accountSelect })
     } catch (error) {
       if (!isUniqueConstraintError(error)) throw error
     }
@@ -36,7 +37,7 @@ export async function ensureAccountHandle(userId: string): Promise<AccountRecord
   throw new Error('ACCOUNT_HANDLE_UNAVAILABLE')
 }
 
-/** Call only with the user returned by Supabase getUser, never client-submitted identity. */
+/** Call only with an account from a validated local JWT session, never client-submitted identity. */
 export async function ensureAccount(user: { id: string; email?: string }): Promise<AccountRecord | null> {
   const existing = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true } })
   if (!existing) {

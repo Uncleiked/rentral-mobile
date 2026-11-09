@@ -1,7 +1,9 @@
 export const STORAGE_BUCKETS = ['listings-media', 'compliance-docs', 'profile-avatars'] as const
 export type StorageBucket = typeof STORAGE_BUCKETS[number]
 export class StorageError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string) { super(message) }
+  readonly status: number
+  readonly code: string
+  constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code }
 }
 
 export function storageBucket(value: string): StorageBucket {

@@ -25,6 +25,31 @@ later user-authorized Atlas preparation is recorded in [runtime troubleshooting]
 No old data was imported and the original PostgreSQL database remains untouched.
 Real devices and optional providers still need separate acceptance.
 
+The completion build adds full member/host native booking, check-in, listing/draft,
+vault, messaging, feedback, notification, saved-search, lease and account controls.
+Staff finance, listing/safety review, matching moderation and lifecycle decisions
+remain web workspaces. Squat-Mates uses opt-in preferences and mutual contact;
+Insights uses consented coarse aggregates with privacy thresholds. Paid Insights
+terms and independently reviewed sponsorship require verified Paystack collections.
+There is no recurring-payment mandate, invented wallet balance or credit score.
+
+Paystack is the only supported payment provider. Source includes recipient setup,
+refund/payout approval, exact-kobo reservations/journals, authenticated webhook
+receipts and explicit uncertain-outcome reconciliation. Real settlement stays off
+until merchant capabilities, custody/fee policy and provider acceptance are agreed.
+Resend recovery and dual-confirmed email changes, Expo push, Mux and advisory
+Gemini/Geoapify integrations are implemented behind their configuration/gates;
+implementation does not mean those providers have been activated or accepted.
+
+Security settings revoke sessions/devices on credential changes; soft closure
+removes public participation while preserving necessary financial/evidence history.
+Bounded exports and encrypted backup/isolated restore verification are implemented.
+Inter assets are bundled locally for web/native startup. Mobile configuration may
+include the optional public EAS project UUID for device push in addition to the API
+origin; private keys remain backend-only. See [environment setup](environment-setup.md),
+[completion blueprint](remaining-work-blueprint.md), and [verification record](progress-tracker.md)
+for the remaining physical-device, real-provider and final release checks.
+
 ## Historical product brief below
 
 The remaining original vision is preserved for context, including planned and

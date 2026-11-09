@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   verifyPassword: vi.fn(), hashPassword: vi.fn(), lock: vi.fn(),
 }))
 vi.mock('@/lib/db', () => ({ default: { user: { findUnique: mocks.findUser } } }))
+vi.mock('@/lib/database/readiness', () => ({ authSecurityPrepared: async () => false, pushPrepared: async () => false }))
 vi.mock('@/lib/auth/password', () => ({ verifyPassword: mocks.verifyPassword, hashPassword: mocks.hashPassword }))
 vi.mock('@/lib/database/transactions', () => ({
   lockRecord: mocks.lock,
@@ -59,4 +60,16 @@ it('issues a session when the verified credential snapshot remains current', asy
   expect(mocks.createSession).toHaveBeenCalledOnce()
   expect(mocks.lock).toHaveBeenCalledWith(expect.any(Object), 'user', userId)
   expect(JSON.stringify(session)).not.toContain('old-password-hash')
+})
+
+it('rejects a stale old-email login when dual confirmation changes the address during password verification', async () => {
+  let entered!: () => void, finish!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve }), release = new Promise<void>(resolve => { finish = resolve })
+  mocks.verifyPassword.mockImplementation(async () => { entered(); await release; return true })
+  const login = loginAccount({ email: account.email, password: 'old-password-123' })
+  const rejected = expect(login).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+  await started
+  account.email = `${crypto.randomUUID()}@fixture.invalid`
+  finish(); await rejected
+  expect(mocks.createSession).not.toHaveBeenCalled()
 })

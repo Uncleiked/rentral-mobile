@@ -5,13 +5,12 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, CheckCircle2, Loader2 } from "lucide-react";
-import { usernameBioSchema, emailChangeSchema } from "@/lib/schemas";
-import { checkUsernameAvailability, updateProfileIdentity, requestEmailChange } from "@/app/actions/profile-edit";
+import { usernameBioSchema } from "@/lib/schemas";
+import { checkUsernameAvailability, updateProfileIdentity } from "@/app/actions/profile-edit";
 import type { OwnProfileDetails } from "@/lib/profile-data";
 import type { z } from "zod";
 
 type IdentityFormData = z.infer<typeof usernameBioSchema>;
-type EmailFormData = z.infer<typeof emailChangeSchema>;
 
 interface EditProfileModalProps {
   profile: OwnProfileDetails;
@@ -31,9 +30,6 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
   const [identitySuccess, setIdentitySuccess] = useState(false);
   const [usernameCheck, setUsernameCheck] = useState<{ username: string; status: 'available' | 'taken' | 'error' } | null>(null);
 
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [emailPending, setEmailPending] = useState(false);
-
   const {
     register: registerIdentity,
     handleSubmit: handleIdentitySubmit,
@@ -42,15 +38,6 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
   } = useForm<IdentityFormData>({
     resolver: zodResolver(usernameBioSchema),
     defaultValues: { username: profile.username, bio: profile.bio ?? "" },
-  });
-
-  const {
-    register: registerEmail,
-    handleSubmit: handleEmailSubmit,
-    formState: { errors: emailErrors, isSubmitting: isSendingEmail },
-  } = useForm<EmailFormData>({
-    resolver: zodResolver(emailChangeSchema),
-    defaultValues: { email: "" },
   });
 
   const watchedUsername = useWatch({ control: identityControl, name: "username" });
@@ -95,16 +82,6 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
 
     setIdentitySuccess(true);
     router.refresh();
-  }
-
-  async function onSubmitEmail(data: EmailFormData) {
-    setEmailError(null);
-    const result = await requestEmailChange(data.email);
-    if (!result.success) {
-      setEmailError(result.error);
-      return;
-    }
-    setEmailPending(true);
   }
 
   return (
@@ -174,32 +151,12 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
         <div className="h-px bg-border-subtle" />
 
         {/* Email */}
-        <form onSubmit={handleEmailSubmit(onSubmitEmail)} className="flex flex-col gap-2">
-          <label className={labelClass}>Email</label>
+        <div className="flex flex-col gap-2">
+          <p className={labelClass}>Email</p>
           <p className="text-sm text-text-primary">{profile.email}</p>
-          {profile.pendingEmail && (
-            <p className="text-xs text-accent-warm">
-              Confirmation pending for {profile.pendingEmail}. Check both inboxes.
-            </p>
-          )}
-          <div className="flex items-center gap-2 mt-1">
-            <input {...registerEmail("email")} className={`${inputClass} min-w-0 flex-1`} placeholder="New email address" />
-            <button
-              type="submit"
-              disabled={isSendingEmail}
-              className="px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wide bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all disabled:opacity-70"
-            >
-              {isSendingEmail ? "Sending..." : "Change"}
-            </button>
-          </div>
-          {emailErrors.email && <span className="text-xs text-trust-flagged">{emailErrors.email.message}</span>}
-          {emailError && <p className="text-xs text-trust-flagged">{emailError}</p>}
-          {emailPending && (
-            <p className="text-xs text-accent-hover">
-              Confirmation links sent to your current and new email. Click both to complete the change.
-            </p>
-          )}
-        </form>
+          <p className="text-xs leading-relaxed text-text-muted">Email changes require your current password and confirmation from both inboxes.</p>
+          <button type="button" onClick={() => { onClose(); requestAnimationFrame(() => document.getElementById('account-security')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} className="mt-2 min-h-11 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-sm font-semibold text-text-primary hover:bg-glass-light-hover">Open account security</button>
+        </div>
 
         <div className="h-px bg-border-subtle" />
 

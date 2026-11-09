@@ -1,27 +1,16 @@
-import { useState } from 'react'
-import { Linking, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { router } from 'expo-router'
 import type { Booking } from '../lib/types'
 import { memberAmount, memberDate, memberStatus } from '../lib/member-format'
-import { config } from '../lib/config'
 import { colors, fonts, radius, space } from '../theme'
 import { Button } from './Button'
 
 type Props = { booking: Booking }
 
 export function BookingCard({ booking }: Props) {
-  const [opening, setOpening] = useState(false)
-  const [webError, setWebError] = useState<string | null>(null)
   const icon = booking.listing.category === 'house' ? 'home-outline' : booking.listing.category === 'car' ? 'car-outline' : 'boat-outline'
   const otherName = (booking.role === 'host' ? booking.renter.username : booking.host.username) ?? 'Rentral member'
-  async function manageBooking(): Promise<void> {
-    if (opening) return
-    setOpening(true); setWebError(null)
-    try { await Linking.openURL(`${config.apiUrl}/marketplace/bookings/${encodeURIComponent(booking.id)}`) }
-    catch { setWebError('Could not open this booking in your browser. Please try again.') }
-    finally { setOpening(false) }
-  }
   return <View style={styles.card}>
     <View style={styles.top}><View style={styles.icon}><Ionicons name={icon} size={22} color={colors.accentBright} /></View>
       <View style={styles.heading}><Text style={styles.title}>{memberStatus(booking.kind)}</Text><Text style={styles.muted}>{booking.listing.location}</Text></View>
@@ -36,9 +25,7 @@ export function BookingCard({ booking }: Props) {
       <View style={styles.amountRow}><Text style={styles.muted}>Additional payment</Text><Text style={styles.body}>{memberAmount(booking.payableKobo, booking.currency)}</Text></View>
     </> : null}
     <Button secondary title="View listing" onPress={() => router.push({ pathname: '/listing/[id]', params: { id: booking.listing.id } })} />
-    <Button secondary title="Manage booking on web" busy={opening} onPress={() => { void manageBooking() }} />
-    <Text style={styles.muted}>Open your browser for booking updates, checkout and check-in. You may need to sign in again.</Text>
-    {webError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{webError}</Text> : null}
+    <Button title="Manage booking" onPress={() => router.push({ pathname: '/booking/[id]', params: { id: booking.id } })} />
   </View>
 }
 

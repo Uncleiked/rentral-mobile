@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import prisma from '@/lib/db'
+import { updateSavedListing } from '@/lib/api/saved'
 import { requireUserId } from '@/lib/action-helpers'
 import { platformEnabled, PLATFORM_UNAVAILABLE, type ActionResult } from '@/lib/platform'
 
@@ -16,13 +16,7 @@ export async function setListingSaved(input: unknown): Promise<ActionResult<{ sa
     const userId = await requireUserId()
     if (!userId) return { success: false, error: 'Please sign in to save a listing.' }
     const { listingId, saved } = parsed.data
-    if (saved) {
-      const listing = await prisma.listing.findFirst({ where: { id: listingId, listing_status: 'active' }, select: { id: true } })
-      if (!listing) return { success: false, error: 'This listing is no longer available.' }
-      await prisma.savedListing.upsert({ where: { user_id_listing_id: { user_id: userId, listing_id: listingId } }, create: { user_id: userId, listing_id: listingId }, update: {} })
-    } else {
-      await prisma.savedListing.deleteMany({ where: { user_id: userId, listing_id: listingId } })
-    }
+    await updateSavedListing(userId, listingId, saved)
     revalidatePath('/marketplace/saved')
     revalidatePath('/marketplace')
     revalidatePath(`/marketplace/listing/${listingId}`)

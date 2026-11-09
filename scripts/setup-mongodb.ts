@@ -15,6 +15,8 @@ try {
   const result = await ensureMongoIndexes(client.db(mongoDatabaseName(uri)))
   console.log(`MongoDB ready: ${result.collections} collections and ${result.indexes} indexes checked.`)
 } catch (error) {
-  console.error('[mongodb/setup] Setup failed:', error instanceof Error ? error.name : 'UnknownError')
+  console.error('[mongodb/setup] Setup failed:', error instanceof Error && error.message === 'RESTORE_QUARANTINED_SETUP_REFUSED'
+    ? 'Restore verification databases stay quarantined. Choose the application database; recovery cutover requires a separate review.'
+    : error instanceof Error ? error.name : 'UnknownError')
   process.exitCode = 1
 } finally { await client.close() }

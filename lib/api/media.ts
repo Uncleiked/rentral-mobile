@@ -1,4 +1,5 @@
 import prisma from '@/lib/db'
+import { activeAccountWhere } from '@/lib/accounts/availability'
 import { createAdminClient } from '@/lib/admin'
 import { canViewMedia, ownsListingMediaPath } from '@/lib/media/policy'
 import { muxConfigured, muxEnabled } from '@/lib/media/config'
@@ -13,7 +14,7 @@ export type ApiListingMedia = { posterUrl: string | null; videoUrl: string | nul
 /** Authorize before signing; native players receive temporary URLs without access tokens. */
 export async function listingMediaForApi(userId: string, listingId: string): Promise<ApiListingMedia> {
   const listing = await prisma.listing.findFirst({
-    where: { id: listingId, OR: [{ lister_id: userId }, { listing_status: 'active' }] },
+    where: { id: listingId, lister: { is: activeAccountWhere }, OR: [{ lister_id: userId }, { listing_status: 'active' }] },
     select: { lister_id: true, listing_status: true, poster_path: true, video_path: true },
   })
   if (!listing || !canViewMedia(userId, listing)) throw new ApiError(404, 'NOT_FOUND', 'This listing is unavailable.')

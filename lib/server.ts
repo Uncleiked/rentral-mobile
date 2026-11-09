@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { authenticateAccess, loginAccount, registerAccount, requestPasswordReset, revokeRefreshToken, revokeSession } from '@/lib/auth/service'
+import { authenticateAccess, loginAccount, registerAccount, requestPasswordReset, revokeRefreshToken, revokeAccessToken } from '@/lib/auth/service'
 import { refreshWebSession } from '@/lib/auth/web-refresh'
 import { ACCESS_COOKIE, REFRESH_COOKIE, expiredCookies, sessionCookies } from '@/lib/auth/cookies'
 import { AuthError, type AuthSession } from '@/lib/auth/types'
@@ -22,16 +22,18 @@ export async function createClient() {
         attemptedRefresh = true
         const session = await refreshWebSession(refresh)
         save(session)
-        return { data: { user: session.user }, error: null }
+        const authenticated = await authenticateAccess(session.access_token)
+        return { data: { user: authenticated.user, sessionId: authenticated.sessionId }, error: null }
       }
       const authenticated = await authenticateAccess(value)
-      return { data: { user: authenticated.user }, error: null }
+      return { data: { user: authenticated.user, sessionId: authenticated.sessionId }, error: null }
     } catch (error) {
       if (!attemptedRefresh && token === undefined && error instanceof AuthError && error.status === 401 && store.get(REFRESH_COOKIE)?.value) {
         try {
           const session = await refreshWebSession(store.get(REFRESH_COOKIE)!.value)
           save(session)
-          return { data: { user: session.user }, error: null }
+          const authenticated = await authenticateAccess(session.access_token)
+          return { data: { user: authenticated.user, sessionId: authenticated.sessionId }, error: null }
         } catch (refreshError) {
           return { data: { user: null }, error: refreshError instanceof AuthError ? refreshError : new AuthError(503, 'AUTH_UNAVAILABLE', 'Sign-in is temporarily unavailable.') }
         }
@@ -53,20 +55,19 @@ export async function createClient() {
     async signOut() {
       try {
         const value = issued?.access_token ?? store.get(ACCESS_COOKIE)?.value
-        let sessionId: string | null = null
+        let revoked = false
         if (value) {
-          try { sessionId = (await authenticateAccess(value)).sessionId }
+          try { revoked = await revokeAccessToken(value) }
           catch (error) { if (!(error instanceof AuthError) || error.status !== 401) throw error }
         }
-        if (sessionId) await revokeSession(sessionId)
-        else {
+        if (!revoked) {
           const refresh = issued?.refresh_token ?? store.get(REFRESH_COOKIE)?.value
-          if (refresh) await revokeRefreshToken(refresh)
+          if (refresh && !await revokeRefreshToken(refresh)) throw new AuthError(409, 'LOGOUT_UNCONFIRMED', 'Sign-out could not be confirmed because the session changed. Refresh account status and try again.')
         }
         for (const cookie of expiredCookies()) store.set(cookie)
         issued = null
         return { error: null }
-      } catch { return { error: new AuthError(503, 'AUTH_UNAVAILABLE', 'Could not sign out. Please try again.') } }
+      } catch (error) { return { error: error instanceof AuthError ? error : new AuthError(503, 'AUTH_UNAVAILABLE', 'Could not sign out. Please try again.') } }
     },
     async refreshSession() {
       try {

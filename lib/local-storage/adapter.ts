@@ -1,6 +1,7 @@
 import { createLocalStorage, defaultStorageDirectory } from './core'
 import { storageBucket, storageFailure, storagePath, StorageError } from './policy'
 import { signedStorageUrl, storageFileUrl } from './urls'
+import { uploadStoredObject, removeStoredObjects } from '@/lib/storage-claims/service'
 
 type UploadBody = Blob | ArrayBuffer | Uint8Array
 function streamBody(body: UploadBody): ReadableStream<Uint8Array> {
@@ -16,7 +17,7 @@ export function createStorageAdmin() {
     const bucket = storageBucket(value)
     return {
       async upload(path: string, body: UploadBody, options?: { contentType?: string; upsert?: boolean; cacheControl?: string }) {
-        try { return { data: await storage.upload(bucket, path, streamBody(body), options?.contentType ?? (body instanceof Blob ? body.type : null)), error: null } }
+        try { return { data: await uploadStoredObject(storagePath(bucket, path)[0], bucket, path, streamBody(body), options?.contentType ?? (body instanceof Blob ? body.type : null)), error: null } }
         catch (error) { return { data: null, error: storageFailure(error) } }
       },
       async info(path: string) {
@@ -27,11 +28,17 @@ export function createStorageAdmin() {
         try { return { data: await storage.download(bucket, path), error: null } }
         catch (error) { return { data: null, error: storageFailure(error) } }
       },
+      async stream(path: string, range?: { start: number; end: number }) {
+        try { return { data: await storage.stream(bucket, path, range), error: null } }
+        catch (error) { return { data: null, error: storageFailure(error) } }
+      },
       async remove(paths: string[]) {
         try {
           if (paths.length > 100) throw new StorageError(400, 'INVALID_REQUEST', 'Remove at most 100 files at a time.')
           for (const path of paths) storagePath(bucket, path)
-          for (const path of paths) await storage.remove(bucket, path)
+          const byOwner = new Map<string, string[]>()
+          for (const path of paths) { const owner = storagePath(bucket, path)[0]; byOwner.set(owner, [...(byOwner.get(owner) ?? []), path]) }
+          for (const [owner, owned] of byOwner) await removeStoredObjects(owner, bucket, owned)
           return { data: paths.map(name => ({ name })), error: null }
         } catch (error) { return { data: null, error: storageFailure(error) } }
       },

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { ApiError, apiFailure } from '@/lib/api/http'
 import { apiRateLimiter } from '@/lib/api/rate-limit'
 import { AuthError } from './types'
-import { MongoReadinessError } from '@/lib/database/readiness'
+import { mongoReadinessFailure } from '@/lib/database/readiness-errors'
 
 export function authLimit(request: Request): void {
   const origin = request.headers.get('origin')
@@ -15,9 +15,10 @@ export function authLimit(request: Request): void {
   if (!apiRateLimiter.allow(`auth:${remote}`, 15)) throw new ApiError(429, 'RATE_LIMITED', 'Too many sign-in attempts. Please wait a minute.')
 }
 export function authFailure(error: unknown): Response {
+  const readiness = mongoReadinessFailure(error)
+  if (readiness) return apiFailure(new ApiError(readiness.status, readiness.code, readiness.message), 'auth')
   if (error instanceof ApiError) return apiFailure(error, 'auth')
   if (error instanceof AuthError) return apiFailure(new ApiError(error.status, error.code, error.message), 'auth')
-  if (error instanceof MongoReadinessError) return apiFailure(new ApiError(error.status, error.code, error.message), 'auth')
   if (error instanceof z.ZodError) return apiFailure(new ApiError(400, 'INVALID_REQUEST', 'Check your email and password. Use at least 8 characters for a new password.'), 'auth')
   // Record only a safe classification; provider messages can contain account
   // data, document contents or connection credentials.

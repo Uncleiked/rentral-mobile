@@ -1,12 +1,14 @@
-import { notFound } from 'next/navigation'
-import { BarChart3 } from 'lucide-react'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { MarketplaceShell } from '@/components/layout/MarketplaceShell'
-import { requireInsightsId } from '@/lib/operations/access'
-import { platformEnabled } from '@/lib/platform'
-import { getMarketInsights } from '@/lib/analytics/insights'
+import { requireUserId } from '@/lib/action-helpers'
+import { commercialInsights } from '@/lib/commerce/insights'
+import { insightsAccess } from '@/lib/commerce/views'
+import { InsightsReport } from '@/components/commerce/InsightsReport'
 
 export default async function InsightsDashboard() {
-  if (!await requireInsightsId()) notFound()
-  const cohorts = platformEnabled() ? await getMarketInsights() : []
-  return <MarketplaceShell><div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12"><p className="text-xs uppercase tracking-widest text-accent-hover">Rentral Insights</p><h1 className="mt-3 text-3xl font-semibold">Understand the next move.</h1><p className="mb-8 mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">Consented search demand for the current month. Groups with fewer than ten distinct contributors are withheld. Search interest is an observation; it does not guarantee occupancy or returns.</p>{!cohorts.length ? <div className="rounded-2xl border border-border-subtle bg-surface-card p-10 text-center"><BarChart3 className="mx-auto mb-4 size-10 text-accent-primary" /><h2 className="text-xl font-semibold">Good insights take evidence.</h2><p className="mt-3 text-sm text-text-muted">No groups meet the reporting threshold yet. There are no fabricated trends or forecasts.</p></div> : <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{cohorts.map(cohort => <article key={`${cohort.category}:${cohort.intent}:${cohort.neighborhood}:${cohort.budget_band}`} className="rounded-2xl border border-border-subtle bg-surface-card p-6"><p className="text-xs uppercase tracking-widest text-accent-hover">{cohort.category} · {cohort.intent}</p><h2 className="mt-4 text-xl font-semibold capitalize">{cohort.neighborhood.replaceAll('-', ' ')}</h2><p className="mt-2 text-sm text-text-muted">Budget: {cohort.budget_band.replaceAll('-', ' ')}</p><p className="mt-6 text-3xl font-semibold">{cohort.people}<span className="ml-2 text-xs font-normal text-text-muted">contributors</span></p><p className="mt-2 text-xs text-text-muted">{cohort.searches} deduplicated preference events</p></article>)}</div>}</div></MarketplaceShell>
+  const actor = await requireUserId()
+  if (!actor) redirect('/sign-in')
+  const access = await insightsAccess(actor), report = access.allowed ? await commercialInsights(actor).catch(() => null) : null
+  return <MarketplaceShell><div className="mx-auto w-full max-w-6xl space-y-7 px-4 py-8 sm:px-6 sm:py-12"><header><p className="text-xs uppercase tracking-widest text-accent-hover">Rentral Insights</p><h1 className="mt-3 text-3xl font-semibold">Understand observed market interest.</h1><p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">Coarse consented observations with minimum contributor thresholds. A paid term never reveals identities or bypasses privacy protections.</p></header><nav className="flex flex-wrap gap-3" aria-label="Insights access"><Link href="/marketplace/purchases" className="inline-flex min-h-11 items-center rounded-xl border border-border-subtle px-4 py-3 text-sm text-accent-hover">Access terms and purchases</Link><Link href="/marketplace/campaigns" className="inline-flex min-h-11 items-center rounded-xl border border-border-subtle px-4 py-3 text-sm text-accent-hover">Sponsored campaigns</Link></nav>{report ? <InsightsReport report={report} /> : <section className="rounded-2xl border border-border-subtle bg-surface-card p-7"><h2 className="text-xl font-semibold">{access.allowed ? 'The report is temporarily unavailable.' : 'Choose a fixed Insights term.'}</h2><p className="mt-3 text-sm leading-relaxed text-text-muted">{access.allowed ? 'Your access record is preserved. Refresh this page in a moment.' : 'Current internal reviewers and members with an active verified paid term can open this report. Review the exact price and duration in purchases; no automatic recurring charges are created.'}</p></section>}</div></MarketplaceShell>
 }

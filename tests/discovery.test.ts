@@ -5,8 +5,9 @@ vi.mock('@/lib/db', () => ({ default: { listing: { findRaw: mocks.findRaw, findM
 vi.mock('@/lib/media/status', () => ({ listingMediaStatuses: mocks.media }))
 vi.mock('@/lib/media/config', () => ({ muxEnabled: () => process.env.MUX_ENABLED === 'true' }))
 vi.mock('@/lib/profile-data', () => ({ formatListingPrice: (value: unknown) => String(value), listingPriceDenomination: (category: string) => category === 'house' ? 'year' : 'day' }))
-import { getDiscoveryListings, getListingDetails } from '@/lib/discovery'
+import { getDiscoveryListings, getListingDetails, getPublicHostListings } from '@/lib/discovery'
 import { parseDiscoveryFilters } from '@/lib/discovery-policy'
+import { activeAccountWhere } from '@/lib/accounts/availability'
 
 const id = '27d5a2ee-62c1-4c5d-93de-7a0ee6d5728d'
 const row = {
@@ -30,10 +31,21 @@ afterEach(() => vi.unstubAllEnvs())
 it('queries active inventory with stable ordered pagination and server-side filters', async () => {
   await getDiscoveryListings(parseDiscoveryFilters({ category: 'house', q: 'Lekki', bedrooms: '0', minPrice: '1000000' }), 'viewer')
   expect(mocks.findRaw).toHaveBeenCalledWith({ filter: { $and: expect.arrayContaining([{ listing_status: 'active' }, { category: 'house' }, { text_address: { $regex: 'Lekki', $options: 'i' } }, { 'asset_metadata.bedrooms': '0' }, { base_rent_amount: { $gte: 1000000 } }]) }, options: { projection: { _id: 1 }, sort: { createdAt: -1, _id: -1 }, limit: 19, maxTimeMS: { secs: 3, nanos: 0 } } })
-  expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 19, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], where: { id: { in: [id] }, listing_status: 'active' } }))
+  expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 19, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], where: { id: { in: [id] }, listing_status: 'active', lister: { is: activeAccountWhere } } }))
   expect(mocks.findMany.mock.calls[0][0].select).not.toHaveProperty('privateLocation')
   expect(mocks.saves).not.toHaveBeenCalled()
   expect(mocks.holds).not.toHaveBeenCalled()
+})
+
+it('archives active host listings through the same private-field allowlist and cursor boundary', async () => {
+  const cursor = { id, createdAt: row.createdAt.toISOString() }
+  const result = await getPublicHostListings('host', 'viewer', cursor, 20)
+  expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { lister_id: 'host', listing_status: 'active', lister: { is: activeAccountWhere }, OR: [
+    { createdAt: { lt: row.createdAt } }, { createdAt: row.createdAt, id: { lt: id } },
+  ] }, take: 21 }))
+  expect(mocks.findMany.mock.calls[0][0].select).not.toHaveProperty('privateLocation')
+  expect(JSON.stringify(result)).not.toContain('Hidden Street')
+  expect(JSON.stringify(result)).not.toContain('host/folder')
 })
 
 it('shows a live hold deadline without exposing the holder or querying new tables before staging', async () => {
@@ -70,7 +82,7 @@ it('shows the public title entered in the native listing form', async () => {
 
 it('limits private detail lookup to the viewer’s own inventory or active listings', async () => {
   await getListingDetails(id, 'viewer')
-  expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id, OR: [{ listing_status: 'active' }, { lister_id: 'viewer' }] } }))
+  expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id, lister: { is: activeAccountWhere }, OR: [{ listing_status: 'active' }, { lister_id: 'viewer' }] } }))
   expect(await getListingDetails('../../private', 'viewer')).toBeNull()
   expect(mocks.findFirst).toHaveBeenCalledTimes(1)
 })

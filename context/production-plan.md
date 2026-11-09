@@ -1,5 +1,19 @@
 # Rentral Architecture and Delivery Plan
 
+> **Historical plan — current scope supersedes this document (2026-11-09).**
+> Read the user-approved [completion blueprint](remaining-work-blueprint.md) and
+> [31-area current status matrix](completion-status.md) first. The active stack is
+> Expo Android/iOS, npm, local Next.js, MongoDB/JWT and private local storage;
+> personal KYC onboarding is removed and Paystack is the sole payment provider.
+> Supabase/PostGIS/OAuth/Didit initiation, OPay, historical migration commands,
+> bypass flags and earlier provider-completion labels below are retained evidence,
+> not current setup instructions. The original PostgreSQL database stays untouched.
+> Use [environment setup](environment-setup.md) and [current progress](progress-tracker.md)
+> for configuration and actual checks. Source completion does not establish real
+> provider/device acceptance or a production release.
+
+## Historical evidence begins here
+
 Current environment instruction (2026-11-07): staging was cancelled; use
 `.env.local`. The user explicitly declined the twelve pending migrations to its
 hosted Supabase database: keep that database unchanged and do not re-request the

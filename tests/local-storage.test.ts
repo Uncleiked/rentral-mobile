@@ -7,7 +7,13 @@ import { signedStorageUrl, verifyStorageToken } from '@/lib/local-storage/urls'
 import { accessToken } from '@/lib/auth/token'
 
 const identity = vi.hoisted(() => vi.fn())
+const avatarOwner = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/db', () => ({ default: { user: { findFirst: avatarOwner } } }))
+const claims = vi.hoisted(() => ({ upload: vi.fn(), remove: vi.fn() }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: identity }))
+// This suite isolates filesystem/HTTP behavior; actual Mongo claim serialization
+// is exercised by the owned replica-set integration fixture.
+vi.mock('@/lib/storage-claims/service', () => ({ uploadStoredObject: claims.upload, removeStoredObjects: claims.remove }))
 import { POST as upload, GET as list, DELETE as remove } from '@/app/api/v1/uploads/[bucket]/route'
 import { GET as file, HEAD } from '@/app/api/v1/files/[bucket]/[...path]/route'
 import { ApiError } from '@/lib/api/http'
@@ -33,6 +39,9 @@ beforeEach(async () => {
   root = join(fixture, 'objects'); storage = createLocalStorage(root)
   vi.stubEnv('RENTRAL_STORAGE_DIR', root); vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'); vi.stubEnv('JWT_SECRET', 'test-only-file-signing-secret-over-32-characters')
   identity.mockReset(); identity.mockResolvedValue({ userId: 'owner', mode: 'bearer' })
+  avatarOwner.mockReset().mockResolvedValue({ id: 'owner' })
+  claims.upload.mockReset().mockImplementation((_owner: string, bucket: Parameters<typeof storage.upload>[0], path: string, body: ReadableStream<Uint8Array>, type: string) => storage.upload(bucket, path, body, type))
+  claims.remove.mockReset().mockImplementation(async (_owner: string, bucket: Parameters<typeof storage.remove>[0], paths: string[]) => { for (const path of paths) await storage.remove(bucket, path) })
 })
 afterEach(async () => {
   vi.useRealTimers(); vi.unstubAllEnvs()
@@ -43,13 +52,31 @@ afterEach(async () => {
 })
 
 describe('scoped local storage and verified binary uploads', () => {
+  it('denies a closed owner’s avatar while keeping active owners’ upload previews available', async () => {
+    await storage.upload('profile-avatars', 'owner/avatar.png', bytesStream(png), 'image/png')
+    avatarOwner.mockResolvedValueOnce(null)
+    expect((await file(new Request('http://localhost:3000/api/v1/files/profile-avatars/owner/avatar.png'), fileContext('profile-avatars', 'owner/avatar.png'))).status).toBe(404)
+    const visible = await file(new Request('http://localhost:3000/api/v1/files/profile-avatars/owner/avatar.png'), fileContext('profile-avatars', 'owner/avatar.png'))
+    expect(visible.status).toBe(200); await visible.arrayBuffer()
+    expect(avatarOwner).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'owner', OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }) }))
+  })
+  it('preserves bytes when the shared deletion boundary reports a committed reference', async () => {
+    await storage.upload('profile-avatars', 'owner/avatar.png', bytesStream(png), 'image/png')
+    claims.remove.mockRejectedValueOnce(new StorageError(409, 'FILE_IN_USE', 'This file is attached and cannot be removed.'))
+    const response = await remove(new Request('http://localhost:3000/api/v1/uploads/profile-avatars', {
+      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paths: ['owner/avatar.png'] }),
+    }), uploadContext())
+    expect(response.status).toBe(409)
+    expect(claims.remove).toHaveBeenCalledWith('owner', 'profile-avatars', ['owner/avatar.png'])
+    expect((await storage.info('profile-avatars', 'owner/avatar.png')).size).toBe(png.length)
+  })
   it('stores genuine raster bytes and metadata without an external storage service', async () => {
     expect((await upload(uploadRequest('owner/avatar.png', png), uploadContext())).status).toBe(201)
     expect(await storage.info('profile-avatars', 'owner/avatar.png')).toMatchObject({ contentType: 'image/png', size: png.length })
     expect(new Uint8Array(await (await storage.download('profile-avatars', 'owner/avatar.png')).arrayBuffer())).toEqual(png)
     const response = await file(new Request('http://localhost:3000/api/v1/files/profile-avatars/owner/avatar.png'), fileContext('profile-avatars', 'owner/avatar.png'))
     expect(response.status).toBe(200); expect(response.headers.get('content-type')).toBe('image/png'); expect(response.headers.get('x-content-type-options')).toBe('nosniff')
-    expect(response.headers.get('cache-control')).toContain('public')
+    expect(response.headers.get('cache-control')).toContain('no-store')
     await response.arrayBuffer()
   })
   it('keeps real MOV container metadata and never relabels it as MP4', async () => {
@@ -78,7 +105,7 @@ describe('scoped local storage and verified binary uploads', () => {
   it('cannot replace a deleted recording under an old listing/GPS path', async () => {
     await storage.upload('listings-media', videoPath, bytesStream(movie), 'video/quicktime')
     await storage.remove('listings-media', videoPath)
-    await expect(storage.info('listings-media', videoPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(storage.info('listings-media', videoPath)).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' })
     await expect(storage.upload('listings-media', videoPath, bytesStream(movie), 'video/quicktime')).rejects.toMatchObject({ status: 409, code: 'FILE_NAME_USED' })
     await expect(storage.upload('listings-media', videoPath.replace('video.mov', 'VIDEO.MOV'), bytesStream(movie), 'video/quicktime')).rejects.toMatchObject({ status: 409, code: 'FILE_NAME_USED' })
     const markers = await readdir(join(root, '.deleted'))

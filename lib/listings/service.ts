@@ -19,6 +19,12 @@ import { processListingMedia } from '@/lib/media/processing'
 import { platformEnabled } from '@/lib/platform'
 import { addressFingerprint } from '@/lib/listings/spatial'
 import { lockRecord, withTransaction } from '@/lib/database/transactions'
+import { claimStorageObjects, prepareListingStorage } from '@/lib/storage-claims/service'
+import { StorageError } from '@/lib/local-storage/policy'
+import { committedMutation, mutationCommand, transactionMutation, recordMutation, MutationConflictError, type MutationCommand } from '@/lib/database/mutations'
+import { expireListingReservations } from '@/lib/bookings/service'
+import { z } from 'zod'
+import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
 
 const METADATA_SCHEMAS = {
   house: houseMetadataSchema,
@@ -26,7 +32,7 @@ const METADATA_SCHEMAS = {
   boat: boatMetadataSchema,
 } as const
 
-type ActionFailure = { success: false; error: string; uncertain?: boolean }
+type ActionFailure = { success: false; error: string; uncertain?: boolean; code?: 'INVALID_RETRY' | 'STALE_LISTING' | 'ACCOUNT_UNAVAILABLE' }
 type SaveListingResult = { success: true; listingId: string } | ActionFailure
 type SaveDraftResult = { success: true; draftId: string } | ActionFailure
 type UpdateListingResult = { success: true } | ActionFailure
@@ -35,6 +41,7 @@ type UpdateListingResult = { success: true } | ActionFailure
 // while still rolling back — caught once, right below the transaction call.
 class DraftNotFoundError extends Error {}
 class MissingCoordinatesError extends Error {}
+class ListingRevisionError extends Error {}
 
 // Authenticated local-file adapters scope uploads to the actor's folder. This
 // additional check rejects references to another member's stored objects.
@@ -60,14 +67,16 @@ async function setListingCoordinates(
 // They are never exported as client-invokable Server Actions.
 export async function saveListingForUser(userId: string, input: unknown): Promise<SaveListingResult> {
   let committedListingId: string | null = null
+  let command: MutationCommand | null = null
   try {
-    if (muxEnabled() && !muxConfigured()) {
-      return { success: false, error: 'Video processing is temporarily unavailable. Save your draft and try again later.' }
-    }
     const parsed = saveListingInputSchema.safeParse(input)
     if (!parsed.success) {
       return { success: false, error: 'Some listing details are invalid. Go back and check each step.' }
     }
+    command = mutationCommand(userId, 'listing_submit', parsed.data.clientId, parsed.data)
+    const alreadySaved = await committedMutation(command)
+    if (alreadySaved) return { success: true, listingId: alreadySaved }
+    if (muxEnabled() && !muxConfigured()) return { success: false, error: 'Video processing is temporarily unavailable. Save your draft and try again later.' }
     const { category, address, basePrice, draftId, lat, lng, accuracy, videoPath, posterPath, documentPath } =
       parsed.data
 
@@ -90,6 +99,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
     if (!hasFreshCoords && !draftId) {
       return { success: false, error: 'Your walkthrough is missing its GPS lock. Go back and re-record it.' }
     }
+    const storedObjects = await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
 
     const listingData = {
       category,
@@ -104,11 +114,15 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
 
     // The validated listing and its private location commit atomically before
     // the draft becomes a review submission. Mongo has no SQL CHECK constraint.
-    const listing = await withTransaction(async (tx) => {
+    const result = await withTransaction(async (tx) => {
+      await assertActiveAccounts(tx, [userId])
+      const replay = await transactionMutation(tx, command)
+      if (replay) return { row: await tx.listing.findFirstOrThrow({ where: { id: replay, lister_id: userId }, select: { id: true, lister: { select: { username: true } } } }), replayed: true }
       if (draftId) {
         // Serialize draft publication with edits so ownership, status, footage
         // and its stored GPS are checked against the exact row being published.
-        const owned = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true } })
+        const owned = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true, revision: true } })
+        if (owned && parsed.data.expectedRevision !== undefined && owned.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
         if (!owned || !await lockRecord(tx, 'listing', draftId)) throw new DraftNotFoundError()
         const current = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { video_path: true, privateLocation: { select: { id: true } } } })
         if (!current) throw new DraftNotFoundError()
@@ -116,6 +130,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
           throw new MissingCoordinatesError()
         }
       }
+      await claimStorageObjects(tx, userId, storedObjects)
       const row = draftId
         ? await tx.listing.update({
             where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
@@ -138,9 +153,12 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       if (muxEnabled()) {
         await tx.mediaAsset.create({ data: { listing_id: row.id, source_path: videoPath, mux_asset_id: null, playback_id: null } })
       }
-      return row
+      await recordMutation(tx, command, row.id)
+      return { row, replayed: false }
     })
+    const listing = result.row
     committedListingId = listing.id
+    if (result.replayed) return { success: true, listingId: listing.id }
 
     revalidatePath('/marketplace')
     revalidatePath('/marketplace/listing')
@@ -163,6 +181,15 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
 
     return { success: true, listingId: listing.id }
   } catch (error) {
+    if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
+    if (error instanceof MutationConflictError) return { success: false, code: 'INVALID_RETRY', error: error.message }
+    if (error instanceof ListingRevisionError) return { success: false, code: 'STALE_LISTING', error: 'This listing changed on another screen. Reload it before saving your changes.' }
+    if (command) {
+      try {
+        const saved = await committedMutation(command)
+        if (saved) return { success: true, listingId: saved }
+      } catch (recovery) { if (recovery instanceof MutationConflictError) return { success: false, code: 'INVALID_RETRY', error: recovery.message } }
+    }
     if (committedListingId) {
       console.warn('[listings] Listing saved; post-commit refresh or dispatch failed.')
       return { success: true, listingId: committedListingId }
@@ -171,6 +198,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
     if (error instanceof MissingCoordinatesError) {
       return { success: false, error: 'Your walkthrough is missing its GPS lock. Go back and re-record it.' }
     }
+    if (error instanceof StorageError && error.status < 500) return { success: false, error: error.message }
     console.error('[listings] Submission failed:', error instanceof Error ? error.name : 'UnknownError')
     return { success: false, uncertain: true, error: 'The save could not be confirmed. Check Your Listings before submitting again.' }
   }
@@ -178,17 +206,22 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
 
 export async function saveDraftForUser(userId: string, input: unknown): Promise<SaveDraftResult> {
   let committedDraftId: string | null = null
+  let command: MutationCommand | null = null
   try {
     const parsed = saveDraftInputSchema.safeParse(input)
     if (!parsed.success) {
       return { success: false, error: 'This draft could not be saved. Please try again.' }
     }
+    command = mutationCommand(userId, 'listing_draft_save', parsed.data.clientId, parsed.data)
+    const alreadySaved = await committedMutation(command)
+    if (alreadySaved) return { success: true, draftId: alreadySaved }
     const { draftId, category, wizardStep, address, basePrice, lat, lng, videoPath, posterPath, documentPath } =
       parsed.data
 
     if (!ownsPaths(userId, [videoPath, posterPath, documentPath])) {
       return { success: false, error: 'Uploaded files could not be verified. Please try again.' }
     }
+    const storedObjects = await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
 
     // Whole-naira prices of at most ten digits are exact IEEE-754 integers.
     const priceForDb = basePrice && /^[1-9][0-9]{0,9}$/.test(basePrice) ? Number(basePrice) : null
@@ -207,6 +240,9 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
     const hasFreshCoords = lat !== undefined && lng !== undefined
 
     const row = await withTransaction(async (tx) => {
+      await assertActiveAccounts(tx, [userId])
+      const replay = await transactionMutation(tx, command)
+      if (replay) return { id: replay, replayed: true }
       let id = draftId
       let videoChanged = false
 
@@ -214,7 +250,8 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
         // Read the current video_path before overwriting it — needed to tell
         // whether this save is swapping in different footage, in which case
         // any inherited coordinates would no longer describe what's stored.
-        const owned = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true } })
+        const owned = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true, revision: true } })
+        if (owned && parsed.data.expectedRevision !== undefined && owned.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
         if (!owned || !await lockRecord(tx, 'listing', draftId)) throw new DraftNotFoundError()
         const existing = await tx.listing.findFirst({
           where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
@@ -222,6 +259,7 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
         })
         if (!existing) throw new DraftNotFoundError()
         videoChanged = (videoPath ?? null) !== existing.video_path
+        await claimStorageObjects(tx, userId, storedObjects)
 
         const result = await tx.listing.updateMany({
           where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
@@ -229,6 +267,7 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
         })
         if (result.count === 0) throw new DraftNotFoundError()
       } else {
+        await claimStorageObjects(tx, userId, storedObjects)
         const created = await tx.listing.create({
           data: { ...draftData, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
           select: { id: true },
@@ -246,9 +285,11 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
         // footage they were never recorded against.
         await tx.listingLocation.deleteMany({ where: { listing_id: id } })
       }
-      return { id }
+      await recordMutation(tx, command, id)
+      return { id, replayed: false }
     })
     committedDraftId = row.id
+    if (row.replayed) return { success: true, draftId: row.id }
 
     revalidatePath('/marketplace/listing')
 
@@ -256,6 +297,15 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
 
     return { success: true, draftId: row.id }
   } catch (error) {
+    if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
+    if (error instanceof MutationConflictError) return { success: false, code: 'INVALID_RETRY', error: error.message }
+    if (error instanceof ListingRevisionError) return { success: false, code: 'STALE_LISTING', error: 'This draft changed on another screen. Reload it before saving your changes.' }
+    if (command) {
+      try {
+        const saved = await committedMutation(command)
+        if (saved) return { success: true, draftId: saved }
+      } catch (recovery) { if (recovery instanceof MutationConflictError) return { success: false, code: 'INVALID_RETRY', error: recovery.message } }
+    }
     if (committedDraftId) {
       console.warn('[listings] Draft saved; post-commit refresh failed.')
       return { success: true, draftId: committedDraftId }
@@ -263,12 +313,48 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
     if (error instanceof DraftNotFoundError) {
       return { success: false, error: 'Draft not found.' }
     }
+    if (error instanceof StorageError && error.status < 500) return { success: false, error: error.message }
     console.error('[listings] Draft save failed:', error instanceof Error ? error.name : 'UnknownError')
     return { success: false, uncertain: true, error: 'The save could not be confirmed. Check Your Listings before saving again.' }
   }
 }
 
+/** Reversible owner archive; every existing booking, receipt and file is retained. */
+export async function setListingArchivedForUser(userId: string, listingId: string, archived: boolean): Promise<UpdateListingResult> {
+  if (!z.uuid().safeParse(listingId).success || typeof archived !== 'boolean') return { success: false, error: 'Choose a valid listing.' }
+  let committed = false
+  try {
+    await withTransaction(async tx => {
+      await assertActiveAccounts(tx, [userId])
+      const owned = await tx.listing.findFirst({ where: { id: listingId, lister_id: userId }, select: { id: true } })
+      if (!owned || !await lockRecord(tx, 'listing', listingId)) throw new DraftNotFoundError()
+      const listing = await tx.listing.findFirst({ where: { id: listingId, lister_id: userId }, select: { listing_status: true, archived_at: true, archived_status: true } })
+      if (!listing) throw new DraftNotFoundError()
+      if (Boolean(listing.archived_at) === archived) return
+      if (archived) {
+        await expireListingReservations(tx, listingId, new Date())
+        const current = await tx.booking.findFirst({ where: { listing_id: listingId, status: { in: ['requested', 'awaiting_payment', 'confirmed', 'disputed'] } }, select: { id: true } })
+        if (current) throw new Error('ACTIVE_BOOKING')
+        await tx.listing.update({ where: { id: listingId }, data: { archived_at: new Date(), archived_status: listing.listing_status, listing_status: 'suspended' } })
+      } else {
+        await tx.listing.update({ where: { id: listingId }, data: { archived_at: null, archived_status: null,
+          listing_status: listing.archived_status === LISTING_STATUS.DRAFT ? LISTING_STATUS.DRAFT : LISTING_STATUS.PENDING_VERIFICATION } })
+      }
+    })
+    committed = true
+    revalidatePath('/marketplace'); revalidatePath('/marketplace/listing'); revalidatePath(`/marketplace/listing/${listingId}`)
+    return { success: true }
+  } catch (error) {
+    if (committed) return { success: true }
+    if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
+    if (error instanceof DraftNotFoundError) return { success: false, error: 'Listing not found.' }
+    if (error instanceof Error && error.message === 'ACTIVE_BOOKING') return { success: false, error: 'Finish or cancel outstanding bookings and reports before archiving this listing.' }
+    return { success: false, uncertain: true, error: 'The archive change could not be confirmed. Refresh your listings before trying again.' }
+  }
+}
+
 export async function updateListingForUser(userId: string, input: unknown): Promise<UpdateListingResult> {
+  let committed = false
   try {
     const parsed = updateListingInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -278,11 +364,12 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
 
     const row = await prisma.listing.findFirst({
       where: { id: listingId, lister_id: userId },
-      select: { id: true, category: true, listing_status: true, lister: { select: { username: true } } },
+      select: { id: true, category: true, listing_status: true, archived_at: true, lister: { select: { username: true } } },
     })
     if (!row) {
       return { success: false, error: 'Listing not found.' }
     }
+    if (row.archived_at) return { success: false, error: 'Restore this listing before editing it.' }
     if (row.listing_status === LISTING_STATUS.DRAFT) {
       return { success: false, error: 'Drafts are edited from the listing wizard.' }
     }
@@ -296,10 +383,15 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
     // Category, video, GPS, and documents are padlocked (Item 11) — only the
     // describable attributes are editable.
     await withTransaction(async tx => {
+      await assertActiveAccounts(tx, [userId])
+      if (parsed.data.expectedRevision !== undefined) {
+        const version = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId }, select: { revision: true } })
+        if (!version || version.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
+      }
       if (!await lockRecord(tx, 'listing', row.id)) throw new Error('Listing is no longer editable.')
       const current = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId, listing_status: { not: LISTING_STATUS.DRAFT } },
-        select: { text_address: true } })
-      if (!current) throw new Error('Listing is no longer editable.')
+        select: { text_address: true, archived_at: true } })
+      if (!current || current.archived_at) throw new Error('Listing is no longer editable.')
       const addressChanged = addressFingerprint(current.text_address ?? '') !== addressFingerprint(address)
       if (addressChanged && platformEnabled()) {
         const reservations = await tx.booking.count({ where: { listing_id: row.id, status: { in: ['confirmed', 'completed', 'disputed'] } } })
@@ -316,6 +408,7 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
       })
     })
 
+    committed = true
     revalidatePath('/marketplace')
     revalidatePath('/marketplace/listing')
     revalidatePath(`/marketplace/listing/${row.id}`)
@@ -325,10 +418,14 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
 
     return { success: true }
   } catch (error) {
+    if (committed) return { success: true }
+    if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
+    if (error instanceof ListingRevisionError) return { success: false, code: 'STALE_LISTING', error: 'This listing changed on another screen. Reload it before saving your changes.' }
     console.error('[listings] Update failed:', error instanceof Error ? error.name : 'UnknownError')
     if (error instanceof Error && error.message === 'Address changes are unavailable after a confirmed booking.') {
       return { success: false, error: 'This asset already has a confirmed booking. Its address cannot be changed.' }
     }
-    return { success: false, error: 'We could not update your listing. Please try again.' }
+    if (error instanceof Error && error.message === 'Listing is no longer editable.') return { success: false, code: 'STALE_LISTING', error: 'This listing is no longer editable. Reload it before continuing.' }
+    return { success: false, uncertain: true, error: 'The update could not be confirmed. Reload this listing before saving again.' }
   }
 }

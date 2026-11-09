@@ -16,7 +16,9 @@
   Access tokens last 15 minutes, refresh/session lifetime of 30 days, refresh hashes rotate once. Do not embed
   JWT_SECRET or database credentials in any EXPO_PUBLIC setting.
 - Expo SDK 58/React 19.3/RN 0.88.1 uses Router, SecureStore, camera/location,
-  document picker, native video and Inter. Match versions with expo install --check.
+  document picker, native video, notifications and bundled Inter. Match versions
+  with expo install --check. Public configuration is EXPO_PUBLIC_API_URL plus the
+  optional EXPO_PUBLIC_EAS_PROJECT_ID UUID; no server credentials belong there.
   Native clients use local JWT API endpoints; OAuth/PKCE/Supabase are removed.
 - Local filesystem adapters validate actual upload type/magic/size and owner paths;
   private signed URLs expire within 300 seconds and support Range/HEAD. iOS MOV
@@ -24,8 +26,28 @@
   migration or hosted Storage service is needed for this implementation.
 - Didit initiation/browser SDK and KYC/profile access gates are removed. Historical
   signed webhook receipts remain local records and never change marketplace access.
-- Development password-reset codes use the private opt-in local email outbox;
-  production delivery remains unavailable. File routes never expose that outbox.
+- Recovery/email-change delivery supports explicitly enabled Resend using a
+  dedicated AES-256-GCM encrypted durable outbox and bounded, same-key provider
+  retries. Configuration requires AUTH_EMAIL_ENABLED, AUTH_EMAIL_ENCRYPTION_KEY,
+  RESEND_API_KEY and RENTRAL_EMAIL_FROM. Without sending, the private opt-in
+  development outbox remains available; file routes never expose either outbox.
+- Paystack is the only payment provider. Exact-kobo/environment-bound collections,
+  recipient verification, independent refund/payout approval, authenticated
+  receipts and reconciliation share domain services. Provider POSTs never run in
+  transaction retries or blindly replay unknown outcomes. See paystack-integration.md.
+- Expo push requires a configured public EAS project UUID, an opted-in current
+  session, encrypted server token storage and PUSH_NOTIFICATIONS_ENABLED. Delivery
+  receipt recovery does not imply device receipt. Logout/credential rotation revoke
+  the appropriate prepared registrations even when sending is disabled.
+- Web Inter uses next/font/local with the installed licensed Inter assets;
+  native Inter uses expo-font and direct weight imports. Do not restore a network
+  Google Fonts dependency or icon-family barrel imports.
+- Gemini/Geoapify use fixed-host bounded JSON transport, redirect denial and whole
+  response deadlines. Document signals remain advisory and cannot publish assets
+  or replace human review. See document-providers.md.
+- Account closure is soft and exports are allowlisted/cursor bounded. Encrypted
+  backup verification restores only to an isolated quarantined target; existing
+  source credentials, funds and storage must never be reset by a verification run.
 - Optional media/payment/AI/geocoding providers remain separately configured and
   gated. Existing timeout/idempotency/uncertain-result constraints still apply.
 - Oluso monitoring requires both OLUSO_ENABLED=true and OLUSO_API_KEY. It is

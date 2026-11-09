@@ -9,6 +9,7 @@ import { sendPasswordReset } from './actions'
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [delivery, setDelivery] = useState<'email' | 'development-outbox'>('email')
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -27,6 +28,7 @@ export default function ForgotPasswordPage() {
         toast.error(result.error)
       } else {
         setIsSuccess(true)
+        setDelivery(result.delivery)
         toast.success(result.message)
       }
     } catch (err: unknown) {
@@ -54,7 +56,7 @@ export default function ForgotPasswordPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-sm text-text-primary font-medium">For this local setup, check the backend’s private email outbox for your code.</p>
+            <p className="text-sm text-text-primary font-medium">{delivery === 'email' ? 'If your account exists, check your inbox for its recovery code.' : 'Ask your Rentral operator for your recovery code.'}</p>
             <Link href="/reset-password" className="text-sm font-medium text-accent-hover">Use reset code</Link>
             <Link 
               href="/sign-in" 

@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { BookingError, bookingQuoteSchema, PAYMENT_WINDOW_MS } from './policy'
 import { lockRecord } from '@/lib/database/transactions'
+import { paymentFundsReserved } from '@/lib/payments/allocations'
 
 type CreditBooking = {
   id: string; listing_id: string; seeker_id: string; lister_id: string; kind: string; status: string;
@@ -43,7 +44,8 @@ export async function allocateHoldCredit(tx: Prisma.TransactionClient, rental: C
   if (!hold || hold.id === rental.id || hold.allocated_hold_credit) throw new BookingError('This holding credit is unavailable or has already been allocated.')
   const terms = holdCreditTerms(hold, rental, hold.payments, now)
   const sourcePayment = hold.payments.find(payment => payment.status === 'succeeded')
-  if (sourcePayment?.kind !== 'booking' || sourcePayment.ledger?.kind !== 'provider_collection') throw new BookingError('This holding payment needs a recorded collection receipt before it can be credited.')
+  if (sourcePayment?.kind !== 'booking' || !sourcePayment.ledger.some(journal => journal.kind === 'provider_collection')) throw new BookingError('This holding payment needs a recorded collection receipt before it can be credited.')
+  if (await paymentFundsReserved(tx, sourcePayment.id)) throw new BookingError('This holding payment is reserved for a financial review and cannot be credited.')
   const seeker = await tx.user.findFirst({ where: { id: rental.seeker_id }, select: { id: true } })
   if (!seeker) throw new BookingError('The renter account is unavailable.')
   // Remove the source from the rental exclusion only in the allocation transaction.
@@ -76,6 +78,6 @@ export async function holdCreditCanConfirm(tx: Prisma.TransactionClient, rental:
     rental.settlement_status === 'unsettled' && Boolean(hold.expires_at && hold.expires_at > now) &&
     (rental.status !== 'awaiting_payment' || Boolean(rental.expires_at && hold.expires_at && rental.expires_at <= hold.expires_at)) &&
     hold.listing_id === rental.listing_id && hold.seeker_id === rental.seeker_id && hold.lister_id === rental.lister_id && hold.currency === rental.currency &&
-    paid.length === 1 && paid[0].kind === 'booking' && paid[0].ledger?.kind === 'provider_collection' && paid[0].amount_kobo === allocation.amount_kobo && paid[0].currency === rental.currency && paid[0].user_id === rental.seeker_id && Boolean(paid[0].paid_at) &&
-    !hold.payments.some(payment => payment.status === 'requires_review')
+    paid.length === 1 && paid[0].kind === 'booking' && paid[0].ledger.some(journal => journal.kind === 'provider_collection') && paid[0].amount_kobo === allocation.amount_kobo && paid[0].currency === rental.currency && paid[0].user_id === rental.seeker_id && Boolean(paid[0].paid_at) &&
+    !hold.payments.some(payment => payment.status === 'requires_review') && !await paymentFundsReserved(tx, paid[0].id)
 }

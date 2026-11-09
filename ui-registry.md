@@ -1,5 +1,57 @@
 # Rentral UI Registry
 
+### Member dashboard activity
+
+Files: components/account/MemberActivityCards.tsx, apps/mobile/app/dashboard.tsx.
+Updated 2026-11-09. Keep surface/border cards, prominent value below a muted
+caption, then a short sample explanation. Native radius.xl/space.xl; web
+rounded-2xl/p-5. Missing or incomplete samples show Unavailable. Do not style
+these observations as a credit score or guarantee of attendance.
+
+### Native lease management
+
+Files: apps/mobile/app/leases.tsx and lease/[id].tsx. Updated 2026-11-09.
+Use Page/Field/Button; surface cards, border token, radius.xl, space.xl padding;
+20px semibold heading, 14px secondary body, 12px muted help. Unknown results keep
+input visible with warning text and an explicit history-check action. Evidence
+links request fresh access, and proposed dates show device time zone.
+
+### Conversation activity controls
+
+File: components/messaging/ChatPanel.tsx. Updated 2026-11-09.
+Keep surface-card / border-subtle / rounded-2xl / p-4 with muted text-xs status
+below the member name. Privacy control is a labeled accent checkbox with a
+text-xs muted label; read receipts remain part of the existing timestamp caption.
+Presence is advisory and scoped to the visible conversation.
+
+### Lease requests and lifecycle reviews — 2026-11-09
+
+Files: components/lifecycle/*, components/admin/LifecycleReviewControls.tsx,
+components/admin/ReviewControls.tsx, marketplace renewal/termination/staff routes.
+
+| Property | Pattern |
+| --- | --- |
+| Cards | bg-surface-card, border-border-subtle, rounded-2xl, p-5/p-6, space-y-5 |
+| Fields | bg-background-app, border-border-subtle, rounded-xl, p-3, text-sm text-text-primary |
+| Labels/help/status | text-xs text-text-muted; body/status text-sm text-text-secondary |
+| Primary action | min-h-11, rounded-xl, px-5 py-3, bg-accent-primary, text-text-inverse |
+| Interaction | hover:bg-accent-hover; semantic focus-visible outline with offset; disabled:opacity-50 |
+| Secondary action | min-h-11, rounded-xl, border-border-subtle, text-text-secondary/accent-hover |
+
+Keep original/proposed lease dates and provider payment evidence distinct.
+Retain documents/form values on failure; unconfirmed creates block resubmission
+while request history refreshes. Counterpart agreement and independent staff
+review remain separate. Incident acknowledgement never implies a resend, booking
+change or financial movement. Private documents open only through scoped links.
+
+### Completion build patterns — 2026-11-09
+
+Native booking summaries, inspection PIN/date controls and current-role staff
+forms are captured in context/ui-registry.md. Use native semantic theme tokens
+and existing Button/Field primitives, and the staff review form's semantic web
+surface/border/accent/focus states. Do not infer public identity verification from
+sign-in or use historical KYC fields as a publication prerequisite.
+
 ### Local JWT account flow — 2026-11-09
 
 The native/web account forms now use local JWT email/password accounts backed by
@@ -313,4 +365,29 @@ Booking credit notices and balances follow `context/ui-registry.md` → **Holdin
 # Build configuration checkpoint — 2026-11-07
 
 Prisma generation now precedes the production build. No visual patterns changed.
+
+### Squat-Mates preferences, contact and review controls — 2026-11-09
+
+Use the existing `bg-surface-card`, `border-border-subtle`, `rounded-2xl`, `p-5`
+cards, `space-y-5` form rhythm and semantic primary/secondary/muted text. Fields
+and buttons have `min-h-11`, `rounded-xl` and visible accent focus outlines.
+The opt-in checkbox starts unchecked for a new profile. Explain overlap with
+plain reasons beside the score; never imply safety, credit or payment ability.
+Messages preserve whitespace and wrap long content. Own messages use
+`bg-accent-muted`; another member uses the standard card surface. Read timestamps
+never imply presence. Unknown sends retain one message identifier and draft;
+an explicit readback precedes same-message retry. Failed current authorization
+clears cached messages and profile content. A separate private report form can
+remain without exposing hidden evidence. Staff decisions require written notes
+and clearly distinguish matching restriction from a public safety notice.
+
+# Commercial purchases and sponsored placements — 2026-11-09
+
+Canonical detail: context/ui-registry.md entry of the same name. Reuse existing
+rounded-2xl surface/border cards, rounded-xl fields, semantic text and minimum44px
+actions. Display exact NGN, fixed terms and billing environment; keep approval,
+verified payment and delivery eligibility distinct. Preserve uncertain commands
+and offer readback. Label sponsored cards separately from organic results.
+Native web handoffs reuse secondary Button plus muted help stating separate
+browser sign-in; never add session credentials to navigation URLs.
 

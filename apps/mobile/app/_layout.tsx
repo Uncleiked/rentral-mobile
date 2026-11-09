@@ -7,11 +7,12 @@ import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider } from '../src/providers/AuthProvider'
 import { RootNavigator } from '../src/components/RootNavigator'
+import { PushProvider } from '../src/providers/PushProvider'
 
 export { ErrorBoundary } from 'expo-router'
 export default function RootLayout() {
   const [loaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold })
   if (!loaded && !fontError) return null
-  return <SafeAreaProvider><AuthProvider><StatusBar style="light" /><RootNavigator /></AuthProvider></SafeAreaProvider>
+  return <SafeAreaProvider><AuthProvider><PushProvider><StatusBar style="light" /><RootNavigator /></PushProvider></AuthProvider></SafeAreaProvider>
 }
 import 'react-native-url-polyfill/auto'

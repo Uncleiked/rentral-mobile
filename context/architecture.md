@@ -44,6 +44,42 @@ and acceptance requirements remain in force. See [API](mobile-api.md),
 Oluso monitoring is optional and starts only when OLUSO_ENABLED=true and
 OLUSO_API_KEY are configured; unconfigured monitoring does not block startup.
 
+The approved completion build now includes member/host native workflows and web
+staff workspaces for listing review, finance, safety, matching and lease changes.
+Shared services cover durable media claims, booking quotes/check-in/hold credit,
+participant messaging/activity/read receipts, notifications, saved searches,
+consented Insights, reviewed sponsored campaigns and manual-term commercial
+orders. These are persisted workflows, not mock wallet balances or credit scores.
+
+Paystack is the sole payment adapter. Collections, recipients, refunds, transfers,
+authenticated receipts and reconciliation bind exact kobo amounts and provider
+environment. Independent approval, durable fund reservations and immutable
+journals separate collection from settlement; an unknown provider outcome remains
+uncertain until readback. Merchant permissions and custody/policy approval remain
+required before enabling real financial mutations. See [Paystack](paystack-integration.md).
+
+Account security includes password/session controls, dual-mailbox email changes,
+and encrypted durable Resend delivery when explicitly configured. The private
+development outbox remains available without sending mail. A signed expired
+access token can prove revocation of its own session only; it never authenticates
+an API request. Credential rotation and all-session revocation also revoke prepared
+push registrations. Soft closure hides public participation and revokes access
+while retaining owed financial/evidence history; exports are bounded allowlists.
+
+Optional Expo push uses a public EAS project UUID plus server-only encrypted
+device tokens, current session/consent checks and delivery receipts. Push remains
+off without its explicit gate and configuration. The mobile public configuration
+is EXPO_PUBLIC_API_URL and optional EXPO_PUBLIC_EAS_PROJECT_ID only.
+
+Web Inter is bundled through next/font/local; native Inter is bundled through
+expo-font. Startup/build does not download Google Fonts. Encrypted backup tooling
+captures Mongo plus private storage/tombstones; restore verification accepts only
+a fresh owned local target, quarantines credentials/providers, and cannot perform
+an automatic production cutover. See [backup operations](backup-operations.md),
+[retention](backup-retention.md), [environment setup](environment-setup.md) and
+[current verification evidence](progress-tracker.md). No real email, push, payment,
+Mux/AI/geocoding acceptance or physical-device release is implied by source tests.
+
 ## Historical architecture below — superseded stack and examples
 
 > Historical target: [Architecture and Delivery Plan](production-plan.md), reviewed

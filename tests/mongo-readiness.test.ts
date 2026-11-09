@@ -16,7 +16,7 @@ vi.mock('@/lib/database/config', () => ({
   mongoDatabaseName: () => 'owned_readiness_fixture',
 }))
 
-import { assertMongoReady, closeMongoReadiness } from '@/lib/database/readiness'
+import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared } from '@/lib/database/readiness'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -32,6 +32,50 @@ describe('Mongo readiness recovery', () => {
     state.nextRead = () => Promise.resolve({ schemaVersion: 1 })
   })
   afterEach(async () => { await closeMongoReadiness(); vi.unstubAllEnvs(); vi.useRealTimers() })
+
+  it('keeps core accounts available but blocks storage claims until their feature preparation is recorded', async () => {
+    vi.useFakeTimers()
+    await assertMongoReady()
+    await expect(assertStorageClaimsReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    expect(state.clients[0].findOne).toHaveBeenCalledOnce()
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, storageClaimsVersion: 1 })
+    vi.advanceTimersByTime(5001)
+    await assertStorageClaimsReady()
+    expect(state.clients).toHaveLength(1)
+    expect(state.clients[0].findOne).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects an incompatible storage feature version without disabling core authentication', async () => {
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, storageClaimsVersion: 2 })
+    await assertMongoReady()
+    await expect(assertStorageClaimsReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+  })
+  it('prepares media transport, commercial billing and conversation activity independently of core auth', async () => {
+    vi.useFakeTimers()
+    await assertMongoReady()
+    await expect(assertMediaUploadReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    await expect(assertCommercialReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    await expect(assertMessagingActivityReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    expect(await commercialPrepared()).toBe(false)
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, mediaUploadVersion: 1, commercialVersion: 1, messagingActivityVersion: 1 })
+    vi.advanceTimersByTime(5001)
+    await assertMediaUploadReady(); await assertCommercialReady(); await assertMessagingActivityReady()
+    expect(await commercialPrepared()).toBe(true)
+  })
+
+  it('keeps existing accounts and storage available while new money/lifecycle collections remain unprepared', async () => {
+    vi.useFakeTimers()
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, storageClaimsVersion: 1 })
+    await assertStorageClaimsReady()
+    expect(await lifecyclePrepared()).toBe(false)
+    await expect(assertFinancialReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    await expect(assertLifecycleReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, storageClaimsVersion: 1, financialVersion: 1, lifecycleVersion: 1 })
+    vi.advanceTimersByTime(5001)
+    await assertFinancialReady(); await assertLifecycleReady()
+    expect(await lifecyclePrepared()).toBe(true)
+    expect(state.clients).toHaveLength(1)
+  })
 
   it('discards a failed connection and recovers on the next request, then caches only a successful marker', async () => {
     vi.useFakeTimers()

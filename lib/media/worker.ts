@@ -1,4 +1,6 @@
 import prisma from '@/lib/db'
+import { activeAccountWhere } from '@/lib/accounts/availability'
+import { assertMediaUploadReady } from '@/lib/database/readiness'
 import { muxConfigured, muxEnabled } from './config'
 import { muxClient } from './mux'
 import { mediaDecision, unboundAssetWhere } from './policy'
@@ -47,6 +49,7 @@ async function reconcile(job: ProcessingJob): Promise<ReconcileResult> {
 
 export async function runMediaWorker(): Promise<MediaWorkerSummary> {
   if (!mediaWorkerEnabled()) throw new Error('media-worker-disabled')
+  await assertMediaUploadReady()
   const cutoff = new Date(Date.now() - RETRY_DELAY_MS)
   const summary: MediaWorkerSummary = {
     dispatch: { skipped: 0, submitted: 0, retryable: 0, uncertain: 0, failed: 0 },
@@ -78,12 +81,15 @@ export async function runMediaWorker(): Promise<MediaWorkerSummary> {
 
   const queued = await prisma.mediaAsset.findMany({
     where: {
-      status: 'queued', attempts: { lt: 5 }, updatedAt: { lte: cutoff },
-      listing: { listing_status: { in: ['pending_verification', 'active'] } },
+      OR: [
+        { status: 'queued', attempts: { lt: 5 }, updatedAt: { lte: cutoff } },
+        { status: { in: ['uploading', 'uncertain'] }, updatedAt: { lte: new Date(Date.now() - 5000) } },
+      ],
+      listing: { lister: activeAccountWhere, listing_status: { in: ['pending_verification', 'active'] } },
     },
     select: { listing_id: true, listing: { select: { lister_id: true } } }, orderBy, take: BATCH_SIZE,
   })
-  const dispatched = await Promise.allSettled(queued.map(job => processListingMedia(job.listing_id, job.listing.lister_id, cutoff)))
+  const dispatched = await Promise.allSettled(queued.map(job => processListingMedia(job.listing_id, job.listing.lister_id, new Date(Date.now() - 5000))))
   for (const result of dispatched) {
     summary.dispatch[result.status === 'fulfilled' ? result.value : 'failed'] += 1
   }

@@ -30,7 +30,7 @@ describe('API identity and authorization', () => {
     expect(mocks.profile).not.toHaveBeenCalled()
   })
 
-  it('validates bearer credentials with Supabase instead of accepting token contents', async () => {
+  it('validates bearer credentials through the live JWT session adapter', async () => {
     const request = new Request(`${appUrl}/api/v1/bookings`, { method: 'POST', headers: { authorization: 'Bearer opaque.valid-token' } })
     await expect(requireApiIdentity(request, { mutation: true, verified: true })).resolves.toMatchObject({ mode: 'bearer' })
     expect(mocks.getUser).toHaveBeenCalledWith('opaque.valid-token')
@@ -64,7 +64,7 @@ describe('API identity and authorization', () => {
     await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/bookings`, { headers: { authorization: 'Bearer token' } }), { verified: true })).rejects.toMatchObject({ status: 403, code: 'ACCOUNT_REQUIRED' })
   })
 
-  it('rejects expired credentials and anonymous Supabase accounts', async () => {
+  it('rejects expired credentials and anonymous accounts', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'sensitive provider detail' } })
     await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/listings`))).rejects.toMatchObject({ status: 401 })
     mocks.getUser.mockResolvedValue({ data: { user: { id: 'anonymous', is_anonymous: true } }, error: null })
@@ -77,6 +77,20 @@ describe('API identity and authorization', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     expect(response.headers.get('location')).toBeNull()
     expect(await response.json()).toEqual({ success: false, error: 'A valid sign-in is required.', code: 'UNAUTHORIZED' })
+  })
+  it.each(['cookie', 'bearer'])('denies a stale %s form after the signed-in account changes and accepts only a matching restriction', async mode => {
+    const auth: Record<string, string> = mode === 'bearer' ? { authorization: 'Bearer valid-token' } : {}
+    for (const expected of ['another-account', '']) {
+      await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/financial/operations`, { method: 'POST', headers: { ...auth, origin: appUrl, 'X-Rentral-Account': expected } }), { mutation: true, verified: true }))
+        .rejects.toMatchObject({ status: 409, code: 'ACCOUNT_CHANGED' })
+    }
+    expect(mocks.profile).not.toHaveBeenCalled()
+    await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/financial/operations`, { method: 'POST', headers: { ...auth, origin: appUrl, 'X-Rentral-Account': `api-user-${identityNumber}` } }), { mutation: true, verified: true }))
+      .resolves.toMatchObject({ userId: `api-user-${identityNumber}` })
+  })
+  it('never treats an expected-account header as authentication', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: null })
+    await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/auth/account`, { headers: { 'X-Rentral-Account': 'forged-account' } }))).rejects.toMatchObject({ status: 401 })
   })
 })
 

@@ -1,112 +1,137 @@
-# Memory — Rentral phone account flow verified
+# Memory — Rentral source and local validation complete
 
-Last updated: 2026-11-09 (Africa/Lagos). Runtime verified; source ready for authorized commit/push.
+Last updated: 2026-11-10 00:14 Africa/Lagos. **All approved source/local work is
+accepted, including native publication fee and clean first-request startup.
+Only root's authorized final staging/commit/push remains at this handoff.**
 
 ## What was built
 
-Expo SDK 58 Android/iOS app in apps/mobile, sharing the Next.js web/API services:
-discovery/details/video, saves, bookings, chat, optional profiles and owner
-camera/GPS/document submission. Existing web host actions/check-in/optional
-checkout and web draft resume remain web flows.
+The whole [approved blueprint](context/remaining-work-blueprint.md) is implemented.
+Use the [31-area matrix](context/completion-status.md),
+[final review](context/final-review.md), [progress](context/progress-tracker.md)
+and detailed [environment guide](context/environment-setup.md), not historical
+unchecked boxes or retired Supabase/PG instructions.
 
-KYC onboarding/initiation/profile-completion access gates are removed. Historical
-verification stays factual; authentication, ownership, participant/staff,
-publication and payment controls remain. MongoDB via Prisma 6.19.3 preserves
-transaction revision locks, overlap prevention, exact balanced integer-kobo
-ledgers, immutable audits/hold allocations, private GPS and thresholded Insights.
-Local filesystem uploads and purpose-bound signed Range/HEAD files replace
-Supabase Storage. JWT accounts replace Supabase/OAuth.
+Expo member/host workflows include discovery/filter/feed, capture/drafts/edit/
+archive/vault, bookings/quotes/check-in/holds, own publication-fee checkout/status/
+reconcile, feedback/appeals, messages/shares/activity/read receipts, notifications,
+leases/dashboard, financial/security/privacy/export/closure, device saved searches
+and Squat-Mates. Staff review/finance/matching/lifecycle/campaign and manual paid
+Insights/sponsorship are web workspaces. Shared services enforce current actor/
+roles, private evidence, exact immutable journals, reservations/independent approval,
+durable request/media claims and explicit uncertain-outcome reconciliation.
+
+Native publication fee is fully accepted: owner GET overview plus strict empty
+checkout POST and exact-reference reconciliation reuse existing collection services.
+Fixed shared server policy is 100,000 kobo/NGN 1,000, never client/env price.
+Fresh intent/URL/mode binding, durable no-autoreplay, locked archive denial,
+callback preflight and current-mode proof for NEW publication passed. Historical
+mode remains factual; already-public assets/old journals are not rewritten.
+
+Optional source includes Paystack, encrypted Resend auth delivery/dual email
+confirmation, SID/consent-bound encrypted Expo push, resumable local-to-Mux recovery,
+bounded advisory Gemini/Geoapify, leased workers/retention and coordinated encrypted
+Mongo/private-storage backup with isolated quarantined restore verification.
 
 ## Decisions made
 
-Use npm 11.19.1 workspaces, Node 24.x, Expo SDK 58, Next.js 16.4.5 and Prisma
-6.19.3 MongoDB. App/backend run locally. The user's later explicit choice is
-KEEP THE SAVED ATLAS CONNECTION. Preserve private environment settings; do not
-replace the database, restore Supabase/pnpm/KYC, import legacy data or run old SQL.
-
-User-authorized Atlas preparation checked/prepared 29 collections and 73 indexes,
-validators and readiness marker. No reset/import; original PostgreSQL/Supabase
-remains untouched. Normal integration suites use only owned disposable local
-fixtures. The controlled Atlas diagnostic ran within the authorized account-flow
-repair and removed only its temporary records. No real addresses, database URI
-or credentials belong in tracked files.
-
-Passwords use salted scrypt-v1 (N=32768/r=8/p=3). Access lasts 15 minutes; refresh
-capabilities rotate once within a 30-day session and are stored as hashes. Current
-AuthSession and database staff_role are authoritative. Private development reset
-codes are opt-in; production email recovery is unavailable. Supporting asset
-documents are listing review, not personal KYC.
-
-Source commit/push to Uncleiked/rentral-mobile is authorized. Git history and the
-coordinator's final response identify the delivered revision; do not add a
-self-referential commit hash here. No deployment/store build/provider activation.
+- User approved completing the whole blueprint, required skills, cleanup/testing/
+  guide and **commit/push to Uncleiked/rentral-mobile**. This persists; no routine
+  reconfirmation is needed. Do not reopen accepted implementation or add scope.
+- **Paystack ONLY**; Expo Android/iOS, Node 24.x/npm 11.19.1 workspaces, local
+  Next.js, saved Atlas through Prisma 6.19.3 Mongo connector, JWT email/password
+  and private local files. Personal KYC/profile onboarding stays removed.
+- Preserve keys/URI/accounts/files/financial/evidence/history and original PG.
+  No reset/import, role grant, real provider send/charge/transfer, deployment,
+  EAS/store build or store publication is implied. Staff roles come from DB.
+- Private env is ignored. Never print URI/host/credentials/private IDs or put
+  backend secrets in public bundles. Mobile public API origin/optional EAS UUID
+  only. Real public release needs HTTPS and approved provider/platform setup.
+- Windows workspace C:/Users/Mudian Consult/Documents/RentralMobile. Use npm.cmd/
+  npx.cmd or actual helper files; complex Node-e/PowerShell quoting has stripped
+  quotes/hung. One owned Next/Metro; leave other projects on 8081–8083 and unrelated
+  Docker resources untouched. Stop owned Next before Prisma generation/build on
+  Windows (DLL lock), and never build/generate during an owned fixture.
 
 ## Problems solved
 
-Metro was serving the phone bundle without an API backend. Keep both processes:
-root npm run dev binds fixed API port 3000; npm run mobile serves Expo on 8081.
-The ignored mobile API origin is explicitly set to the reachable computer LAN.
-Missing/loopback/tunnel native hosts now require actionable explicit configuration;
-emulator addresses are not guessed, and Expo tunnels do not forward the API.
+Atlas IP drift/readiness recovery and cold startup were diagnosed without TLS
+bypass or URI replacement. Readiness's old 3s connection window was too short:
+sanitized temporary trace showed native discovery/marker about 8.5s, Prisma 2s
+and dummy scrypt 1.1s. The bounded window is now 10s. All traces/helper/imports/
+diagnostic-flag references were removed. Cross-module readiness errors now require
+Error name + exact 503 + one of two codes and always use trusted constant messages,
+never foreign error text. Clean diagnostic-OFF first request passed below.
 
-The saved Atlas IP entry had drifted. After a user-approved public-IP check the
-user updated the /32. TLS, replica-set checks, preparation and Prisma reads pass.
-The external approval covered an IP-only lookup; no private Atlas hostname was
-sent to a third-party DNS service.
-Failed readiness clients are evicted instead of caching a closed topology;
-readiness auth errors are safely mapped/redacted.
-
-A session transaction exceeded the prior five-second timeout after account
-creation. Acquisition/execution now allow up to 5s/10s within 15s total; P2028 is
-never replayed. Registration after a fresh backend restart returned 201 in 12.4s,
-under the native 20s timeout. Concurrent phone background traffic was present;
-do not describe this as an isolated cold-only startup benchmark.
-
-Earlier safeguards remain: session creation rechecks the verified hash under the
-user lock; password resets revoke sessions/other reset codes; strict refresh CAS;
-bounded pending cookie refresh; explicit bearer precedence; logout can revoke by
-refresh capability. Oluso is opt-in and does not block unconfigured startup.
-Fresh production builds may need network access for the Google Inter font.
+15s bounded transaction budgets/no P2028 replay, actor-bound commands/account
+headers, same-SID revocation-only expired proof, consent/SID push serialization,
+locally bundled Inter/shadcn CSS and supported Expo dependency reification are
+retained. Safe cleanup removed 23 retired files plus 7 SQL fixtures, fake UI/
+TrustSummary/PG-only deps, scratch and verified caches while preserving needed
+history, user operational data and installed skills.
 
 ## Current state
 
-Actual phone sign-in returned 200 (6.4s); profile/listings returned 200; profile
-PATCH returned 200 (6.6s). Subsequent messages, bookings, saves and category/location
-discovery all returned 200. Live member use confirms the account-flow failure is
-resolved. The original real account is preserved.
+- **Full unit 1,678 PASS**, with 89 ordinary fixture skips executed separately.
+  **Full actual owned Mongo 89 PASS in one serial sequence:** core49 + financial18
+  + auth20 + backup2. Actual wrapper PASS14 synthetic records/4 files/1 balanced
+  journal/1 claim. All owned Docker/browser/backup fixtures cleaned; no user DB.
+- Earlier old5s contention timeouts are superseded by the successful full run.
+  Owned integration default is bounded15s; explicit overrides remain. Unit
+  default stays5s; one deliberate five-KDF case explicitly15s with assertions/
+  password parameters unchanged. Final safe-error/CORS focused checks passed.
+- **Final production build14839 PASS:** compile49s, TypeScript108s,97 static
+  pages, no warnings after startup/safe-error/CORS fixes, including3 fee API routes.
+  Android1787/iOS1808 modules~4.8MB each; web1250 modules/45 chunks passed.
+  Late changes were server-only, so no additional native re-export was needed.
+- Final production web6 PASS57.5s +8 real HTTP fixture checks, including fee401/
+  409/404 scopes and ZERO PaymentIntent writes. Native fee8 checks/35 API mocks/
+  0 errors or outbound requests PASS320/390/768. Earlier sponsor6/54, push7/29,
+  dashboard4/4 accepted. Providers blocked; physical devices are not inferred.
+- Final root/mobile lint/type checks passed. Doctor20/20, full audit0 and backend/
+  mobile env checks remain valid; no late dependency/key change. Actual Atlas
+  setup51 collections/152 indexes preserved all31 pre-existing collections and
+  2 non-marker records with unchanged hashes. No fee schema/repreparation needed.
+- Final source/public scan1170 files against2 actual backend secret values found
+  0 matches. Private env remains untracked; local mobile API origin is not tracked.
+  Only the core Safety flag changed earlier; other parsed keys/gates preserved.
+- **Clean diagnostic-OFF runtime PASS:** /sign-in200 in10.8s, FIRST unique fake
+  login401 in12.6s, NO retry/account/session writes. This supersedes exploratory
+  503/aborted30s observations; the abort's default log200 never proved success.
+- **Current owned backend63491 runs3000; Metro73492 runs8090**, manifest confirmed
+  Rentral, one development server each. Revalidate IDs/ports before future action.
+  Other projects on8081–8083 untouched. No active build/fixture job remains.
 
-The controlled Atlas registration/profile/listings/sign-in diagnostic succeeded.
-Guarded cleanup removed only its User and two sessions; diagnostic accounts
-remaining: zero. No general data cleanup or reset ran.
+Browser verification is reproducible in tracked scripts/test-browser.mjs and
+playwright.fixture.config.mjs via `npm.cmd run build` then `npm.cmd run test:browser`,
+with Docker/installed Chrome. It uses synthetic users/owned loopback Mongo, blocks
+providers, avoids the saved user DB/env, preserves production build and cleans
+owned resources. Syntax/lint and six-test/four-file discovery passed. Keep runs
+sequential; artifacts stay ignored. No selected-Atlas backup/cutover was performed.
 
-Latest full npm tests: 636 across 61 files PASS. Owned local Mongo fixture 16/16
-PASS after the timeout change; foundation checks 11 PASS; root/mobile typechecks
-and lint PASS. The Android dev bundle (~6.4 MB) contains the verified origin and
-diagnostics. Earlier delivery separately passed 34 local HTTP checks, Expo Doctor
-20/20, platform exports/private-value artifact scan and production build. Those
-earlier checks are scoped separately from the live phone evidence.
-
-Owned Next reference 94501 and Expo reference 39088 are intentionally left running
-at the coordinator's latest check (API 3000, Metro 8081). They are volatile tool/
-process references, not proof of current identity or liveness. Revalidate actual
-listeners, commands and ownership before reuse or stopping anything.
-
-Last recorded npm audit --omit=dev: eight toolchain findings (three high Prisma
-CLI/config/deepmerge; five moderate Expo CLI/fingerprint/glob/minimatch). Track
-supported updates without a breaking Prisma 7/Expo change; no audit-clean or
-production-readiness claim.
+Git was checked at this documentation handoff: main still had uncommitted final
+changes, with pre-delivery HEAD e26105f. Root is staging/reviewing/committing/pushing
+the already-authorized delivery now. If resuming after interruption, inspect
+actual status/log/tracking: delivery may have completed since this timestamp.
+Do not infer a pushed revision, or treat this pre-commit note as a new blocker.
 
 ## Next session starts with
 
-1. Read README, current architecture/progress and context/local-development.md.
-   Preserve the chosen Atlas connection and private phone API configuration.
-2. Revalidate the intentionally running services and check Git state for delivery.
-3. Continue real Android/iOS camera/GPS/permissions/playback, refresh/logout,
-   network/accessibility and provider acceptance; phone account use is verified.
-4. Keep automated tests isolated and preserve the original real account/data.
+If root's Git delivery has not finished, complete only final staged secret/
+artifact review, commit and authorized push, and record the actual revision.
+Do not rerun heavy suites without a new change/failure or seek routine approval.
+
+For the user next: optional provider keys/permissions/policies using the guide,
+plus real Android/iOS capture/GPS/files/permissions/interruption/background/video/
+accessibility/push acceptance. Keep provider gates off until deliberate approval;
+Expo Go is not remote-push acceptance. A public HTTPS backend/origin, callbacks,
+platform credentials and separate deployment/store decisions are needed for a
+later public release. None was performed by source/local completion.
 
 ## Open questions
 
-Real capture/device coverage beyond the verified member account flow, production
-recovery mail, provider custody/refund/payout/default-compensation and operational
-release acceptance remain. No legacy-data import is authorized.
+No application implementation gap or user clarification blocks the approved local
+scope. Real merchant custody/fees/capabilities, actual provider delivery, physical
+devices, backup key custody and separately reviewed recovery/cutover remain
+external acceptance. No live money, production certification or store release is
+claimed from controlled fixtures or local exports.

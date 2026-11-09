@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
-import { isAdminId } from '@/lib/operations/access'
+import { assertStaffPermission, hasStaffPermission } from '@/lib/auth/roles'
 import { platformEnabled } from '@/lib/platform'
 import { appealSafetyNoticeSchema, decideSafetyAppealSchema, independentSafetyReviewer, issueSafetyNoticeSchema, safetyReportSubject } from '@/lib/trust/safety-policy'
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
@@ -13,10 +13,7 @@ export function safetyEnabled(): boolean {
 function requireSafety(): void { if (!safetyEnabled()) throw new Error('Safety reviews are not available yet.') }
 
 async function requireCurrentStaff(tx: Prisma.TransactionClient, actorId: string): Promise<void> {
-  if (!isAdminId(actorId)) throw new Error('Staff access required.')
-  await lockRecord(tx, 'user', actorId)
-  const actor = await tx.user.findUnique({ where: { id: actorId }, select: { id: true } })
-  if (!actor) throw new Error('A current staff account is required.')
+  await assertStaffPermission(tx, actorId, 'safety:review')
 }
 
 /** Only this bounded boolean is public. Reporter identity and evidence stay private. */
@@ -28,7 +25,7 @@ export async function hasActiveSafetyNotice(subjectId: string): Promise<boolean>
 export async function issueSafetyNotice(actorId: string, input: unknown): Promise<void> {
   requireSafety()
   const data = issueSafetyNoticeSchema.parse(input)
-  if (!isAdminId(actorId)) throw new Error('Staff access required.')
+  if (!await hasStaffPermission(actorId, 'safety:review')) throw new Error('Staff access required.')
   await withTransaction(async tx => {
     await lockRecord(tx, 'dispute', data.disputeId)
     await requireCurrentStaff(tx, actorId)
@@ -64,7 +61,7 @@ export async function appealSafetyNotice(appellantId: string, input: unknown): P
 export async function decideSafetyAppeal(actorId: string, input: unknown): Promise<void> {
   requireSafety()
   const data = decideSafetyAppealSchema.parse(input)
-  if (!isAdminId(actorId)) throw new Error('Staff access required.')
+  if (!await hasStaffPermission(actorId, 'safety:review')) throw new Error('Staff access required.')
   const target = await prisma.safetyAppeal.findUnique({ where: { id: data.appealId }, select: { notice_id: true } })
   if (!target) throw new Error('Appeal not found.')
   await withTransaction(async tx => {
@@ -96,7 +93,7 @@ export async function getOwnSafetyNotices(userId: string) {
 
 export async function getSafetyAdminQueue(actorId: string) {
   if (!safetyEnabled()) return null
-  if (!isAdminId(actorId)) throw new Error('Staff access required.')
+  if (!await hasStaffPermission(actorId, 'safety:review')) throw new Error('Staff access required.')
   const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { id: true } })
   if (!actor) return null
   const [reports, appeals] = await Promise.all([

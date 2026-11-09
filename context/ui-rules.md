@@ -1,18 +1,26 @@
 ## UI Rules
 
-Native extension (2026-11-09): Expo components use semantic equivalents from
+Current implementation (2026-11-09): Expo components use semantic equivalents from
 `apps/mobile/src/theme.ts` through React Native StyleSheet. The CSS/Tailwind/font
 loading syntax below applies to web components. Native tab navigation and safe
 areas follow Expo Router; matching patterns are recorded in both UI registries.
+Member and host native flows share backend rules with web; staff/institutional
+review tools remain responsive web workspaces. Account, finance and recovery forms
+must fit 320px widths, wrap long labels/identifiers and preserve visible validation.
+Never render mock balances, invented trust/credit scores, fake verification or
+provider success inferred from a redirect. Unknown outcomes show explicit readback
+and preserve the original command; a new request is never an automatic retry.
 
 Concise rules for building the Rentral UI. Design assets and the @theme token definitions in globals.css act as the absolute source of truth for visual decisions. These rules cover the most important patterns and constraints to keep the UI consistent, mobile-first, and immersive across our zero-trust, multi-asset marketplace without over-specifying every detail.
 
 ## Font
 
-Always import Inter via next/font/google in the root layout. The application exclusively relies on Inter to maintain a modern, clean, and highly legible interface.
-
-import { Inter } from "next/font/google";
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+Load web Inter through `next/font/local` in the root layout, using the installed
+licensed `@expo-google-fonts/inter` Regular/Medium/SemiBold/Bold TTF assets. Keep
+the `--font-sans` variable. This avoids Google Fonts downloads during local startup
+or production compilation. Native uses `expo-font` and direct imports of those
+four weights. See `app/layout.tsx` and `apps/mobile/app/_layout.tsx` for the current
+configuration; do not introduce a second font loader in a component.
 
 
 The --font-sans variable is already declared in the @theme directive in globals.css. Apply the font variable class to the <html> tag in the root layout. Never fallback to generic system fonts directly in components.

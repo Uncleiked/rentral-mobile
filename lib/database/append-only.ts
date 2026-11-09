@@ -1,4 +1,4 @@
-const appendOnlyModels = new Set(['LedgerTransaction', 'LedgerEntry', 'AdminAudit', 'HoldCreditAllocation'])
+const appendOnlyModels = new Set(['LedgerTransaction', 'LedgerEntry', 'AdminAudit', 'HoldCreditAllocation', 'FinancialAllocation', 'MutationReceipt'])
 const prohibitedOperations = new Set(['update', 'updateMany', 'updateManyAndReturn', 'delete', 'deleteMany', 'upsert'])
 const dataOperations = new Set(['create', 'createMany', 'createManyAndReturn', 'update', 'updateMany', 'updateManyAndReturn', 'upsert'])
 export type RelationGraph = Readonly<Record<string, Readonly<Record<string, string>>>>

@@ -5,7 +5,7 @@ function matchesRoute(pathname: string, route: string): boolean {
 }
 
 export function authRedirect(pathname: string, user: AuthIdentity): string | null {
-  const publicPages = ['/', '/sign-in', '/forgot-password', '/reset-password', '/auth/callback', '/help', '/terms', '/privacy', '/insights']
+  const publicPages = ['/', '/sign-in', '/forgot-password', '/reset-password', '/confirm-email', '/auth/callback', '/help', '/terms', '/privacy', '/insights']
   if (publicPages.includes(pathname) || matchesRoute(pathname, '/api/webhooks')) return null
   // Versioned APIs perform bearer/cookie authorization and return JSON errors.
   if (matchesRoute(pathname, '/api/v1')) return null

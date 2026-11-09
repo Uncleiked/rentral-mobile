@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAdminId } from '@/lib/operations/access'
+import { requireStaffId } from '@/lib/operations/access'
 import { createAdminClient } from '@/lib/admin'
 import prisma from '@/lib/db'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const headers = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' }
   try {
-    if (!await requireAdminId()) return NextResponse.json({ success: false, error: 'Not found.' }, { status: 404, headers })
+    if (!await requireStaffId('listing:review')) return NextResponse.json({ success: false, error: 'Not found.' }, { status: 404, headers })
     const { id } = await params
     if (!z.uuid().safeParse(id).success) return NextResponse.json({ success: false, error: 'Not found.' }, { status: 404, headers })
     const row = await prisma.listing.findUnique({ where: { id }, select: { document_path: true, lister_id: true } })

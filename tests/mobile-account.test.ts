@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({ find: vi.fn(), update: vi.fn(), upsert: vi.fn(
 vi.mock('@/lib/db', () => ({ default: { user: { findUnique: mocks.find, updateMany: mocks.update, upsert: mocks.upsert } } }))
 import { defaultAccountHandle, ensureAccount, ensureAccountHandle } from '@/lib/accounts/bootstrap'
 import { accountPatchSchema, publicAccount } from '@/lib/api/account'
+import { activeAccountWhere } from '@/lib/accounts/availability'
 
 const id = '55bfc098-ff33-4fdd-b7ae-68d810a74050'
 const account = { id, email: 'member@example.com', username: null, account_type: null, bio: null, avatar_url: null, createdAt: new Date('2026-01-01T00:00:00Z') }
@@ -16,7 +17,7 @@ it('bootstraps only a missing public handle without fabricating identity evidenc
   mocks.find.mockResolvedValueOnce(account).mockResolvedValueOnce({ ...account, username, account_type: 'individual' })
   mocks.update.mockResolvedValue({ count: 1 })
   expect(await ensureAccountHandle(id)).toMatchObject({ username })
-  expect(mocks.update).toHaveBeenCalledWith({ where: { id, username: null }, data: { username, account_type: 'individual' } })
+  expect(mocks.update).toHaveBeenCalledWith({ where: { id, username: null, ...activeAccountWhere }, data: { username, account_type: 'individual' } })
   expect(JSON.stringify(mocks.update.mock.calls)).not.toMatch(/kyc_verified|verifiedDocument|individualProfile|verification_status/)
 })
 

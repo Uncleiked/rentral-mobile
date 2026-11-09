@@ -59,6 +59,7 @@ describe('address matching and stale provider results', () => {
     mocks.location.mockResolvedValue({ geometry: { type: 'Point', coordinates: [point.longitude, north(100.01)] } })
     expect(await verifyListingAddress(listingId)).toBe('mismatch')
     expect(mocks.upsert.mock.calls[1][0].create.distance_meters).toBeGreaterThan(100)
+    expect(fetch).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ redirect: 'error' }))
   })
   it('cannot apply a delayed response after the listing address changes', async () => {
     mocks.current.mockResolvedValue({ text_address: 'Different building, Yaba, Lagos' })
@@ -75,5 +76,17 @@ describe('address matching and stale provider results', () => {
     vi.stubEnv('GEOAPIFY_API_KEY', '')
     expect(await verifyListingAddress(listingId)).toBe('unavailable')
     expect(fetch).not.toHaveBeenCalled()
+  })
+  it('rejects oversized/multiple results without persisting a spatial match', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('private address response', { headers: { 'content-type': 'application/json', 'content-length': String(65 * 1024) } }))
+    await expect(verifyListingAddress(listingId)).rejects.toThrow('GEOCODER_UNAVAILABLE')
+    const result = { geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'building', rank: { confidence: 1 } } }
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [result, result] }))
+    await expect(verifyListingAddress(listingId)).rejects.toThrow('GEOCODER_UNAVAILABLE')
+    expect(mocks.upsert).not.toHaveBeenCalled()
+  })
+  it('does not accept a foreign-country response despite the requested Nigeria filter', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [{ geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'building', country_code: 'gh', rank: { confidence: 1 } } }] }))
+    expect(await verifyListingAddress(listingId)).toBe('unavailable'); expect(mocks.upsert).not.toHaveBeenCalled()
   })
 })

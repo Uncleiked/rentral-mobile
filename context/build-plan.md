@@ -7,10 +7,30 @@ Next.js 16.4.5 backend, MongoDB via Prisma 6.19.3, JWT email/password accounts a
 local filesystem uploads. KYC onboarding and mandatory profile completion are
 removed; Supabase/PostgreSQL/pnpm/OAuth are retired from the active implementation.
 
-Implemented: native marketplace/member/owner screens; shared authenticated API
-adapters; Mongo schema/index/validator/readiness setup; actual transaction locks,
-overlap/ledger/hold-credit invariants; local account/session/reset flows; scoped
-uploads, signed private Range/HEAD file serving and public raster avatars.
+Implemented source covers native marketplace/member/owner screens and shared APIs
+for booking quotes/actions/check-in/hold conversion, listing/draft/vault management,
+feedback/reports/appeals, notification/privacy/saved-search controls, lease changes,
+messaging shares/activity/read receipts, and opt-in matching. Staff listing/safety,
+finance, matching and lifecycle review remain web workspaces. Mongo setup provides
+reviewed indexes/validators/feature readiness, transaction locks and immutable exact
+kobo journals. Durable media claims protect upload/attach/delete races; signed
+private media supports Range/HEAD and public avatars validate actual raster bytes.
+
+Paystack-only source includes collection, recipient setup, refund/payout requests,
+independent approval, reservations, authenticated receipt recovery and uncertain
+outcome reconciliation. Paid manual-term Insights and independently reviewed
+sponsorship grant access only from current verified collection proof. No recurring
+mandate, actual custody approval or enabled settlement is implied.
+
+Account security includes local JWT sessions, current-password/session controls,
+dual-confirmed email changes, optional encrypted Resend delivery, soft closure and
+bounded exports. Expo push has session/consent-bound encrypted registrations and
+receipt recovery behind opt-in configuration. Mux resumable upload/reconciliation
+and bounded advisory Gemini/Geoapify adapters preserve human publication review.
+Web and native Inter assets are bundled locally; optional device push can use the
+public EAS project UUID alongside the mobile API origin. Backup tools capture
+encrypted Mongo/private storage and verify restores only in quarantined owned
+local targets. See the dedicated provider/security/backup guides for exact gates.
 
 Local sequence: npm install, npm run setup:local, start the supplied Mongo replica
 set, npm run db:setup, npm run dev, then npm run mobile in another terminal.
@@ -22,8 +42,10 @@ data import or reset ran; the original PostgreSQL database remains untouched.
 Final verification covers unit regressions, type/lint, native bundles, production
 compilation and uniquely owned Mongo/localhost HTTP fixtures. Complete real
 Android/iOS camera/GPS/permissions/playback and accessibility/network acceptance
-before claiming device readiness. Provider/custody/refund/payout and operational
-release work remains separate; no deployment/EAS/store submission was run.
+before claiming device readiness. Real-provider delivery/receipt/capability tests,
+merchant custody/fee policy approval, operational backup/recovery acceptance and
+release checks remain separate from source completion. No deployment, EAS build,
+store submission, real money transfer or actual provider activation was run.
 
 See [implementation record](expo-implementation.md), [setup](../README.md) and
 [progress](progress-tracker.md). The original phases below are historical target

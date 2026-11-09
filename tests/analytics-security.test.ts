@@ -1,11 +1,13 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ cookies: vi.fn(), consent: vi.fn(), setCookie: vi.fn(), authenticated: vi.fn(), create: vi.fn(), remove: vi.fn(), query: vi.fn(), lock: vi.fn() }))
+const mocks = vi.hoisted(() => ({ cookies: vi.fn(), consent: vi.fn(), setCookie: vi.fn(), authenticated: vi.fn(), create: vi.fn(), remove: vi.fn(), query: vi.fn(), lock: vi.fn(), active: vi.fn(), user: vi.fn(), updateUser: vi.fn() }))
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
 vi.mock('@/lib/db', () => ({ default: { marketEvent: { deleteMany: mocks.remove, aggregateRaw: mocks.query } } }))
-vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ marketEvent: { upsert: mocks.create } }) }))
+vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({
+  user: { findUnique: mocks.user, update: mocks.updateUser, updateMany: mocks.active }, marketEvent: { upsert: mocks.create, deleteMany: mocks.remove },
+}) }))
 import { recordInsightAction } from '@/app/actions/analyticsActions'
 import { getMarketInsights } from '@/lib/analytics/insights'
 
@@ -15,6 +17,8 @@ beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true'); vi.stubEnv('RENTRAL_ANALYTICS_ENABLED', 'true'); vi.stubEnv('ANALYTICS_HASH_SECRET', secret)
   mocks.cookies.mockResolvedValue({ get: mocks.consent, set: mocks.setCookie }); mocks.consent.mockReturnValue({ value: 'yes' }); mocks.authenticated.mockResolvedValue('raw-user-1')
   mocks.lock.mockResolvedValue(true)
+  mocks.active.mockResolvedValue({ count: 1 })
+  mocks.user.mockResolvedValue({ analytics_consent: true, analytics_subjects: null })
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -38,11 +42,11 @@ describe('consented aggregate analytics boundaries', () => {
     const expected = createHmac('sha256', secret).update(`${new Date().toISOString().slice(0, 7)}:raw-user-1`).digest('hex')
     expect(saved).toMatchObject({ create: { subject_hash: expected, event_type: 'search', category: 'house', neighborhood: 'yaba', budget_band: '1m-3m', bedrooms: 2 }, update: {} })
     expect(saved.where.dedupe_key).toBe(saved.create.dedupe_key)
-    expect(mocks.lock).toHaveBeenCalledWith(expect.any(Object), 'user', 'raw-user-1')
+    expect(mocks.active).toHaveBeenCalledWith({ where: { id: 'raw-user-1', OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }, data: { revision: { increment: 1 } } })
     expect(JSON.stringify(saved)).not.toContain('raw-user-1')
   })
   it('does not record an event after the authenticated account disappears', async () => {
-    mocks.lock.mockResolvedValue(false)
+    mocks.active.mockResolvedValue({ count: 0 })
     expect(await recordInsightAction(input)).toMatchObject({ success: false })
     expect(mocks.create).not.toHaveBeenCalled()
   })
@@ -51,7 +55,7 @@ describe('consented aggregate analytics boundaries', () => {
     expect(await getMarketInsights()).toEqual([])
     const { pipeline } = mocks.query.mock.calls[0][0]
     const now = new Date()
-    expect(pipeline[0]).toEqual({ $match: { createdAt: { $gte: { $date: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString() } } } })
+    expect(pipeline[0]).toEqual({ $match: { createdAt: { $gte: { $date: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString() } }, event_type: { $in: ['search', 'detail', 'checkout'] } } })
     expect(pipeline[1].$group._id.subject).toBe('$subject_hash')
     expect(pipeline[2].$group.people).toEqual({ $sum: 1 })
     expect(pipeline[3]).toEqual({ $match: { people: { $gte: 10 } } })

@@ -5,10 +5,10 @@ import { PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 const verified = { app_metadata: { kyc_verified: true, username: 'renter', profile_completed: true } }
 
 describe('auth route boundaries', () => {
-  it.each(['/forgot-password', '/reset-password', '/sign-in', '/', '/api/webhooks/didit'])('allows %s without a session', path => {
+  it.each(['/forgot-password', '/reset-password', '/confirm-email', '/sign-in', '/', '/api/webhooks/didit'])('allows %s without a session', path => {
     expect(authRedirect(path, null)).toBeNull()
   })
-  it.each(['/marketplace', '/marketplace/listing/create', '/sign-in-evil', '/api/webhooks-evil', '/onboarding-evil'])('protects %s', path => {
+  it.each(['/marketplace', '/marketplace/listing/create', '/sign-in-evil', '/confirm-email-evil', '/api/webhooks-evil', '/onboarding-evil'])('protects %s', path => {
     expect(authRedirect(path, null)).toBe('/sign-in')
   })
   it('allows signed-in accounts to enter directly and redirects legacy onboarding', () => {

@@ -1,5 +1,220 @@
 ## Progress Tracker
 
+## Final source and local verification — 2026-11-10
+
+The approved [completion blueprint](remaining-work-blueprint.md) is implemented
+for Expo Android/iOS, npm, local Next.js, saved Atlas/MongoDB/JWT and private local
+storage, with Paystack only and no personal KYC onboarding. **Source and local
+validation are complete, including native publication-fee actions.** See the
+[31-area matrix](completion-status.md), [final review](final-review.md), and
+[environment guide](environment-setup.md). Git delivery is being finalized;
+physical-device/provider/store release acceptance remains separate.
+
+- Unit aggregate: **1,678 passed**, with 89 fixture cases skipped by the ordinary
+  unit invocation and then executed in the deliberate owned Mongo run. That full
+  suite passed **89 in one
+  serial sequence: core 49, financial 18, auth/closure/export 20, backup 2**.
+  This includes the four new fee/mode/archive/callback cases and real push races.
+  Earlier resource-contention failures at the old 5s integration timeout are
+  superseded by this successful full run. The owned-fixture default is bounded
+  at 15s, explicit case overrides remain, and the unit default stays 5s. The one
+  deliberate five-KDF unit case has its own 15s timeout; assertions and password
+  parameters were unchanged. Final source checks include the safe cross-module
+  readiness-error mapping and required CORS account header.
+- Actual backup wrapper passed **14 synthetic records, 4 files, 1 balanced
+  journal and 1 claim**, preserving source and quarantining restore. All owned
+  Mongo/browser/backup containers were removed. No selected-Atlas backup or
+  automatic recovery cutover was performed.
+- Final production Next build passed: **97 static pages**, compile **49s**,
+  TypeScript **108s**, no warnings, after the bounded startup, safe error helper
+  and CORS fixes, with all three owner publication-fee routes.
+  Android export passed **1,787 modules / about 4.8 MB**; iOS **1,808 modules /
+  about 4.8 MB**; web **1,250 modules / 45 chunks**. The web export used an HTTPS
+  fixture origin through a process-only override; private environment files
+  were not rewritten. These are local artifacts, not EAS/store/device builds.
+- All **6 final production web journeys passed in 57.5s**, plus **8 real HTTP
+  fixture checks** including native-fee 401/409/404 ownership/account/provenance
+  denial and **zero PaymentIntent writes**. Fixture
+  `localhost-b3f03e630fe6` blocked providers and removed owned resources.
+- Native publication-fee browser acceptance passed **8 checks / 35 mocked API
+  calls / 0 errors or outbound requests**, at **320/390/768** widths (ignored
+  `test-results/mobile/listing-fee-p15`). Own actor/listing/current-mode proof,
+  truthful historical-mode records and durable no-automatic-replay recovery are
+  implemented. The earlier missing native fee action is closed.
+- Earlier controlled previews remain separate evidence: sponsored discovery
+  **6 checks/54 mocks**, push **7 checks/29 mocks**, dashboard **4 checks/4 calls**;
+  real hardware/provider delivery is not inferred from these intercepted runs.
+- Final root ESLint and mobile TypeScript passed. Production TypeScript passed
+  as above. Prior backend/mobile environment checks, Expo Doctor **20/20** and
+  full dependency audit **0 vulnerabilities** remain valid; the fee increment
+  changed no dependencies or required keys.
+- Reviewed additive Atlas setup checked **51 collections / 152 indexes** while
+  preserving **all 31 pre-existing collections and 2 non-marker documents with
+  unchanged before/after hashes**. Feature markers are prepared. The fee change
+  added no schema and required no further setup. No reset/import/role grant,
+  provider activation, user-file deletion or original PostgreSQL write occurred.
+- Final source/public-artifact secret scan: **1,170 files**, **2 actual backend
+  secret values**, **0 matches**. Private env files are untracked and the local
+  mobile API origin is not in tracked source. Staged-content review still
+  precedes commit/push.
+
+Native fee checkout/reconciliation uses the existing collection services and
+shared fixed **100,000 kobo / NGN 1,000** policy. Exact fresh intent/URL/mode binding,
+locked archived-listing denial, callback preflight and current-mode proof for new
+publication are accepted; old public assets/history are not rewritten. Provider
+actions remain gated. See [fee contract](listing-publication-fee.md).
+
+Final runtime handback passed with diagnostics off: **/sign-in 200 in 10.8s** and
+the **first unique nonexistent-account login 401 in 12.6s, without retry** or
+account/session writes. These complete responses supersede earlier exploratory
+503/aborted 30s observations; the abort's default log status was never success
+evidence. Bounded 10s native Mongo connection/selection remains. Temporary traces,
+helper and flag references were removed. The owned backend runs on **3000** and
+Expo on **8090**; its manifest confirms Rentral, one owned development server each.
+Other projects on 8081–8083 remain untouched. **Only final staged review and the
+authorized Git commit/push remain; no final pushed revision is claimed here.**
+
+Browser acceptance is now reproducible through tracked
+[test-browser.mjs](../scripts/test-browser.mjs) and
+[fixture config](../playwright.fixture.config.mjs): with Docker and installed
+Chrome available, run `npm.cmd run build`, then `npm.cmd run test:browser`.
+The wrapper uses only its owned loopback Mongo/synthetic accounts, blocks providers,
+preserves the configured application database/private env and cleans owned
+resources. Do not build/generate concurrently with that fixture. Syntax, lint and
+discovery of six tests across four files passed; recorded real acceptance is above.
+
+Only the core safety flag changed in private backend settings; other parsed
+values/secrets/provider gates were preserved. Real Android/iOS permissions,
+capture/GPS/files/interruption/background/playback/push, real merchant/provider
+activation and backup/recovery custody still require their own acceptance. A
+public release additionally needs HTTPS and deliberate hosting/store decisions.
+
+## Earlier checkpoint log — superseded by current verification above
+
+Final web account boundary: the marketplace layout captures its authenticated
+actor for commerce and matching requests. Clients attach the existing
+X-Rentral-Account restriction on reads and writes; switching ambient cookies
+cannot silently submit old purchase commands or privacy choices into another
+account. A changed captured actor remounts the workspace and discards old form
+state. Four focused files passed 31 checks, including missing-actor denial and
+changed-account no-replay cases; scoped lint is clean. Final aggregate build and
+browser verification remain separate.
+
+Commerce/push increment (2026-11-09): paid manual-term Insights, independently
+reviewed sponsorship, labeled filtered web placement, strict order/checkout/
+reconciliation APIs, coarse consented observations and member refund history are
+implemented. Four actual commercial/privacy cases passed within core42. New
+commercial API/policy/service checks passed 39 tests; controlled browser specs are
+written and await execution. Dashboard/native web handoff discoverability is
+implemented, with explicit separate browser authentication and no URL credentials.
+
+Optional push source now includes encrypted tokens, stable installation proof,
+account consent epochs, current-session binding, owner/session/account revocation,
+single submission claims, ticket/receipt recovery and derived90-day metadata
+pruning behind explicit gates. Eight focused push/auth/worker files passed 83
+tests; source lint passed. Three real push race/retention cases were appended to
+the owned core suite and await execution. No actual provider sends occurred.
+Physical Android/iOS push acceptance remains outstanding. See
+[push operations](push-operations.md) and [commercial boundaries](commercial.md).
+
+2026-11-09 latest database acceptance:78/78 passed in one owned replica sequence
+(core42, financial18, auth/closure/export18). Includes exact commercial collection
+entitlement/reversal rules, actual media lease/webhook race, participant-scoped
+ephemeral activity, monotonic reads, and own dashboard metadata projection. The
+selected Atlas database was unused. Separate encrypted backup/restore fixture
+passed2 actual cases, with source untouched and restored target quarantined.
+Dependency audit after targeted fixes reports0 vulnerabilities; final production
+build and app exports remain outstanding. Push models are generated; integration
+and full aggregate acceptance are still in progress.
+
+Native leases source (2026-11-09): member extension/early-end archives, per-lease
+history, evidence selection/private copy/upload/readback, proposal forms and
+counterparty decisions implemented against shared lifecycle contracts. Mobile
+TypeScript and scoped lint passed; latest native API/lifecycle/messaging focused
+run61 checks passed. Native protected-route integration and intercepted browser
+acceptance are pending; physical document-picking/preview is not yet accepted.
+
+Current actual database acceptance:71 owned-replica checks passed (core35,
+financial18, auth/closure/export18); configured Atlas was not used. Paid commerce,
+new media upload and messaging activity acceptance remain separate work.
+
+2026-11-09 media/messaging increment: backend local-to-Mux resumable upload,
+bounded unknown-create reconciliation and durable upload leases are implemented;
+90 focused controlled media checks passed before the final webhook-binding
+hardening (final aggregate still required). Messaging now has participant-scoped
+ephemeral presence/typing, strict API contracts, paged inbox/unread state,
+monotonic displayed-message read receipts and immutable message retry payloads.
+25 focused messaging boundary checks passed. Web activity source/lint is complete;
+native transport and combined browser acceptance remain in progress. No actual
+provider upload, hosted feature preparation or deployment is implied.
+
+Squat-Mates source increment (2026-11-09): opt-in preferences, exact monthly
+budget/area overlap explanations, mutual contact requests, participant-only
+messages with durable retry keys, activity/read receipts, block/withdrawal,
+private report histories, and independent staff restriction/restoration are
+implemented with member web screens and versioned APIs. Current visibility,
+moderation, blocks and account closure are rechecked; no fake listing or booking
+grants contact. Closed/withdrawn contacts retain a narrow reporting route without
+hidden message/profile payloads. Focused domain/API/privacy tests passed; matching
+browser acceptance is tracked separately until executed. Four matching cases
+passed in the owned35-case Mongo suite (included in the final71-case aggregate
+provider-agent fixture run); all owned resources were cleaned. This
+increment has not prepared matching on Atlas or sent actual member messages.
+See [matching contracts and boundaries](matching.md).
+
+## Approved completion build — in progress 2026-11-09
+
+Lifecycle/API increment (source implemented; aggregate acceptance still pending):
+member notifications with cursor/read state, public host/review/listing projections,
+booking feedback/report readback, own reviewed notices/appeals, claimed avatars,
+and persisted analytics consent/withdrawal are implemented. Optional collection
+requires database consent; locked rotation-safe mappings support withdrawal and
+inactive-user retention. Owned Mongo proved the three privacy cases in its25-case
+run, with application data unused.
+
+Lease extension and early-end requests now require owned evidence, counterpart
+agreement and independent current-role review. Extensions preserve original
+amount/pricing/payment records; effective termination release preserves listing
+review status and waits on reports/occupancy. Dispute decisions explicitly restore,
+complete or cancel eligible reservations; reserved financial funds prevent restore.
+Web member/staff forms, protected evidence links, cursor histories, fair leased
+workers and durable incidents are implemented.162 focused checks and scoped lint
+passed before final browser/aggregate fixture checks. New lifecycle/financial Atlas
+preparation and real provider acceptance have not been performed for this increment.
+Notification emails additionally require NOTIFICATION_EMAIL_ENABLED and a valid
+NOTIFICATION_EMAIL_SINCE cutoff; old pending records stay in-app without bulk mail.
+
+User approved [remaining-work blueprint](remaining-work-blueprint.md). Current
+payment direction: **Paystack only**; OPay is deferred. This section supersedes
+historical completion labels below and does not claim full project completion.
+
+- Storage claims: durable upload/attach/delete serialization, actual file checks,
+  legacy references, avatars and tombstones. 37 focused unit checks and 22 real
+  owned Mongo checks passed, including separate-process races. Additive Atlas
+  preparation checked 30 collections/76 indexes; all existing documents across
+  29 collections were unchanged. No reset, import or asset deletion.
+- Database roles are the only staff authority. Administrator, moderator, finance
+  and analyst permissions are separate; privileged writes recheck under the user
+  lock. Role changes are audited, with a deliberate operator CLI for bootstrap.
+  39 role/moderation/safety regressions, root TypeScript and scoped lint passed.
+  No real member was promoted or demoted.
+- Native booking detail/actions, quotes, hold conversion, checkout status and
+  GPS/PIN inspection check-in implemented. 67 focused checks, native TypeScript
+  and scoped lint passed. Controlled Expo-web smoke: seven scenarios, 27 mocked
+  API calls, 320/390/768 layouts, no page/console errors or horizontal overflow.
+  Physical location/camera/provider acceptance remains separate.
+- Installed 16 reviewed Expo/MongoDB/Playwright/security skills, with pinned
+  provenance in skill-installation.json. SDK-compatible mobile modules installed
+  through npm; existing Zod is declared directly by the mobile workspace.
+- In progress: native profile/feedback/notification/privacy parity, shared API
+  adapters/consent retention, Paystack provider contracts and financial lifecycle.
+  Remaining blueprint phases, final environment guide and cleanup are pending.
+
+Development process correction: duplicate Expo writers corrupted only generated
+route types. Verified duplicate workspace processes were stopped and a single
+Metro regenerated the file. Keep one Next development server and one Metro;
+revalidate process ownership rather than trusting old session IDs.
+
 ## Phone runtime follow-up — verified 2026-11-09
 
 - User-selected Atlas is preserved. Corrected public-IP drift; native TLS,
@@ -397,6 +612,21 @@ _State Management: Used Zustand (useRentralStore) for transient multi-step wizar
 ---
 
 ## Notes
+
+### Current verified extension — 2026-11-09
+
+The approved completion blueprint and latest user decisions supersede historical
+provider/database notes below. Paystack only, npm, MongoDB/JWT and no personal
+KYC remain authoritative. Financial provider adapters, source reservations,
+independent approvals, partial refunds/payouts, reversals and the explicitly gated
+hold-default policy are implemented with controlled provider transport. Account
+password/session controls, dual-mailbox confirmation and encrypted optional
+Resend delivery are implemented. Their owned Mongo acceptance passed62cases
+(31core,18financial,13account-security); focused auth/API policy checks passed102.
+Neither provider activation nor real email/money movement is implied. See
+context/paystack-integration.md and context/account-security.md for exact gates,
+contracts and acceptance limits. Web/native/device validation is tracked separately.
+
 
 _Spatial Privacy Invariant: Never expose raw hardware coordinates (hardware-coordinates) to the client-side frontend. Only expose computed distances (distance-meters) or abstracted neighborhood zones._
 

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUserId } from '@/lib/action-helpers'
-import { isAdminId } from '@/lib/operations/access'
+import { hasStaffPermission } from '@/lib/auth/roles'
 import { type ActionResult, PLATFORM_UNAVAILABLE } from '@/lib/platform'
 import { appealSafetyNotice, decideSafetyAppeal, issueSafetyNotice, safetyEnabled } from '@/lib/trust/safety'
 
@@ -16,7 +16,7 @@ export async function issueSafetyNoticeAction(input: unknown): Promise<ActionRes
   try {
     if (!safetyEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
     const actor = await requireUserId()
-    if (!actor || !isAdminId(actor)) return { success: false, error: 'Staff access required.' }
+    if (!actor || !await hasStaffPermission(actor, 'safety:review')) return { success: false, error: 'Staff access required.' }
     await issueSafetyNotice(actor, input)
     revalidateSafety()
     return { success: true, data: undefined }
@@ -38,7 +38,7 @@ export async function decideSafetyAppealAction(input: unknown): Promise<ActionRe
   try {
     if (!safetyEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
     const actor = await requireUserId()
-    if (!actor || !isAdminId(actor)) return { success: false, error: 'Staff access required.' }
+    if (!actor || !await hasStaffPermission(actor, 'safety:review')) return { success: false, error: 'Staff access required.' }
     await decideSafetyAppeal(actor, input)
     revalidateSafety()
     return { success: true, data: undefined }

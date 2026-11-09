@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), 
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction,
-  safetyAppeal: { findUnique: mocks.appealTarget }, safetyNotice: { findFirst: mocks.findNotice } } }))
+  user: { findUnique: mocks.user }, safetyAppeal: { findUnique: mocks.appealTarget }, safetyNotice: { findFirst: mocks.findNotice } } }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import { appealSafetyNotice, decideSafetyAppeal, hasActiveSafetyNotice, issueSafetyNotice, safetyEnabled } from '@/lib/trust/safety'
@@ -30,7 +30,7 @@ beforeEach(() => {
   vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true'); vi.stubEnv('RENTRAL_SAFETY_ENABLED', 'true')
   vi.stubEnv('RENTRAL_ADMIN_IDS', 'staff, second-staff')
   mocks.authenticated.mockResolvedValue('staff')
-  mocks.user.mockResolvedValue({ id: 'staff', kyc_verified: true, username: 'staff' })
+  mocks.user.mockImplementation(async ({ where }: { where: { id: string } }) => ({ id: where.id, staff_role: ['staff', 'second-staff'].includes(where.id) ? 'moderator' : null }))
   mocks.report.mockResolvedValue(report()); mocks.findNotice.mockResolvedValue(finding())
   mocks.createNotice.mockResolvedValue({ id: noticeId }); mocks.appealTarget.mockResolvedValue({ notice_id: noticeId })
   mocks.findAppeal.mockResolvedValue(pendingAppeal())
@@ -91,7 +91,7 @@ describe('reviewed safety notice authorization', () => {
   it('denies missing staff accounts, participant staff and invalid reporters', async () => {
     mocks.user.mockResolvedValue(null)
     expect(await issueSafetyNoticeAction(issue)).toMatchObject({ success: false })
-    mocks.user.mockResolvedValue({ kyc_verified: true, username: 'staff' })
+    mocks.user.mockResolvedValue({ id: 'staff', staff_role: 'moderator' })
     mocks.report.mockResolvedValue({ ...report(), booking: { seeker_id: 'staff', lister_id: 'host' } })
     expect(await issueSafetyNoticeAction(issue)).toMatchObject({ success: false })
     mocks.report.mockResolvedValue({ ...report(), opened_by: 'outsider' })
@@ -135,7 +135,7 @@ describe('affected-account redress and independent decisions', () => {
 
   it('requires a different staff reviewer, forbids participant decisions and prevents replay', async () => {
     await expect(decideSafetyAppeal('staff', decision)).rejects.toThrow('independent')
-    vi.stubEnv('RENTRAL_ADMIN_IDS', 'staff,host,second-staff')
+    mocks.user.mockResolvedValue({ staff_role: 'admin' })
     await expect(decideSafetyAppeal('host', decision)).rejects.toThrow('independent')
     mocks.findAppeal.mockResolvedValue({ ...pendingAppeal(), status: 'removed' })
     await expect(decideSafetyAppeal('second-staff', decision)).rejects.toThrow('independent')
@@ -155,6 +155,11 @@ describe('affected-account redress and independent decisions', () => {
     await decideSafetyAppeal('second-staff', { ...decision, decision: 'upheld' })
     expect(mocks.updateAppeal).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'upheld' }) }))
     expect(mocks.updateNotice).not.toHaveBeenCalled()
+  })
+  it('rechecks a revoked role after acquiring the mutation lock', async () => {
+    mocks.user.mockResolvedValueOnce({ staff_role: 'moderator' }).mockResolvedValue({ staff_role: null })
+    await expect(issueSafetyNotice('staff', issue)).rejects.toThrow('Staff access')
+    expect(mocks.createNotice).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
   })
 
   it('does not claim success or send a notification after an audit write fails', async () => {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({ verified: vi.fn(), transaction: vi.fn(), lock: vi.fn(), booking: vi.fn(), createReview: vi.fn(), notify: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.verified }))

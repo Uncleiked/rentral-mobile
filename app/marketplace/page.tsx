@@ -11,6 +11,8 @@ import { coarseNeighborhood } from '@/lib/analytics/policy'
 import { requireUserId } from '@/lib/action-helpers'
 import { getDiscoveryListings } from '@/lib/discovery'
 import { parseDiscoveryFilters, discoveryHref, discoveryHasFilters, type DiscoverySearchParams } from '@/lib/discovery-policy'
+import { sponsoredPlacements } from '@/lib/commerce/placements'
+import { SponsoredSection } from '@/components/commerce/SponsoredSection'
 
 type Props = { searchParams: Promise<DiscoverySearchParams> }
 
@@ -19,9 +21,11 @@ export default async function MarketplacePage({ searchParams }: Props) {
   const filters = parseDiscoveryFilters(await searchParams)
   const userId = await requireUserId()
   const { listings, nextCursor } = await getDiscoveryListings(filters, userId)
+  const sponsored = await sponsoredPlacements(filters, userId).catch(() => [])
   const filtered = discoveryHasFilters(filters)
   return <MarketplaceShell>
     <MarketplaceHeader filters={filters} />
+    <SponsoredSection rows={sponsored} />
     {filters.category !== 'all' && <DiscoveryTelemetry category={filters.category} intent={filters.intent || 'rent'}
       neighborhood={coarseNeighborhood(filters.q)} bedrooms={filters.bedrooms ? Number(filters.bedrooms) : undefined}
       budgetBand={!filters.maxPrice ? 'unspecified' : Number(filters.maxPrice) < 1000000 ? 'under-1m' : Number(filters.maxPrice) <= 3000000 ? '1m-3m' : Number(filters.maxPrice) <= 5000000 ? '3m-5m' : '5m-plus'} />}

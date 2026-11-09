@@ -33,7 +33,7 @@ describe('Mongo ledger insert boundary', () => {
     const create = vi.fn()
     const tx = { ledgerTransaction: { create } } as unknown as Prisma.TransactionClient
     await insertBalancedLedger(tx, input)
-    expect(create).toHaveBeenCalledWith({ data: { payment_id: 'payment', currency: 'NGN', kind: 'provider_collection', entries: { create: [debit, credit] } } })
+    expect(create).toHaveBeenCalledWith({ data: { payment_id: 'payment', currency: 'NGN', kind: 'provider_collection', business_key: 'provider_collection:payment', entries: { create: [debit, credit] } } })
   })
   it.each([
     { ...input, entries: [debit] },

@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={8}
                 disabled={isLoading}
               />
               <button
@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={8}
                 disabled={isLoading}
               />
             </div>

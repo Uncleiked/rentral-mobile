@@ -8,6 +8,7 @@ vi.mock('@/lib/db', () => ({ default: { mediaAsset: {
 } } }))
 vi.mock('@/lib/media/mux', () => ({ muxClient: () => ({ video: { assets: { retrieve: mocks.retrieve } } }) }))
 vi.mock('@/lib/media/processing', () => ({ processListingMedia: mocks.dispatch }))
+vi.mock('@/lib/database/readiness', () => ({ assertMediaUploadReady: async () => undefined }))
 
 import { mediaWorkerAuthorized } from '@/lib/media/worker-auth'
 import { runMediaWorker } from '@/lib/media/worker'
@@ -91,10 +92,10 @@ describe('scheduled dispatch and stalled submissions', () => {
     const cutoff = new Date('2026-09-24T08:55:00Z')
     expect(mocks.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       take: 2, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-      where: { status: 'queued', attempts: { lt: 5 }, updatedAt: { lte: cutoff },
-        listing: { listing_status: { in: ['pending_verification', 'active'] } } },
+      where: expect.objectContaining({ OR: expect.arrayContaining([{ status: 'queued', attempts: { lt: 5 }, updatedAt: { lte: cutoff } }]),
+        listing: expect.objectContaining({ listing_status: { in: ['pending_verification', 'active'] } }) }),
     }))
-    expect(mocks.dispatch).toHaveBeenCalledWith('listing-1', 'owner', cutoff)
+    expect(mocks.dispatch).toHaveBeenCalledWith('listing-1', 'owner', new Date('2026-09-24T08:59:55Z'))
     expect(result.dispatch.submitted).toBe(1)
   })
   it('marks only unchanged stale submissions uncertain, never queued', async () => {

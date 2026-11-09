@@ -10,6 +10,7 @@ export const HOLD_WINDOW_MS = 24 * 60 * 60 * 1000
 export const DAY_MS = 24 * 60 * 60 * 1000
 
 export const bookingRequestSchema = z.object({
+  clientId: z.uuid().optional(),
   listingId: z.string().uuid(),
   kind: z.enum(BOOKING_KINDS),
   startsAt: z.string().datetime({ offset: true }),

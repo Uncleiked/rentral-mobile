@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ user: vi.fn(), findListing: vi.fn(), upsert: vi.fn(), remove: vi.fn(), revalidate: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.user }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: mocks.findListing }, savedListing: { upsert: mocks.upsert, deleteMany: mocks.remove } } }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ user: { updateMany: async () => ({ count: 1 }) }, listing: { findFirst: mocks.findListing }, savedListing: { upsert: mocks.upsert } }) }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
 import { setListingSaved } from '@/app/actions/savedActions'
 
@@ -11,7 +12,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true')
   mocks.user.mockResolvedValue('current-user')
-  mocks.findListing.mockResolvedValue({ id: listingId })
+  mocks.findListing.mockResolvedValue({ id: listingId, lister_id: 'host' })
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -32,7 +33,7 @@ it('requires an authenticated user and valid input', async () => {
 
 it('only saves a currently active listing, using the authenticated identity', async () => {
   expect(await setListingSaved({ listingId, saved: true, userId: 'another-user' })).toEqual({ success: true, data: { saved: true } })
-  expect(mocks.findListing).toHaveBeenCalledWith({ where: { id: listingId, listing_status: 'active' }, select: { id: true } })
+  expect(mocks.findListing).toHaveBeenCalledWith({ where: { id: listingId, listing_status: 'active' }, select: { id: true, lister_id: true } })
   expect(mocks.upsert).toHaveBeenCalledWith({ where: { user_id_listing_id: { user_id: 'current-user', listing_id: listingId } }, create: { user_id: 'current-user', listing_id: listingId }, update: {} })
   mocks.findListing.mockResolvedValue(null)
   expect(await setListingSaved({ listingId, saved: true })).toMatchObject({ success: false })

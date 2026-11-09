@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(), findIntent: vi.fn(), updateIntent: vi.fn(), createEvent: vi.fn(), findEvent: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unk
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.requireUser }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/bookings/service', () => ({ expireListingReservations: vi.fn(), paidBookingExpiry: () => null, otherConfirmedHold: mocks.hold }))
+vi.mock('@/lib/payments/financial-receipts', () => ({ ingestProviderReceipt: vi.fn() }))
 
 import { verifyPaystackSignature, verifiedPaymentSchema, initializePaystack } from '@/lib/payments/paystack'
 import { paymentBindingMatches, recordVerifiedPayment, startBookingPayment } from '@/lib/payments/service'
@@ -53,7 +55,7 @@ describe('Paystack origin and binding', () => {
     expect(verifiedPaymentSchema.safeParse({ ...verifiedBase, amount: 1.5 }).success).toBe(false)
   })
   it('accepts checkout URLs only on the actual Paystack host', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: true, data: { reference: 'ref', authorization_url: 'https://checkout.paystack.com.evil.test/x' } }) }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ status: true, data: { reference: 'ref', authorization_url: 'https://checkout.paystack.com.evil.test/x' } })))
     await expect(initializePaystack({ id: paymentId, userId, email: 'person@example.test', reference: 'ref', amountKobo: BigInt(1000), callbackUrl: 'https://rentral.example/' })).rejects.toThrow('Invalid checkout')
   })
 })
@@ -86,7 +88,7 @@ describe('transactional collection settlement', () => {
     ] } }) }))
     expect(mocks.updateBooking).toHaveBeenCalledTimes(1)
     expect(mocks.updateBooking).toHaveBeenCalledWith({ where: { id: 'booking-1' }, data: { status: 'confirmed', expires_at: null } })
-    expect(mocks.query.mock.calls[0]).toEqual(['listing', 'listing-1'])
+    expect(mocks.query.mock.calls.slice(0, 2)).toEqual([['user', userId], ['listing', 'listing-1']])
   })
   it('records late money for reconciliation without reviving an expired reservation', async () => {
     prepareSettlement('expired', new Date(Date.now() - 10000))

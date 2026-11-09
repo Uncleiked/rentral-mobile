@@ -3,9 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireUserId, requireVerifiedUserId } from '@/lib/action-helpers'
-import prisma from '@/lib/db'
 import { platformEnabled, PLATFORM_UNAVAILABLE, type ActionResult } from '@/lib/platform'
-import { beginConversation, getThread, persistMessage } from '@/lib/messaging/service'
+import { beginConversation, getThread, persistMessage, markConversationRead } from '@/lib/messaging/service'
 import { type ChatThread } from '@/lib/messaging/policy'
 
 export async function startConversationAction(listingId: unknown): Promise<ActionResult<string>> {
@@ -59,12 +58,7 @@ export async function markThreadReadAction(id: unknown): Promise<ActionResult> {
     }
     const userId = await requireUserId()
     if (!userId) return { success: false, error: 'Sign in to read messages.' }
-    const now = new Date()
-    const changed = await prisma.$transaction([
-      prisma.conversation.updateMany({ where: { id, seeker_id: userId }, data: { seeker_read_at: now } }),
-      prisma.conversation.updateMany({ where: { id, lister_id: userId }, data: { lister_read_at: now } }),
-    ])
-    if (!changed.some(result => result.count > 0)) return { success: false, error: 'Conversation unavailable.' }
+    if (!await markConversationRead(userId, id)) return { success: false, error: 'Conversation unavailable.' }
     return { success: true, data: undefined }
   } catch {
     return { success: false, error: 'Read receipt could not be saved.' }

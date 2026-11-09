@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
+import { assertActiveAccounts } from '@/lib/accounts/availability'
 
-const mocks = vi.hoisted(() => ({ identity: vi.fn(), account: vi.fn(), update: vi.fn(), saved: vi.fn(), updateSaved: vi.fn(), media: vi.fn(), revalidate: vi.fn() }))
+const mocks = vi.hoisted(() => ({ identity: vi.fn(), account: vi.fn(), update: vi.fn(), saved: vi.fn(), updateSaved: vi.fn(), media: vi.fn(), revalidate: vi.fn(), lock: vi.fn(), prepare: vi.fn(), claim: vi.fn() }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: mocks.identity }))
 vi.mock('@/lib/accounts/bootstrap', () => ({
   ensureAccount: mocks.account, accountSelect: { id: true },
@@ -11,6 +13,8 @@ vi.mock('@/lib/discovery', () => ({ getSavedListings: mocks.saved }))
 vi.mock('@/lib/api/saved', () => ({ updateSavedListing: mocks.updateSaved }))
 vi.mock('@/lib/api/media', () => ({ listingMediaForApi: mocks.media }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
+vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ user: { update: mocks.update } }) }))
+vi.mock('@/lib/storage-claims/service', () => ({ prepareAvatarStorage: mocks.prepare, claimStorageObjects: mocks.claim }))
 import { ApiError } from '@/lib/api/http'
 import { GET as getMe, PATCH as patchMe } from '@/app/api/v1/me/route'
 import { GET as getSaved } from '@/app/api/v1/saved/route'
@@ -29,6 +33,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.identity.mockResolvedValue({ userId: id, email: account.email, mode: 'bearer' })
   mocks.account.mockResolvedValue(account)
+  mocks.lock.mockResolvedValue(true)
 })
 
 it('rejects unauthenticated requests before account, saved or privileged media services run', async () => {
@@ -78,6 +83,32 @@ it('maps duplicate handles to a readable private conflict without leaking databa
   const response = await patchMe(request('/me', 'PATCH', { username: 'taken_handle' }))
   expect(response.status).toBe(409)
   expect(await response.json()).toEqual({ success: false, code: 'USERNAME_TAKEN', error: 'That username is already taken.' })
+})
+
+it('verifies and claims an uploaded avatar in the same actor-locked profile transaction', async () => {
+  const avatarUrl = `/api/v1/files/profile-avatars/${id}/avatar.png`
+  const objects = [{ id: 'prepared-storage-object' }]
+  mocks.prepare.mockResolvedValue({ reference: avatarUrl, objects })
+  mocks.update.mockResolvedValue({ ...account, avatar_url: avatarUrl })
+  const response = await patchMe(request('/me', 'PATCH', { avatarUrl }))
+  expect(response.status).toBe(200)
+  expect(mocks.prepare).toHaveBeenCalledExactlyOnceWith(id, avatarUrl)
+  expect(assertActiveAccounts).toHaveBeenCalledWith(expect.any(Object), [id])
+  expect(mocks.claim).toHaveBeenCalledWith(expect.any(Object), id, objects)
+  expect(mocks.prepare.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(assertActiveAccounts).mock.invocationCallOrder[0])
+  expect(mocks.claim.mock.invocationCallOrder[0]).toBeLessThan(mocks.update.mock.invocationCallOrder[0])
+  expect((await response.json()).data.avatarUrl).toBe(avatarUrl)
+})
+
+it('allows avatar removal without claiming an object and rejects noncanonical avatar sources', async () => {
+  mocks.update.mockResolvedValue(account)
+  expect((await patchMe(request('/me', 'PATCH', { avatarUrl: null }))).status).toBe(200)
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ data: { avatar_url: null } }))
+  expect(mocks.prepare).not.toHaveBeenCalled(); expect(mocks.claim).not.toHaveBeenCalled()
+  for (const avatarUrl of ['https://external.example/avatar.png', `/api/v1/files/compliance-docs/${id}/deed.pdf`, `/api/v1/files/profile-avatars/${id}/avatar.png?token=private`]) {
+    expect((await patchMe(request('/me', 'PATCH', { avatarUrl }))).status).toBe(400)
+  }
+  expect(mocks.update).toHaveBeenCalledTimes(1)
 })
 
 it('requires account/platform guards for idempotent saves and returns bounded saved results', async () => {

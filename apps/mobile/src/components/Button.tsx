@@ -3,7 +3,7 @@ import { colors, fonts, radius, space } from '../theme'
 
 type Props = { title: string; onPress: () => void; disabled?: boolean; busy?: boolean; secondary?: boolean }
 export function Button({ title, onPress, disabled, busy, secondary }: Props) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ disabled: disabled || busy, busy }} disabled={disabled || busy} onPress={onPress}
+  return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled: disabled || busy, busy }} disabled={disabled || busy} onPress={onPress}
     style={({ pressed }) => [styles.button, secondary && styles.secondary, pressed && styles.pressed, (disabled || busy) && styles.disabled]}>
     {busy ? <ActivityIndicator color={secondary ? colors.text : colors.inverse} /> : <Text style={[styles.label, secondary && styles.secondaryLabel]}>{title}</Text>}
   </Pressable>

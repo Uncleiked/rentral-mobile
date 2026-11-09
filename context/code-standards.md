@@ -10,7 +10,10 @@ Web files follow the installed Next.js16 documentation. Native files use strict
 Expo SDK 58 TypeScript, Expo Router defaults, StyleSheet, semantic src/theme.ts
 tokens and bundled Inter; the native workspace has its own typecheck. Never send
 Prisma, MongoDB connections, JWT_SECRET or private server modules to the app.
-EXPO_PUBLIC_API_URL is the only optional public mobile configuration.
+Public mobile configuration is EXPO_PUBLIC_API_URL and the optional
+EXPO_PUBLIC_EAS_PROJECT_ID UUID. Use locally bundled Inter: next/font/local on
+web, expo-font with direct weight imports on native. Do not require remote font
+downloads during startup/build or import all icon families through a barrel.
 
 Authenticate JWTs against current database sessions and roles; never trust
 decoded/editable profile metadata. Signed-in members do not require KYC, a chosen
@@ -23,6 +26,31 @@ locks, common listing first for reservations. Recheck overlaps and exact integer
 kobo balances. Keep provider HTTP, password hashing and external side effects
 outside retry callbacks; never blindly retry ambiguous payments or listing creates.
 Immutable ledgers/audits/hold allocations must not be edited or deleted.
+
+Paystack is the only payment provider. Bind provider records to immutable amount,
+currency, payer/order/booking and test/live environment. Independent settlement
+approval and exact source reservations precede provider instructions; only verified
+readback changes financial truth. Retain unknown outcomes for reconciliation,
+and never use checkout redirects as payment proof or silently activate providers.
+
+Password changes, resets and completed email changes recheck the credential
+snapshot under a User write lock and revoke sessions, capabilities and prepared
+push registrations. A signed expired access token is accepted only as bounded
+same-session revocation proof, never as authentication. An unconfirmed logout
+must not claim server revocation succeeded. Email-change codes require independent
+mailbox confirmation; provider secrets/codes/tokens stay out of DTOs and logs.
+
+Send email and push only through their explicit gates and bounded provider
+adapters. Resend jobs retain encrypted capability payloads only until accepted or
+expired. Push enrollment binds current session and consent version; revocation
+does not depend on the sending gate. Gemini/Geoapify responses have whole-body
+deadlines/byte/schema limits and cannot override human publication decisions.
+
+Soft closure serializes with new participation and preserves owed financial and
+necessary evidence records. Exports use bounded allowlists. Backup verification
+authenticates an owned ciphertext snapshot before decompression, restores only
+to a fresh owned local target, and quarantines credentials/providers; it must not
+alter the source or claim automatic cutover/account recovery is safe.
 
 Private GPS belongs in ListingLocation only. Return allowlisted public data and
 coarse neighborhoods. Files must pass ownership, actual byte/type/magic, path and

@@ -1,4 +1,4 @@
-export type MediaStatus = 'queued' | 'submitting' | 'uncertain' | 'processing' | 'ready' | 'errored'
+export type MediaStatus = 'queued' | 'submitting' | 'uploading' | 'uncertain' | 'processing' | 'ready' | 'errored'
 
 // Mongo distinguishes an omitted optional field from an explicit null. Both
 // represent a submission that has not acquired a provider asset identifier.

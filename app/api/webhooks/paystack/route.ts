@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto'
-import { z } from 'zod'
 import { paymentsEnabled } from '@/lib/payments/config'
-import { verifiedPaymentSchema, verifyPaystackSignature } from '@/lib/payments/paystack'
-import { recordVerifiedPayment } from '@/lib/payments/service'
+import { verifyPaystackSignature } from '@/lib/payments/paystack'
+import { paystackEnvironment } from '@/lib/payments/providers/paystack/client'
+import { normalizePaystackWebhook, PaystackWebhookError, readPaystackWebhook } from '@/lib/payments/providers/paystack/webhooks'
+import { ingestProviderReceipt } from '@/lib/payments/financial-receipts'
 
 export const runtime = 'nodejs'
 
@@ -10,16 +10,15 @@ export async function POST(request: Request): Promise<Response> {
   const headers = { 'Cache-Control': 'private, no-store' }
   if (!paymentsEnabled()) return Response.json({ success: false, error: 'Payments unavailable.' }, { status: 503, headers })
   try {
-    const raw = await request.text()
-    if (Buffer.byteLength(raw) > 262144) return Response.json({ success: false, error: 'Payload too large.' }, { status: 413, headers })
+    const raw = await readPaystackWebhook(request)
     if (!verifyPaystackSignature(raw, request.headers)) return Response.json({ success: false, error: 'Unauthorized.' }, { status: 401, headers })
-    const payload = z.object({ event: z.string(), data: z.unknown() }).parse(JSON.parse(raw))
-    if (payload.event === 'charge.success') {
-      await recordVerifiedPayment(verifiedPaymentSchema.parse(payload.data), createHash('sha256').update(raw).digest('hex'))
-    }
+    const environment = paystackEnvironment(process.env.PAYSTACK_SECRET_KEY?.trim() ?? '', process.env.PAYSTACK_ENVIRONMENT?.trim())
+    const payload = normalizePaystackWebhook(raw, environment)
+    if (payload) await ingestProviderReceipt(payload.hint)
     return Response.json({ success: true }, { headers })
   } catch (error) {
-    console.error('[api/webhooks/paystack] Processing failed', error instanceof Error ? error.name : 'UnknownError')
-    return Response.json({ success: false, error: 'Payment event could not be processed.' }, { status: error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 500, headers })
+    // Provider bodies and errors can contain bank/customer details. Return only fixed public messages.
+    return Response.json({ success: false, error: error instanceof PaystackWebhookError ? error.message : 'Payment event could not be processed.' },
+      { status: error instanceof PaystackWebhookError ? error.status : 500, headers })
   }
 }

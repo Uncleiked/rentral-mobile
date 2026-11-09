@@ -243,6 +243,37 @@ it('does not report logout success when keychain deletion fails and still attemp
   expect(await auth.getSession()).toEqual(original)
   expect(fixtures.fetch).toHaveBeenCalledWith(expect.stringContaining('/logout'), expect.objectContaining({ method: 'POST' }))
 })
+it('does not erase a newer account while the captured-account pre-logout cleanup is awaiting', async () => {
+  fixtures.stored.set(key, JSON.stringify(session()))
+  const auth = await import('../apps/mobile/src/lib/auth'), effects = await import('../apps/mobile/src/lib/sign-out-effects')
+  await auth.getSession()
+  const cleanup = deferred<void>(), started = vi.fn()
+  const remove = effects.beforeSignOut(async captured => { started(captured.user.id); await cleanup.promise })
+  const logout = auth.signOut()
+  await vi.waitFor(() => expect(started).toHaveBeenCalledWith('fixture-user'))
+  const newer = { ...session(), access_token: 'new-account-access', user: { ...session().user, id: 'new-account', email: 'new@example.test' } }
+  fixtures.fetch.mockImplementation(async (url: string) => response(url.endsWith('/login') ? newer : { signedOut: true }))
+  await auth.signIn('new@example.test', 'fixture-password')
+  cleanup.resolve(); await logout; remove()
+  expect(await auth.getSession()).toEqual(newer)
+  expect(JSON.parse(fixtures.stored.get(key)!)).toEqual(newer)
+  expect(fixtures.fetch).toHaveBeenCalledWith(expect.stringContaining('/logout'), expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fixture-access' }) }))
+})
+it('clears local credentials even if optional pre-logout device cleanup rejects', async () => {
+  fixtures.stored.set(key, JSON.stringify(session())); fixtures.fetch.mockResolvedValue(response({ signedOut: true }))
+  const auth = await import('../apps/mobile/src/lib/auth'), effects = await import('../apps/mobile/src/lib/sign-out-effects')
+  await auth.getSession(); const remove = effects.beforeSignOut(async () => { throw new Error('Push revocation could not be confirmed') })
+  await auth.signOut(); remove()
+  expect(await auth.getSession()).toBeNull(); expect(fixtures.stored.has(key)).toBe(false)
+})
+it('bounds a stalled optional device cleanup before clearing local JWT credentials', async () => {
+  vi.useFakeTimers(); fixtures.stored.set(key, JSON.stringify(session())); fixtures.fetch.mockResolvedValue(response({ signedOut: true }))
+  const auth = await import('../apps/mobile/src/lib/auth'), effects = await import('../apps/mobile/src/lib/sign-out-effects')
+  await auth.getSession(); const remove = effects.beforeSignOut(() => new Promise(() => undefined))
+  const logout = auth.signOut()
+  await vi.advanceTimersByTimeAsync(5000); await logout; remove()
+  expect(fixtures.stored.has(key)).toBe(false); expect(await auth.getSession()).toBeNull()
+})
 
 it('invalidates only the matching access-token session and not a newer sign-in', async () => {
   fixtures.stored.set(key, JSON.stringify(session()))

@@ -1,6 +1,8 @@
 import { createLocalStorage, defaultStorageDirectory } from '@/lib/local-storage/core'
 import { storageBucket, storageFailure, storagePath, StorageError } from '@/lib/local-storage/policy'
 import { verifyStorageToken } from '@/lib/local-storage/urls'
+import prisma from '@/lib/db'
+import { activeAccountWhere } from '@/lib/accounts/availability'
 
 export const runtime = 'nodejs'
 type Context = { params: Promise<{ bucket: string; path: string[] }> }
@@ -26,6 +28,7 @@ async function fileResponse(request: Request, context: Context): Promise<Respons
     const path = params.path.join('/')
     storagePath(bucket, path)
     if (bucket !== 'profile-avatars') await verifyStorageToken(url.searchParams.get('token'), bucket, path)
+    else if (!await prisma.user.findFirst({ where: { id: params.path[0], ...activeAccountWhere }, select: { id: true } })) throw new StorageError(404, 'NOT_FOUND', 'This file is unavailable.')
     const storage = createLocalStorage(defaultStorageDirectory())
     const info = await storage.info(bucket, path)
     const etag = `"${info.digest}"`
@@ -33,7 +36,7 @@ async function fileResponse(request: Request, context: Context): Promise<Respons
       'Content-Type': info.contentType, 'Content-Length': String(info.size), 'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
       'Accept-Ranges': 'bytes', ETag: etag, 'Last-Modified': new Date(info.createdAt).toUTCString(),
-      'Cache-Control': bucket === 'profile-avatars' ? 'public, max-age=300' : 'private, no-store',
+      'Cache-Control': 'private, no-store',
       'Content-Security-Policy': "default-src 'none'; sandbox",
       'Content-Disposition': `${bucket === 'compliance-docs' ? 'attachment' : 'inline'}; filename="${params.path.at(-1)}"`,
     }

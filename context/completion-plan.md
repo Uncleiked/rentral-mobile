@@ -1,5 +1,18 @@
 # Rentral completion implementation
 
+> **Historical implementation plan — superseded scope (2026-11-09).**
+> Follow the user-approved [completion blueprint](remaining-work-blueprint.md),
+> [current 31-area matrix](completion-status.md), and [environment guide](environment-setup.md).
+> The active stack is Expo Android/iOS, npm, local Next.js, MongoDB/JWT and private
+> local storage. Personal KYC/profile onboarding is removed; Paystack alone is
+> approved. Supabase/PostGIS/OAuth/Didit initiation, OPay and migration/bypass
+> assumptions below remain historical evidence and must not be reinstated.
+> Source implementations and recorded fixtures do not imply final aggregate,
+> physical-device, real-provider or production-release acceptance. See
+> [the progress tracker](progress-tracker.md) for current command outcomes.
+
+## Historical evidence begins here
+
 Started: 2026-11-07 (Africa/Lagos).
 
 The user authorizes completing the existing TypeScript platform, responsive

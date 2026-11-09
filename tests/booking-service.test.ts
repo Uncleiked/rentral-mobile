@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Account liveness is verified independently by conditional-write tests and real Mongo closure races.
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), raw: vi.fn(), proximity: vi.fn(), conflicting: vi.fn(), findBooking: vi.fn(), hold: vi.fn(), expiredHolds: vi.fn(), uniqueBooking: vi.fn(), updateBooking: vi.fn(), updateMany: vi.fn(), findListing: vi.fn(), createBooking: vi.fn(), notify: vi.fn(), findMany: vi.fn() }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.raw(model, id); return true } }))

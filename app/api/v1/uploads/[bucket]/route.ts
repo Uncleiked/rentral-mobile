@@ -3,6 +3,7 @@ import { requireApiIdentity } from '@/lib/api/auth'
 import { ApiError, apiFailure, apiSuccess, readApiJson } from '@/lib/api/http'
 import { createLocalStorage, defaultStorageDirectory } from '@/lib/local-storage/core'
 import { requireOwnedStoragePath, storageBucket, storagePrefix, storageFailure, uploadPolicy } from '@/lib/local-storage/policy'
+import { uploadStoredObject, removeStoredObjects } from '@/lib/storage-claims/service'
 
 export const runtime = 'nodejs'
 type Context = { params: Promise<{ bucket: string }> }
@@ -21,7 +22,7 @@ export async function POST(request: Request, context: Context): Promise<Response
     const policy = uploadPolicy(bucket, path, request.headers.get('content-type'))
     const length = request.headers.get('content-length')
     if (length && (!/^\d+$/.test(length) || Number(length) > policy.maximumBytes)) throw new ApiError(413, 'FILE_TOO_LARGE', 'This file exceeds the upload limit.')
-    const result = await createLocalStorage(defaultStorageDirectory()).upload(bucket, path, request.body, policy.contentType)
+    const result = await uploadStoredObject(identity.userId, bucket, path, request.body, policy.contentType)
     return apiSuccess(result, 201)
   } catch (error) { return failure(error) }
 }
@@ -32,8 +33,7 @@ export async function DELETE(request: Request, context: Context): Promise<Respon
     const bucket = storageBucket((await context.params).bucket)
     const input = z.object({ paths: z.array(z.string().max(500)).min(1).max(100) }).strict().parse(await readApiJson(request))
     for (const path of input.paths) requireOwnedStoragePath(bucket, path, identity.userId)
-    const storage = createLocalStorage(defaultStorageDirectory())
-    for (const path of input.paths) await storage.remove(bucket, path)
+    await removeStoredObjects(identity.userId, bucket, input.paths)
     return apiSuccess(input.paths.map(name => ({ name })))
   } catch (error) { return failure(error) }
 }

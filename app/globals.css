@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./styles/shadcn-runtime.css";
+
+/* Runtime component variants are local; no generator package is required. */
 
 @custom-variant dark (&:is(.dark *));
 

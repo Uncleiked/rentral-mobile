@@ -1,5 +1,18 @@
 # Rentral implementation and release readiness
 
+> **Historical readiness snapshot — not current release approval (2026-11-09).**
+> The [approved completion blueprint](remaining-work-blueprint.md) and
+> [current 31-area matrix](completion-status.md) supersede the scope/status below.
+> Rentral now uses Expo Android/iOS, npm, local Next.js, MongoDB/JWT and private
+> filesystem storage, with no personal KYC onboarding and Paystack only. Old
+> pnpm/Supabase/PostGIS/Didit/OPay and hosted-migration instructions are archival.
+> Earlier test totals and provider gaps describe that earlier checkout, not the
+> latest changes. Consult [current progress](progress-tracker.md) for actual runs;
+> final builds, device/provider acceptance and release approval remain separate.
+> Preserve the original PostgreSQL data; follow [current setup](environment-setup.md).
+
+## Historical evidence begins here
+
 Date: 2026-11-07 (Africa/Lagos).
 
 ## Implemented in this checkout

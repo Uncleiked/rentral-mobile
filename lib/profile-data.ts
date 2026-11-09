@@ -7,6 +7,7 @@ import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import type { User, IndividualProfile, OrganizationProfile } from '@prisma/client'
 import { muxEnabled } from '@/lib/media/config'
 import { listingMediaStatuses, type MediaSummary } from '@/lib/media/status'
+import { accountIsActive, activeAccountWhere } from '@/lib/accounts/availability'
 
 export type ProfileRecord = {
   id: string
@@ -31,25 +32,6 @@ export type OwnProfileDetails = ProfileRecord & {
   phoneNumber: string | null
   country: string | null
   address: string | null
-}
-
-export type TrustSummary = {
-  // Computed metrics with no backing system yet (reputation scoring,
-  // messaging, handshake check-ins). null means "not available", not zero —
-  // render as a placeholder, never fabricate a number.
-  trustScore: string | null
-  topPercentLabel: string | null
-  avgResponseMinutes: number | null
-  showUpRatePercent: number | null
-  // Real counts. Legitimately zero for every user until listings, handshakes,
-  // and bookings exist — same as a brand-new account showing "0 followers".
-  ghostListings: number
-  listingsCount: number
-  followersCount: number
-  handshakesCount: number
-  rentalsCompleted: number
-  onTimePayments: number
-  verifiedSinceYear: number
 }
 
 export type ListingSummary = {
@@ -105,6 +87,7 @@ export async function getListingsForProfile(
   const rows = await prisma.listing.findMany({
     where: {
       lister_id: listerId,
+      lister: { is: activeAccountWhere },
       // Drafts are private to their owner — only the "Your Listings" hub asks
       // for them; visitor profiles never see them. `in` (not `not: draft`)
       // so the query can use the (listing_status, createdAt) index.
@@ -146,22 +129,6 @@ export async function getListingsForProfile(
   })
 }
 
-export function getTrustSummary(profile: ProfileRecord): TrustSummary {
-  return {
-    trustScore: null,
-    topPercentLabel: null,
-    avgResponseMinutes: null,
-    showUpRatePercent: null,
-    ghostListings: 0,
-    listingsCount: 0,
-    followersCount: 0,
-    handshakesCount: 0,
-    rentalsCompleted: 0,
-    onTimePayments: 0,
-    verifiedSinceYear: profile.memberSince.getFullYear(),
-  }
-}
-
 type UserWithProfiles = User & {
   individualProfile: IndividualProfile | null
   organizationProfile: OrganizationProfile | null
@@ -196,31 +163,29 @@ export async function getOwnProfile(): Promise<ProfileRecord | null> {
   if (!await ensureAccountHandle(userId)) return null
 
   const dbUser = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, ...activeAccountWhere },
     include: { individualProfile: true, organizationProfile: true },
   })
 
-  if (!dbUser) return null
+  if (!dbUser || !accountIsActive(dbUser)) return null
 
   return toProfileRecord(dbUser)
 }
 
 export async function getOwnProfileDetails(): Promise<OwnProfileDetails | null> {
-  // Needs the full Supabase user (for pendingEmail), not just the id, so this
-  // one keeps its own auth call rather than requireUserId() + a second round-trip.
-  const supabase = await createClient()
+  const client = await createClient()
   const {
     data: { user }, error,
-  } = await supabase.auth.getUser()
+  } = await client.auth.getUser()
   if (error || !user || user.is_anonymous) return null
   if (!await ensureAccountHandle(user.id)) return null
 
   const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: user.id, ...activeAccountWhere },
     include: { individualProfile: true, organizationProfile: true },
   })
 
-  if (!dbUser) return null
+  if (!dbUser || !accountIsActive(dbUser)) return null
 
   const base = toProfileRecord(dbUser)
   if (!base) return null
@@ -238,11 +203,11 @@ export async function getOwnProfileDetails(): Promise<OwnProfileDetails | null> 
 
 export async function getProfileByUsername(username: string): Promise<ProfileRecord | null> {
   const dbUser = await prisma.user.findUnique({
-    where: { username },
+    where: { username, ...activeAccountWhere },
     include: { individualProfile: true, organizationProfile: true },
   })
 
-  if (!dbUser) return null
+  if (!dbUser || !accountIsActive(dbUser)) return null
 
   return toProfileRecord(dbUser)
 }

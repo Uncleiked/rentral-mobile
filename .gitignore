@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 /.npm-migration-backup/
+/.npm-cache/
 /storage/
 **/node_modules/
 **/.expo/

@@ -22,7 +22,7 @@ export async function getMarketInsights(): Promise<InsightCohort[]> {
   const now = new Date()
   const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
   const cohorts: unknown = await prisma.marketEvent.aggregateRaw({ pipeline: [
-    { $match: { createdAt: { $gte: { $date: month } } } },
+    { $match: { createdAt: { $gte: { $date: month } }, event_type: { $in: ['search', 'detail', 'checkout'] } } },
     // Count each contributor once per coarse cohort, without building an array
     // of identities in the aggregate result or exposing hashes to the caller.
     { $group: { _id: { category: '$category', intent: '$intent', neighborhood: '$neighborhood', budget_band: '$budget_band', subject: '$subject_hash' }, events: { $sum: 1 } } },

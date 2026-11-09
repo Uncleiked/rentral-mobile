@@ -19,7 +19,7 @@ export async function updateSession(request: NextRequest) {
     if (origin) {
       response.headers.set('Access-Control-Allow-Origin', origin)
       response.headers.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, PATCH, PUT, DELETE, OPTIONS')
-      response.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept, X-Upload-Path, Range')
+      response.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept, X-Upload-Path, X-Rentral-Account, Range')
       response.headers.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length')
       response.headers.append('Vary', 'Origin')
     }

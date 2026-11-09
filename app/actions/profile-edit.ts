@@ -2,10 +2,10 @@
 
 import { z } from 'zod'
 import prisma from '@/lib/db'
-import { createClient } from '@/lib/server'
 import { captureServerEvent } from '@/lib/posthog'
 import { requireUserId, revalidateProfilePaths } from '@/lib/action-helpers'
-import { verifiedAvatarReference } from '@/lib/local-storage/avatars'
+import { updateAccountProfile } from '@/lib/accounts/profile'
+import { AccountUnavailableError } from '@/lib/accounts/availability'
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/
 const MAX_BIO_LENGTH = 280
@@ -73,15 +73,13 @@ export async function updateProfileIdentity(data: { username: string; bio: strin
   try {
     const previous = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } })
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { username, bio: bio.length > 0 ? bio : null },
-    })
+    await updateAccountProfile(userId, { username, bio: bio.length > 0 ? bio : null })
 
     revalidateProfilePaths(username, previous?.username)
     await captureServerEvent(userId, 'profile_updated', { field: 'identity' })
     return { success: true }
   } catch (error) {
+    if (error instanceof AccountUnavailableError) return { success: false, error: error.message }
     if (isUniqueConstraintError(error)) {
       return { success: false, error: 'That username is already taken.' }
     }
@@ -89,37 +87,6 @@ export async function updateProfileIdentity(data: { username: string; bio: strin
     console.error('[actions/profile-edit] Profile update failed:', error instanceof Error ? error.name : 'UnknownError')
     return { success: false, error: 'Could not save your profile. Please try again.' }
   }
-}
-
-export async function requestEmailChange(newEmail: string): Promise<ActionResult> {
-  const parsed = z.string().trim().email().safeParse(newEmail)
-  if (!parsed.success) {
-    return { success: false, error: 'Enter a valid email address.' }
-  }
-
-  const client = await createClient()
-  const {
-    data: { user },
-  } = await client.auth.getUser()
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' }
-  }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const next = encodeURIComponent('/marketplace/profile?email_change=check')
-
-  const { error } = await client.auth.updateUser(
-    { email: parsed.data },
-    { emailRedirectTo: `${appUrl}/auth/callback?next=${next}` }
-  )
-
-  if (error) {
-    console.error('[actions/profile-edit] requestEmailChange failed:', error.message)
-    return { success: false, error: 'Could not start the email change. Please try again.' }
-  }
-
-  return { success: true }
 }
 
 export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> {
@@ -134,12 +101,7 @@ export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> 
   }
 
   try {
-    const reference = await verifiedAvatarReference(parsed.data, userId)
-    const dbUser = await prisma.user.update({
-      where: { id: userId },
-      data: { avatar_url: reference },
-      select: { username: true },
-    })
+    const dbUser = await updateAccountProfile(userId, { avatarUrl: parsed.data })
 
     revalidateProfilePaths(dbUser.username)
 

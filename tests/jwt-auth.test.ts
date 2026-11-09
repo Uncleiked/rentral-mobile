@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SignJWT } from 'jose'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
-import { accessClaims, accessToken, signingKey, tokenHash } from '@/lib/auth/token'
+import { ACCESS_SECONDS, REFRESH_SECONDS, accessClaims, accessToken, revocationClaims, signingKey, tokenHash } from '@/lib/auth/token'
+import { sessionCookies } from '@/lib/auth/cookies'
 
 const mocks = vi.hoisted(() => ({
   userFind: vi.fn(), userCreate: vi.fn(), sessionFind: vi.fn(), sessionCreate: vi.fn(), sessionUpdate: vi.fn(),
@@ -11,9 +12,10 @@ vi.mock('@/lib/db', () => ({ default: {
   authSession: { findUnique: mocks.sessionFind, create: mocks.sessionCreate, updateMany: mocks.sessionUpdate },
 } }))
 vi.mock('@/lib/database/transactions', () => ({
-  withTransaction: (work: (tx: unknown) => Promise<unknown>) => work({ user: { findUnique: mocks.userFind }, authSession: { create: mocks.sessionCreate } }),
+  withTransaction: (work: (tx: unknown) => Promise<unknown>) => work({ user: { findUnique: mocks.userFind }, authSession: { create: mocks.sessionCreate, updateMany: mocks.sessionUpdate } }),
   lockRecord: async () => true,
 }))
+vi.mock('@/lib/database/readiness', () => ({ pushPrepared: async () => false }))
 import { authenticateAccess, loginAccount, refreshSession, registerAccount, revokeRefreshToken, revokeSession } from '@/lib/auth/service'
 
 const userId = 'f305fc41-73fd-4b8d-a685-b25f3bb8a58b'
@@ -30,6 +32,20 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('JWT signatures and session boundaries', () => {
+  it('accepts a bounded signed expired token ONLY as same-session revocation proof, never authentication', async () => {
+    const issued = Math.floor(Date.now() / 1000) - 3600
+    const proof = await new SignJWT({ sid: sessionId }).setProtectedHeader({ alg: 'HS256', typ: 'JWT' }).setSubject(userId).setAudience('rentral-app').setIssuer('rentral').setIssuedAt(issued).setExpirationTime(issued + ACCESS_SECONDS).sign(signingKey())
+    await expect(accessClaims(proof)).rejects.toMatchObject({ status: 401 })
+    expect(await revocationClaims(proof)).toEqual({ userId, sessionId })
+    const cookies = sessionCookies({ access_token: proof, refresh_token: 'a'.repeat(43), token_type: 'bearer', expires_in: ACCESS_SECONDS, expires_at: issued + ACCESS_SECONDS, user: { id: userId, email: user.email, is_anonymous: false, app_metadata: {}, user_metadata: {} } })
+    expect(cookies[0]).toMatchObject({ httpOnly: true, maxAge: REFRESH_SECONDS })
+  })
+  it.each(['future', 'old', 'long', 'purpose', 'audience', 'issuer', 'algorithm', 'missing'])('rejects invalid revocation-proof constraints: %s', async kind => {
+    const now = Math.floor(Date.now() / 1000), issued = kind === 'future' ? now + 120 : kind === 'old' ? now - REFRESH_SECONDS - 1 : now - 1000
+    let token = new SignJWT({ sid: sessionId, ...(kind === 'purpose' ? { bucket: 'private-files' } : {}) }).setProtectedHeader({ alg: kind === 'algorithm' ? 'HS384' : 'HS256', typ: 'JWT' }).setSubject(userId).setAudience(kind === 'audience' ? 'rentral-files' : 'rentral-app').setIssuer(kind === 'issuer' ? 'other' : 'rentral').setExpirationTime(issued + (kind === 'long' ? 3600 : ACCESS_SECONDS))
+    if (kind !== 'missing') token = token.setIssuedAt(issued)
+    await expect(revocationClaims(await token.sign(signingKey()))).rejects.toMatchObject({ status: 401 })
+  })
   it('binds an expiring signed JWT to the user and database session', async () => {
     const token = await accessToken(userId, sessionId)
     expect(await accessClaims(token)).toEqual({ userId, sessionId })
@@ -72,6 +88,7 @@ describe('MongoDB account credentials', () => {
     expect(JSON.stringify(result)).not.toContain('local-password-123')
     expect(result.user.email).toBe('member@example.test')
   })
+  // Five real, intentionally expensive KDF calls need a supported-host budget.
   it('gives identical passwords different salts and verifies without plaintext storage', async () => {
     const first = await hashPassword('an-example-password')
     const second = await hashPassword('an-example-password')
@@ -79,7 +96,7 @@ describe('MongoDB account credentials', () => {
     expect(await verifyPassword('an-example-password', first)).toBe(true)
     expect(await verifyPassword('wrong', first)).toBe(false)
     expect(await verifyPassword('wrong', 'malformed')).toBe(false)
-  })
+  }, 15000)
   it('rejects actor/role injections and weak signup passwords', async () => {
     await expect(registerAccount({ email: 'member@example.test', password: 'local-password-123', staff_role: 'admin' })).rejects.toThrow()
     await expect(registerAccount({ email: 'member@example.test', password: 'short' })).rejects.toThrow()
@@ -107,13 +124,16 @@ describe('MongoDB account credentials', () => {
     expect(mocks.sessionUpdate).not.toHaveBeenCalled()
   })
   it('revokes only the selected session', async () => {
+    mocks.sessionFind.mockResolvedValue({ id: sessionId, user_id: userId })
     await revokeSession(sessionId)
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith({ where: { id: sessionId, revoked_at: null }, data: { revoked_at: expect.any(Date) } })
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith({ where: { id: sessionId, user_id: userId, revoked_at: null }, data: { revoked_at: expect.any(Date) } })
   })
   it('revokes an opaque refresh credential by its hash when the access cookie has expired', async () => {
     const token = 'a'.repeat(43)
+    mocks.sessionFind.mockResolvedValue({ id: sessionId, user_id: userId })
     await revokeRefreshToken(token)
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith({ where: { refresh_hash: tokenHash(token), revoked_at: null }, data: { revoked_at: expect.any(Date) } })
+    expect(mocks.sessionFind).toHaveBeenCalledWith({ where: { refresh_hash: tokenHash(token) }, select: { id: true, user_id: true } })
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith({ where: { id: sessionId, user_id: userId, revoked_at: null }, data: { revoked_at: expect.any(Date) } })
     await revokeRefreshToken('malformed')
     expect(mocks.sessionUpdate).toHaveBeenCalledOnce()
   })

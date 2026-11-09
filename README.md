@@ -1,165 +1,159 @@
 # Rentral
 
-Expo Android and iOS app with a local Next.js backend, MongoDB, email/password JWT authentication, and private local file storage. KYC onboarding has been removed: members enter Explore after signing in, and profile edits are optional.
+Expo Android/iOS app with a local Next.js backend, MongoDB, JWT email/password
+accounts and private filesystem storage. Members enter Explore directly after
+sign-in; personal KYC onboarding and mandatory profile completion are removed.
 
-Use Node 24.x and npm 11.19.1. The repository uses npm workspaces and `package-lock.json`. Supabase is no longer part of the application.
+Source and local validation are complete, including native owner publication-fee
+checkout, status and reconciliation with durable recovery. See
+[current status](context/completion-status.md) for verified results and the
+separate device/provider release boundaries.
 
-The user-authorized source delivery repository is
-[Uncleiked/rentral-mobile](https://github.com/Uncleiked/rentral-mobile).
-Deployment and app-store publication are outside this local delivery.
+Use **Node 24.x and npm 11.19.1**. The npm workspace contains the web/API backend
+and `apps/mobile`. Prisma is pinned to 6.19.3 for its MongoDB connector. Supabase,
+PostgreSQL/PostGIS, pnpm and OPay are outside the active implementation.
 
 ## Start locally
 
-From the repository root:
+Follow the [step-by-step environment guide](context/environment-setup.md), keeping
+the existing private files and saved Atlas connection. For a fresh checkout:
 
-~~~powershell
-npm install
-npm run setup:local
-~~~
+```powershell
+npm.cmd install
+npm.cmd run setup:local
+npx.cmd prisma generate
+npm.cmd run env:check
+```
 
-`setup:local` fills missing local settings in the ignored `.env.local`: a MongoDB URL, a random backend JWT secret, `NEXT_PUBLIC_APP_URL=http://localhost:3000`, `AUTH_DEV_EMAIL_OUTBOX=true`, and `RENTRAL_PLATFORM_ENABLED=true`. It preserves existing nonempty values. Never put database connections or JWT secrets in Expo public variables.
+`setup:local` fills missing local defaults and preserves nonempty settings.
+`env:check` checks file formats offline; it does not connect to MongoDB or validate
+provider permissions. MongoDB needs replica-set transactions and reviewed setup.
+Do not use `prisma db push` or replay historical SQL migrations.
 
-Keep the saved `MONGODB_URL` unless you deliberately choose a different database.
-MongoDB must support replica-set transactions. Choose the setup for that connection:
+After reviewing and authorizing preparation of the selected database:
 
-**Saved MongoDB Atlas:** allow the backend computer's current public IP in the
-Atlas project's Network Access list. This is the computer network's public egress
-IP, not the phone's or computer's private LAN address. Follow
-[Atlas IP access-list instructions](https://www.mongodb.com/docs/atlas/security/ip-access-list/).
-After network/TLS access works and you intend to prepare that saved database, run:
+```powershell
+# Saved Atlas: deliberately prepare that remote target.
+npm.cmd run db:setup -- --allow-remote
+# Chosen local replica set instead: npm.cmd run db:setup
+```
 
-~~~powershell
-npm run db:setup -- --allow-remote
-~~~
+The supplied `compose.mongodb.yml` is an optional local replica-set source; it
+does not replace a saved Atlas connection. Setup applies indexes, validators and
+readiness markers without importing or resetting application data. See the guide
+before running it against any existing database.
 
-This explicitly prepares indexes, validators and the readiness marker in the
-selected database. It does not import, reset or replace existing data. Keep TLS
-certificate verification enabled. The current phone/Atlas troubleshooting status
-is in [local development](context/local-development.md).
+Only if you deliberately chose a new local MongoDB connection:
 
-**New local MongoDB, if selected:**
-
-~~~powershell
+```powershell
 docker compose -f compose.mongodb.yml up -d
 docker compose -f compose.mongodb.yml exec mongodb mongosh --quiet --file /bootstrap/init-local-mongo.js
-~~~
+npm.cmd run db:setup
+```
 
-This binds MongoDB to `127.0.0.1:27017`, uses replica set `rs0`, and keeps data in a named Docker volume. The local connection format is:
+These commands do not change the saved Atlas URI; do not substitute a different
+database merely to hide a connectivity/setup error.
 
-~~~text
-mongodb://127.0.0.1:27017/rentral?replicaSet=rs0&directConnection=true
-~~~
+Keep one backend and one Expo process running in separate terminals:
 
-`setup:local` preserves an existing nonempty connection. If you chose this local
-replica set, prepare it with:
+```powershell
+# Terminal 1: backend on port 3000
+npm.cmd run dev
+# Terminal 2: mobile bundle, normally on port 8081
+npm.cmd run mobile
+```
 
-~~~powershell
-npm run db:setup
-~~~
+Open `http://localhost:3000` on the computer. Set `EXPO_PUBLIC_API_URL` in
+`apps/mobile/.env.local` to the backend origin reachable from the device, without
+`/api/v1`, then restart Expo. A physical phone normally uses
+`http://YOUR_COMPUTER_LAN_IP:3000`; Android emulators use `http://10.0.2.2:3000`.
+An Expo tunnel serves the bundle, not the separate backend. The iOS simulator
+requires macOS/Xcode. See [mobile setup](apps/mobile/README.md) and
+[network troubleshooting](context/local-development.md).
 
-Runtime database operations fail closed until preparation succeeds; enabling the
-platform flag alone is insufficient. Do not use `prisma db push` or replay the
-historical SQL migrations.
+## Implemented workflows
 
-**Terminal 1 — keep the backend running:**
+- Discovery filters and walkthroughs, public host profiles, saved listings/searches,
+  owner inventory, native camera/GPS capture, drafts, editing and private vault.
+- Booking quotes, requests, host decisions, inspection check-in, paid-hold credit,
+  history, lease extensions and reviewed early termination.
+- Participant messaging, listing shares, unread/read state, activity controls,
+  reviews, reports, safety appeals and notifications.
+- Opt-in Squat-Mates preferences, mutual contact, blocking/reporting, and consented
+  coarse Insights with privacy thresholds and reviewed sponsored placement.
+- Password/session controls, dual-confirmed email change, optional Resend recovery,
+  soft account closure and bounded data exports. Historical verification never
+  grants staff permission; roles come from the current database account.
+- Staff web workspaces for listing/safety review, finance, matching and lifecycle
+  decisions; Paystack-only collections, recipients, independently approved
+  refunds/payouts and explicit uncertain-outcome reconciliation.
 
-~~~powershell
-npm run dev
-~~~
+Shared domain services enforce ownership, active-account checks, reservation
+overlap, exact kobo journals and durable request/media claims. Private files use
+scoped short-lived URLs with Range/HEAD support; raw GPS and mail outboxes remain
+private. Asset evidence, advisory screening and human publication review remain
+separate from the removed personal KYC flow. Web/native Inter fonts are bundled
+locally, so startup and web compilation do not download Google Fonts.
 
-The backend listens on `0.0.0.0:3000`; open http://localhost:3000 on the computer.
-Keep port 3000 available because the native app uses that API address.
+## Optional services and operations
 
-**Terminal 2 — keep Expo running:**
+Basic local accounts and uploads do not need provider keys. Keep optional
+payments/settlement, commercial purchases, email, push, Mux, workers, analytics
+and monitoring disabled until deliberately configured and accepted. Only the API
+origin and optional public EAS project UUID belong in mobile public settings;
+all database, signing, encryption and provider secrets stay on the backend.
 
-~~~powershell
-npm run mobile
-~~~
+Provider-ready source and controlled tests do not prove actual delivery, merchant
+custody permissions, refunds, payouts or physical-device readiness. No live money,
+provider activation, deployment, EAS build or store submission is implied.
 
-Expo normally serves the JavaScript bundle on port 8081. It does not start the
-backend on port 3000. Scan its QR code with SDK-compatible Expo Go, or use an
-Android emulator. The iOS simulator requires macOS/Xcode. See
-[mobile setup](apps/mobile/README.md).
-
-## Configuration
-
-| Backend setting | Purpose |
-| --- | --- |
-| `MONGODB_URL` | Canonical MongoDB connection; `DATABASE_URL` is a compatibility fallback. |
-| `JWT_SECRET` | Backend-only random signing secret, at least 32 bytes. Setup generates one. |
-| `NEXT_PUBLIC_APP_URL` | Local web origin, normally `http://localhost:3000`. |
-| `RENTRAL_PLATFORM_ENABLED` | Enables prepared marketplace domains; database readiness is checked separately. |
-| `RENTRAL_STORAGE_DIR` | Optional private filesystem root; defaults to `storage` in the workspace. |
-| `AUTH_DEV_EMAIL_OUTBOX` | Opt-in development password-reset codes in private `storage/mail-outbox`. |
-| `OLUSO_ENABLED`, `OLUSO_API_KEY` | Optional monitoring; starts only with explicit `OLUSO_ENABLED=true` and a key. Neither is required for local startup. |
-
-Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env.local` to an origin without
-`/api/v1`, then restart Expo:
-
-| Device | Explicit API address |
-| --- | --- |
-| Physical Android/iPhone | `http://YOUR_COMPUTER_LAN_IP:3000` on the same reachable network. |
-| Android emulator | `http://10.0.2.2:3000` |
-| iOS simulator | `http://localhost:3000` |
-| Web preview on this computer | `http://localhost:3000` |
-
-A usable local Expo host may be detected in development. Native loopback,
-missing-host and tunnel configurations require an explicit device-reachable API
-address; there is no automatic emulator fallback. An Expo tunnel forwards the
-app bundle, not the separate API on port 3000. A phone's localhost is the phone.
-See [network/Atlas troubleshooting](context/local-development.md) and
-[API contracts](context/mobile-api.md).
-
-Oluso monitoring is optional and disabled without both an explicit enable flag
-and its backend key. An unconfigured monitoring service must not prevent the app
-from starting. Keep monitoring/provider keys out of mobile public settings.
-
-## Accounts and files
-
-Create an account with email and password; email delivery and OAuth are not required for local sign-in. Passwords are salted scrypt hashes. Access JWTs last 15 minutes and are checked against a private MongoDB session on every authenticated request. Refresh credentials last at most 30 days, are stored as hashes on the backend, and rotate once per use. Staff permissions come from the current database account.
-
-Development password recovery writes a one-use code to the private backend email outbox when enabled. Enter that code in Reset password on web or mobile. These files are never served through the upload API. Production recovery delivery is not configured and returns an explicit unavailable response.
-
-Uploads use authenticated HTTP endpoints and local `listings-media`, `compliance-docs`, and `profile-avatars` directories. Private playback/download URLs use short-lived purpose-bound JWTs; file reads support byte ranges. Supporting ownership documents belong to listing review and are not personal KYC onboarding. Actual iOS MOV, Android MP4, and web WebM formats retain their truthful MIME types.
-
-Existing historical verification fields remain factual; bypassing onboarding never marks an account verified. Legacy `/onboarding` redirects and `/api/verify` returns 410.
-
-## Implemented scope and limits
-
-Native Explore/search/filtering, listing details/video, saved listings, booking requests/history, inbox/chat, optional account edits, owner inventory, and camera/GPS/document listing submission share backend domain services with the web app.
-
-Booking cards open the local web app for existing host actions, inspection check-in, and optional provider checkout. Existing web drafts can be resumed on web. Native booking requests and listing submissions must be refreshed after ambiguous failures before retrying; message UUID retries are idempotent.
-
-Publication still requires the existing asset-document, location, media, staff, and payment checks. Provider integrations remain separately gated. Collection receipts do not prove custody, refunds, payouts, escrow, or default compensation. The initial isolated delivery made no hosted database writes. A later user-authorized Atlas setup prepared indexes/validators without a reset or legacy-data import; current account-flow status is in [runtime troubleshooting](context/local-development.md). The original PostgreSQL database remains untouched. No provider activation, deployment or store build/submission was run.
+See [Paystack](context/paystack-integration.md), [account security](context/account-security.md),
+[push](context/push-operations.md), [media processing](context/media-processing.md),
+[document providers](context/document-providers.md),
+[commercial access](context/commercial.md), and [backup operations](context/backup-operations.md).
+Backup verification restores only to an isolated quarantined local target; it
+does not perform a production cutover. The original PostgreSQL database and
+existing user assets remain outside cleanup/reset operations.
 
 ## Verification
 
-Registration after a fresh backend restart completed in12.4 seconds. Real phone
-sign-in, profile editing and marketplace/member requests now succeed against the
-user-selected Atlas database. See [runtime evidence](context/local-development.md).
+```powershell
+npm.cmd test
+npm.cmd run lint
+npm.cmd run typecheck
+npm.cmd run mobile:typecheck
+npm.cmd exec --workspace @rentral/mobile -- expo install --check
+npm.cmd exec --workspace @rentral/mobile -- expo export --platform all
+npm.cmd run test:mongo
+npm.cmd run build
+npm.cmd run test:browser
+```
 
-~~~powershell
-npm test
-npm run lint
-npm run typecheck
-npm run mobile:typecheck
-npm exec --workspace @rentral/mobile -- expo install --check
-npm exec --workspace @rentral/mobile -- expo export --platform all
-npm run test:mongo
-npm run build
-~~~
+`test:mongo` creates and removes its own labeled loopback replica fixtures; it
+does not select the application database. Run resource-heavy builds/fixtures
+sequentially. [The progress tracker](context/progress-tracker.md) records current
+acceptance and remaining handoff checks; [the final review](context/final-review.md)
+records the passed unit/Mongo, production build, exports and browser journeys.
+Final acceptance includes **1,678 unit checks**, **89 owned Mongo checks**, the
+production build, Android/iOS/web exports, six production web journeys and native
+fee browser checks. Clean diagnostic-off runtime handback passed on the first
+request; staged review and authorized commit/push are separately confirmed from
+Git. A public release needs a reachable HTTPS
+backend/origin and its own provider/device acceptance.
+Real Android/iOS capture, GPS, permissions, background behavior, playback,
+accessibility and real-provider acceptance require their own evidence.
 
-`test:mongo` creates and destroys its own labeled, loopback-only MongoDB replica fixture; it never selects the application's database. Final verification results and device/provider limits are recorded in [the implementation record](context/expo-implementation.md) and [progress tracker](context/progress-tracker.md). Real Android/iOS camera, GPS, permissions, playback, and device acceptance remain required. Next.js 16.4.5 includes the reviewed security update; this local implementation is not a production release certification.
+For reproducible production browser acceptance, start Docker Desktop and use an
+installed Chrome, then run `npm.cmd run build` followed by `npm.cmd run test:browser`.
+Stop this checkout's Next server before building on Windows to release the Prisma
+engine DLL. The tracked [wrapper](scripts/test-browser.mjs) and
+[fixture config](playwright.fixture.config.mjs) provision their own labeled
+loopback Mongo/synthetic accounts, block providers and clean owned resources;
+they do not use the saved application database or rewrite private env files.
+Keep builds/generation and fixture runs sequential. Results stay in ignored
+`test-results`. See [the environment guide](context/environment-setup.md).
 
-Latest checks:636 tests across61 files,16 owned local Mongo integration checks
-after the timeout fix, clean lint and root/mobile typechecks. Initial delivery
-also passed34 localhost HTTP checks, Expo Doctor20/20, Android/iOS/web export and
-production build with48 static pages. The configured Inter font requires network
-access during a fresh web build. Camera/GPS and provider acceptance remain separate.
-
-`npm audit --omit=dev` still reports eight toolchain dependency advisories:
-three high in Prisma CLI/config/deepmerge paths and five moderate in Expo
-CLI/fingerprint/glob/minimatch paths. Supported updates remain a follow-up; do not
-force a breaking Prisma 7 or incompatible Expo change to hide these findings.
-
-Read [current architecture](context/architecture.md) and follow the context order in `AGENTS.md`. Earlier PostgreSQL/Supabase design and deployment notes are historical; the original README is archived in [legacy-web-readme.md](context/legacy-web-readme.md).
+Read [current architecture](context/architecture.md),
+[the approved completion blueprint](context/remaining-work-blueprint.md), and
+the context order in `AGENTS.md`. Historical design sections do not override the
+current stack or restore onboarding/provider assumptions.

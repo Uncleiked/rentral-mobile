@@ -58,3 +58,22 @@ it('returns the versioned successful data without exposing tokens in a URL', asy
   expect(await api('/messages')).toEqual({ items: [] })
   expect(fixtures.fetch).toHaveBeenCalledWith('http://127.0.0.1:3000/api/v1/messages', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer fixture-access' }) }))
 })
+
+it('rejects a saved mutation when the awaited session belongs to another account', async () => {
+  let restore: (value: unknown) => void = () => undefined
+  fixtures.getSession.mockReturnValue(new Promise(resolve => { restore = resolve }))
+  const pending = api('/financial/operations', { method: 'POST', body: { clientId: 'saved-command' }, expectedUserId: 'original-member' })
+  restore({ access_token: 'different-account-access', user: { id: 'new-member' } })
+  await expect(pending).rejects.toMatchObject({ code: 'ACCOUNT_CHANGED', status: 409 })
+  expect(fixtures.fetch).not.toHaveBeenCalled()
+  expect(fixtures.invalidate).not.toHaveBeenCalled()
+})
+
+it('sends a matching actor-scoped command once without refreshing or replaying it', async () => {
+  fixtures.getSession.mockResolvedValue({ access_token: 'fixture-access', user: { id: 'original-member' } })
+  fixtures.fetch.mockResolvedValue(Response.json({ success: true, data: { recorded: true } }))
+  expect(await api('/financial/operations', { method: 'POST', body: { clientId: 'saved-command' }, expectedUserId: 'original-member' })).toEqual({ recorded: true })
+  expect(fixtures.getSession).toHaveBeenCalledTimes(1)
+  expect(fixtures.fetch).toHaveBeenCalledTimes(1)
+  expect(fixtures.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ headers: expect.objectContaining({ 'X-Rentral-Account': 'original-member' }) }))
+})

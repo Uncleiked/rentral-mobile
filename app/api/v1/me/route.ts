@@ -1,9 +1,10 @@
 import { revalidatePath } from 'next/cache'
-import prisma from '@/lib/db'
-import { accountSelect, ensureAccount, isUniqueConstraintError } from '@/lib/accounts/bootstrap'
+import { ensureAccount, isUniqueConstraintError } from '@/lib/accounts/bootstrap'
+import { updateAccountProfile } from '@/lib/accounts/profile'
 import { accountPatchSchema, publicAccount } from '@/lib/api/account'
 import { requireApiIdentity } from '@/lib/api/auth'
 import { ApiError, apiFailure, apiSuccess, readApiJson } from '@/lib/api/http'
+import { StorageError } from '@/lib/local-storage/policy'
 
 export const runtime = 'nodejs'
 
@@ -22,16 +23,13 @@ export async function PATCH(request: Request): Promise<Response> {
     const input = accountPatchSchema.parse(await readApiJson(request))
     const previous = await ensureAccount({ id: identity.userId, email: identity.email })
     if (!previous) throw new ApiError(503, 'ACCOUNT_UNAVAILABLE', 'Your account is not ready yet. Please try again.')
-    const account = await prisma.user.update({
-      where: { id: identity.userId },
-      data: { ...(input.username !== undefined ? { username: input.username } : {}), ...(input.bio !== undefined ? { bio: input.bio || null } : {}) },
-      select: accountSelect,
-    })
+    const account = await updateAccountProfile(identity.userId, input)
     revalidatePath('/marketplace/profile')
     if (previous.username) revalidatePath(`/marketplace/profile/${previous.username}`)
     if (account.username) revalidatePath(`/marketplace/profile/${account.username}`)
     return apiSuccess(publicAccount(account))
   } catch (error) {
+    if (error instanceof StorageError) return apiFailure(new ApiError(error.status, error.code, error.message), 'me')
     return apiFailure(isUniqueConstraintError(error) ? new ApiError(409, 'USERNAME_TAKEN', 'That username is already taken.') : error, 'me')
   }
 }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({ identity: vi.fn(), find: vi.fn(), transactionFind: vi.fn(), update: vi.fn(), raw: vi.fn(), count: vi.fn(), review: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.identity, revalidateProfilePaths: vi.fn() }))
@@ -10,6 +11,7 @@ vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/server', () => ({ after: vi.fn() }))
 import { updateListing } from '@/app/actions/listingActions'
+import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
 
 const data = { listingId: '27d5a2ee-62c1-4c5d-93de-7a0ee6d5728d', address: 'Changed address, Lagos', basePrice: '500000', metadata: { bedrooms: '2', bathrooms: '2', sizeSqm: '80', amenities: '' } }
 beforeEach(() => {
@@ -19,6 +21,14 @@ beforeEach(() => {
   mocks.raw.mockResolvedValue(true)
 })
 afterEach(() => vi.unstubAllEnvs())
+
+it('rejects a closed account definitively before editing a posted listing', async () => {
+  vi.mocked(assertActiveAccounts).mockRejectedValueOnce(new AccountUnavailableError())
+  const result = await updateListing(data)
+  expect(result).toMatchObject({ success: false, code: 'ACCOUNT_UNAVAILABLE' })
+  expect(result).not.toHaveProperty('uncertain', true)
+  expect(mocks.update).not.toHaveBeenCalled()
+})
 
 it('removes a changed address from discovery and requires document review again', async () => {
   expect(await updateListing(data)).toEqual({ success: true })

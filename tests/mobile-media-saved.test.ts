@@ -5,10 +5,12 @@ vi.mock('@/lib/db', () => ({ default: {
   listing: { findFirst: mocks.listing }, mediaAsset: { findUnique: mocks.media },
   savedListing: { upsert: mocks.save, deleteMany: mocks.remove },
 } }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ user: { updateMany: async () => ({ count: 1 }) }, listing: { findFirst: mocks.listing }, savedListing: { upsert: mocks.save } }) }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: () => ({ createSignedUrl: mocks.sign }) } }) }))
 vi.mock('@/lib/media/mux', () => ({ muxClient: () => ({ jwt: { signPlaybackId: mocks.muxSign } }) }))
 import { listingMediaForApi } from '@/lib/api/media'
 import { updateSavedListing } from '@/lib/api/saved'
+import { activeAccountWhere } from '@/lib/accounts/availability'
 
 const owner = '55bfc098-ff33-4fdd-b7ae-68d810a74050'
 const viewer = '5bf5d643-96cc-4114-80eb-fb83c325257f'
@@ -21,7 +23,7 @@ it('authorizes listing ownership/publication before signing and hides inaccessib
   mocks.listing.mockResolvedValue(null)
   await expect(listingMediaForApi(viewer, listingId)).rejects.toMatchObject({ status: 404 })
   expect(mocks.sign).not.toHaveBeenCalled()
-  expect(mocks.listing).toHaveBeenCalledWith(expect.objectContaining({ where: { id: listingId, OR: [{ lister_id: viewer }, { listing_status: 'active' }] } }))
+  expect(mocks.listing).toHaveBeenCalledWith(expect.objectContaining({ where: { id: listingId, lister: { is: activeAccountWhere }, OR: [{ lister_id: viewer }, { listing_status: 'active' }] } }))
   mocks.listing.mockResolvedValue({ lister_id: owner, listing_status: 'draft', ...paths })
   await expect(listingMediaForApi(viewer, listingId)).rejects.toMatchObject({ status: 404 })
   expect(mocks.sign).not.toHaveBeenCalled()
@@ -67,7 +69,7 @@ it('saves idempotently for the authenticated actor and refuses unavailable inven
   mocks.listing.mockResolvedValue(null)
   await expect(updateSavedListing(viewer, listingId, true)).rejects.toMatchObject({ status: 404 })
   expect(mocks.save).not.toHaveBeenCalled()
-  mocks.listing.mockResolvedValue({ id: listingId })
+  mocks.listing.mockResolvedValue({ id: listingId, lister_id: owner })
   expect(await updateSavedListing(viewer, listingId, true)).toEqual({ saved: true })
   expect(mocks.save).toHaveBeenCalledWith({ where: { user_id_listing_id: { user_id: viewer, listing_id: listingId } }, create: { user_id: viewer, listing_id: listingId }, update: {} })
 })

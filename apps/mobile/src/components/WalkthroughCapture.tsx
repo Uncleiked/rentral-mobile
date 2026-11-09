@@ -9,7 +9,7 @@ import { NativeVideoPreview } from './NativeVideoPreview'
 import { MAX_NATIVE_VIDEO_BYTES, type NativeCapture } from '../lib/native-listing'
 import { colors, fonts, radius, space } from '../theme'
 
-type Props = { value: NativeCapture | null; onChange: (capture: NativeCapture | null) => void; disabled?: boolean; onBusyChange: (busy: boolean) => void }
+type Props = { value: NativeCapture | null; onChange: (capture: NativeCapture | null) => void | Promise<void>; disabled?: boolean; onBusyChange: (busy: boolean) => void }
 class CaptureError extends Error {}
 
 async function captureLocation(): Promise<Location.LocationObject> {
@@ -64,7 +64,7 @@ export function WalkthroughCapture({ value, onChange, disabled, onBusyChange }: 
       const location = await captureLocation()
       if (!active.current || invalidated.current) return
       const accuracy = location.coords.accuracy
-      if (location.mocked || accuracy === null || !Number.isFinite(accuracy) || accuracy > 100 || Date.now() - location.timestamp > 15000) throw new CaptureError('A fresh, precise GPS fix is needed. Enable precise location and try outdoors.')
+      if (location.mocked || accuracy === null || !Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100 || !Number.isFinite(location.coords.latitude) || Math.abs(location.coords.latitude) > 90 || !Number.isFinite(location.coords.longitude) || Math.abs(location.coords.longitude) > 180 || Math.abs(Date.now() - location.timestamp) > 15000) throw new CaptureError('A fresh, precise GPS fix is needed. Enable precise location and try outdoors.')
       if (!camera.current) throw new CaptureError('The camera is unavailable. Return to the capture step and retry.')
       if (AppState.currentState !== 'active') throw new CaptureError('Keep Rentral open while recording, then try again.')
       setAcquiring(false); setRecording(true); recordingNow.current = true; duration.current = 0; setSeconds(0)
@@ -73,7 +73,7 @@ export function WalkthroughCapture({ value, onChange, disabled, onBusyChange }: 
       if (!result?.uri || duration.current <= 0) throw new CaptureError('The recording was too short or could not be saved. Record a fresh walkthrough.')
       const file = new File(result.uri)
       if (!file.exists || file.size <= 0 || file.size > MAX_NATIVE_VIDEO_BYTES) throw new CaptureError('The video is empty or larger than 200MB. Record a shorter walkthrough.')
-      onChange({ uri: result.uri, lat: location.coords.latitude, lng: location.coords.longitude, accuracy, duration: duration.current })
+      await onChange({ uri: result.uri, lat: location.coords.latitude, lng: location.coords.longitude, accuracy, duration: duration.current })
     } catch (reason) { if (active.current) setError(reason instanceof CaptureError ? reason.message : 'The walkthrough could not be recorded. Check camera and precise location access, then retry.') }
     finally { busy.current = false; recordingNow.current = false; onBusyChange(false); if (active.current) { setRecording(false); setAcquiring(false) } }
   }
@@ -82,7 +82,7 @@ export function WalkthroughCapture({ value, onChange, disabled, onBusyChange }: 
     <Text style={styles.heading}>Record a walkthrough</Text><Text style={styles.help}>Show the actual asset in one continuous take, up to two minutes. Your location is captured when recording starts. Walkthroughs are recorded without sound.</Text>
     {Platform.OS === 'web' ? <Text style={styles.help}>Use the Android or iOS app to record a listing walkthrough.</Text> : value ? <>
       <NativeVideoPreview key={value.uri} uri={value.uri} /><Text style={styles.success}>Walkthrough saved · {Math.ceil(value.duration)} seconds · GPS captured</Text>
-      <Button title="Record again" secondary disabled={disabled} onPress={() => { setReady(false); onChange(null) }} />
+      <Button title="Record again" secondary disabled={disabled} onPress={() => { setReady(false); void Promise.resolve(onChange(null)).catch(() => { setError('This recording could not be replaced safely. Keep the current walkthrough and retry.') }) }} />
     </> : permission?.granted ? <>
       {focused ? <CameraView key={cameraVersion} ref={camera} style={styles.camera} facing="back" mode="video" mute videoQuality="720p" videoBitrate={2500000} onCameraReady={() => setReady(true)}
         onMountError={() => { setReady(false); setError('The camera could not start. Check camera access and try on a physical device.') }}

@@ -10,12 +10,13 @@ it('allows only documented listing metadata across the mobile API boundary', () 
     useMux: false, username: 'host', avatarUrl: null, isVerified: true, badges: ['Studio'],
     saved: false, savingAvailable: true, listerId: 'private-auth-identifier', isOwner: false,
     status: 'active', metadata: { bedrooms: '0', kitchens: '1', rentalIntent: 'rent', description: 'A sunny studio.', listingTitle: 'My studio',
+      bodyType: 'SUV', engineType: 'Electric', insuranceStatus: 'insured', insuranceDetails: 'Current coverage disclosed by the host', lifeJackets: true, safetyEquipment: 'Radio',
       document_path: 'host/folder/private-deed.pdf', hardware_coordinates: '6.123,3.456',
       internalAuditNote: 'private review finding' },
     hostBio: 'Hello Lagos', hostSince: '2026-01-01T00:00:00.000Z', hostAccountType: 'Individual', postedOn: '2026-11-07T00:00:00.000Z',
   }
   const result = publicListingDetails(listing)
-  expect(result.metadata).toEqual({ bedrooms: '0', kitchens: '1', rentalIntent: 'rent', description: 'A sunny studio.', listingTitle: 'My studio' })
+  expect(result.metadata).toEqual({ bedrooms: '0', kitchens: '1', rentalIntent: 'rent', description: 'A sunny studio.', listingTitle: 'My studio', bodyType: 'SUV', engineType: 'Electric', insuranceStatus: 'insured', insuranceDetails: 'Current coverage disclosed by the host', lifeJackets: true, safetyEquipment: 'Radio' })
   expect(result.host.username).toBe('host')
   const serialized = JSON.stringify(result)
   expect(serialized).not.toContain('private-auth-identifier')

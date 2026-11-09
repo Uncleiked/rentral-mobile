@@ -1,6 +1,7 @@
 import { createHash, randomInt } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
+import { committedMutation, mutationCommand, recordMutation, transactionMutation } from '@/lib/database/mutations'
 import { platformEnabled } from '@/lib/platform'
 import { bookingRequestSchema, bookingTransition, bookingQuoteSchema, checkInSchema, nairaToKobo, quoteBookingBreakdown, HOLD_WINDOW_MS, PAYMENT_WINDOW_MS, BookingError, type BookingOperation } from './policy'
 import { allocateHoldCredit, reviewHoldCredit, holdCreditTerms } from './hold-credit'
@@ -8,6 +9,8 @@ import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { listingProximity } from '@/lib/listings/spatial'
 import { bookingWindowAvailable } from './availability'
 import { ensureNotification } from '@/lib/operations/notifications'
+import { assertActiveAccounts } from '@/lib/accounts/availability'
+import { recordConfirmedBookingObservation } from '@/lib/analytics/observations'
 
 const bookingSelect = {
   id: true, listing_id: true, seeker_id: true, lister_id: true, kind: true, status: true,
@@ -78,13 +81,19 @@ async function assertNoOtherHold(tx: Prisma.TransactionClient, listingId: string
 
 export async function requestBooking(userId: string, input: unknown): Promise<string> {
   const parsed = bookingRequestSchema.parse(input)
+  const command = mutationCommand(userId, 'booking_create', parsed.clientId, parsed)
+  const replay = await committedMutation(command)
+  if (replay) return replay
   const start = new Date(parsed.startsAt), end = new Date(parsed.endsAt), now = new Date()
   if ((!parsed.holdBookingId && start.getTime() < now.getTime() - 60000) || end <= now) throw new BookingError('Choose an available rental period.')
-  return withTransaction(async tx => {
+  try { return await withTransaction(async tx => {
+    const existing = await transactionMutation(tx, command)
+    if (existing) return existing
     await lockRecord(tx, 'listing', parsed.listingId)
     const listing = await tx.listing.findFirst({ where: { id: parsed.listingId, listing_status: 'active' }, select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true } })
     if (!listing || !listing.base_rent_amount) throw new BookingError('This listing is unavailable.')
     if (listing.lister_id === userId) throw new BookingError('You cannot book your own listing.')
+    await assertActiveAccounts(tx, [userId, listing.lister_id])
     await expireListingReservations(tx, listing.id, now)
     await assertNoOtherHold(tx, listing.id, userId)
     const quote = quoteBookingBreakdown(parsed.kind, listing.category, nairaToKobo(listing.base_rent_amount.toString()), start, end, listing.asset_metadata, parsed.holdDays)
@@ -99,8 +108,15 @@ export async function requestBooking(userId: string, input: unknown): Promise<st
     const booking = await tx.booking.create({ data: { listing_id: listing.id, seeker_id: userId, lister_id: listing.lister_id,
       kind: parsed.kind, starts_at: start, ends_at: end, amount_kobo: amount, pricing_snapshot: { ...quote, ...(parsed.holdBookingId ? { holdBookingId: parsed.holdBookingId } : {}) } } })
     await tx.notification.create({ data: { user_id: listing.lister_id, kind: 'booking_requested', title: 'A new booking request', body: 'Review the dates and price before accepting.', href: `/marketplace/bookings/${booking.id}` } })
+    await recordMutation(tx, command, booking.id)
     return booking.id
-  })
+  }) } catch (error) {
+    if (command) {
+      const saved = await committedMutation(command)
+      if (saved) return saved
+    }
+    throw error
+  }
 }
 
 export async function changeBookingStatus(userId: string, id: string, operation: BookingOperation): Promise<void> {
@@ -116,6 +132,7 @@ export async function changeBookingStatus(userId: string, id: string, operation:
     if (!status) throw new BookingError('This change is unavailable. Paid cancellations require a dispute and refund review.')
     let credit: Awaited<ReturnType<typeof allocateHoldCredit>> = null
     if (operation === 'accept') {
+      await assertActiveAccounts(tx, [booking.seeker_id, booking.lister_id])
       await assertNoOtherHold(tx, booking.listing_id, booking.seeker_id)
       const listing = await tx.listing.findFirst({ where: { id: booking.listing_id, listing_status: 'active' }, select: { id: true } })
       const isConversion = Boolean(bookingQuoteSchema.safeParse(booking.pricing_snapshot).data?.holdBookingId)
@@ -126,6 +143,7 @@ export async function changeBookingStatus(userId: string, id: string, operation:
     if (operation === 'cancel' && booking.hold_credit_kobo > BigInt(0)) await reviewHoldCredit(tx, id)
     const nextStatus = credit?.status ?? status
     await tx.booking.update({ where: { id }, data: { status, ...(status === 'awaiting_payment' ? { expires_at: new Date(Date.now() + PAYMENT_WINDOW_MS) } : {}), ...(credit ?? {}) } })
+    if (nextStatus === 'confirmed' && booking.kind === 'rental') await recordConfirmedBookingObservation(tx, booking.seeker_id, id)
     await tx.notification.create({ data: { user_id: userId === booking.lister_id ? booking.seeker_id : booking.lister_id,
       kind: 'booking_updated', title: `Booking ${nextStatus.replaceAll('_', ' ')}`, body: credit ? 'Your paid hold was allocated once to this rental. Open the booking to see the remaining balance and deadline.' : 'Open your booking for the current details.', href: `/marketplace/bookings/${id}` } })
   })
@@ -133,9 +151,16 @@ export async function changeBookingStatus(userId: string, id: string, operation:
 
 export async function issueHandshakeCode(userId: string, id: string): Promise<string> {
   const code = randomInt(100000, 1000000).toString()
-  const changed = await prisma.booking.updateMany({ where: { id, seeker_id: userId, kind: 'inspection', status: 'confirmed' },
-    data: { handshake_code_hash: createHash('sha256').update(`${id}:${code}`).digest('hex') } })
-  if (!changed.count) throw new BookingError('A confirmed inspection is required.')
+  await withTransaction(async tx => {
+    const booking = await tx.booking.findFirst({ where: { id, seeker_id: userId, kind: 'inspection', status: 'confirmed' }, select: { listing_id: true, seeker_id: true, lister_id: true } })
+    if (!booking) throw new BookingError('A confirmed inspection is required.')
+    await lockRecord(tx, 'listing', booking.listing_id)
+    await lockRecord(tx, 'booking', id)
+    await assertActiveAccounts(tx, [booking.seeker_id, booking.lister_id])
+    const changed = await tx.booking.updateMany({ where: { id, seeker_id: userId, kind: 'inspection', status: 'confirmed' },
+      data: { handshake_code_hash: createHash('sha256').update(`${id}:${code}`).digest('hex') } })
+    if (!changed.count) throw new BookingError('A confirmed inspection is required.')
+  })
   return code
 }
 
@@ -150,6 +175,7 @@ export async function checkInBooking(userId: string, id: string, input: unknown)
     await lockRecord(tx, 'booking', id)
     const booking = await tx.booking.findFirst({ where: { id, kind: 'inspection', status: 'confirmed', OR: [{ seeker_id: userId }, { lister_id: userId }] } })
     if (!booking) throw new BookingError('Confirmed inspection not found.')
+    await assertActiveAccounts(tx, [booking.seeker_id, booking.lister_id])
     const now = new Date()
     if (Math.abs(now.getTime() - booking.starts_at.getTime()) > 4 * 60 * 60 * 1000) throw new BookingError('Check in within four hours of the inspection time.')
     if (!await listingProximity(tx, booking.listing_id, parsed.longitude, parsed.latitude, 20)) throw new BookingError('Move closer to the listed asset and try again. Check-in requires being within 20 metres.')

@@ -1,51 +1,26 @@
-import { useCallback, useState } from 'react'
-import { Linking, StyleSheet, Text, View } from 'react-native'
-import { Stack, router, useFocusEffect } from 'expo-router'
-import { Page } from '../src/components/Page'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Stack, router } from 'expo-router'
+import { ownerListingPageSchema } from '../../../lib/contracts/listings'
 import { Button } from '../src/components/Button'
 import { StatusView } from '../src/components/StatusView'
-import { useApiResource } from '../src/hooks/useApiResource'
-import type { OwnerListing } from '../src/lib/native-listing'
-import { memberDate, memberStatus } from '../src/lib/member-format'
-import { config } from '../src/lib/config'
-import { colors, fonts, radius, space } from '../src/theme'
-
-type OwnerListings = { items: OwnerListing[]; limit: number }
+import { OwnerListingCard } from '../src/components/owner-listing-card'
+import { useMemberPages } from '../src/hooks/use-member-resource'
+import { colors, fonts, space } from '../src/theme'
 
 export default function MyListingsScreen() {
-  const { data, loading, error, refresh } = useApiResource<OwnerListings>('/my-listings')
-  const [openingDraft, setOpeningDraft] = useState<string | null>(null)
-  const [webError, setWebError] = useState<string | null>(null)
-  useFocusEffect(useCallback(() => { refresh() }, [refresh]))
-  async function continueDraft(id: string): Promise<void> {
-    if (openingDraft) return
-    setOpeningDraft(id); setWebError(null)
-    try { await Linking.openURL(`${config.apiUrl}/marketplace/listing/create?draft=${encodeURIComponent(id)}`) }
-    catch { setWebError('Could not open this draft in your browser. Please try again.') }
-    finally { setOpeningDraft(null) }
-  }
-  return <>
+  const resource = useMemberPages('/my-listings?limit=20', ownerListingPageSchema)
+  const refresh = () => { void resource.refresh(true).catch(() => undefined) }
+  return <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
     <Stack.Screen options={{ title: 'My listings', headerShown: true }} />
-    <Page title="My listings" subtitle="Manage your homes, cars and boats." refreshing={loading} onRefresh={refresh}>
-      <Button title="Create a listing" onPress={() => router.push('/create-listing')} />
-      {loading ? <StatusView loading message="Loading your listings…" /> : error ? <StatusView title="Listings unavailable" message={error} onRetry={refresh} /> : !data?.items.length ? <StatusView title="Your next listing starts here" message="Record a walkthrough, add asset details and submit your ownership or listing-authority document for review." /> : data.items.map(item => <View key={item.id} style={styles.card}>
-        <View style={styles.top}><Text style={styles.title}>{item.title}</Text><Text style={styles.status}>{memberStatus(item.status)}</Text></View>
-        <Text style={styles.amount}>{item.price} <Text style={styles.muted}>/ {item.pricePeriod}</Text></Text>
-        <Text style={styles.muted}>Created {memberDate(item.createdAt)}</Text>
-        {item.status === 'pending_verification' ? <Text style={styles.help}>Submitted for review. Publication and any fees are confirmed by the server.</Text> : null}
-        {item.status !== 'draft' ? <Button title="View listing" secondary onPress={() => router.push({ pathname: '/listing/[id]', params: { id: item.id } })} /> : <>
-          <Button title="Continue draft on web" secondary busy={openingDraft === item.id} disabled={Boolean(openingDraft) && openingDraft !== item.id} onPress={() => { void continueDraft(item.id) }} />
-          <Text style={styles.help}>Continue this saved draft in your browser. You may need to sign in again.</Text>
-        </>}
-      </View>)}
-      {webError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{webError}</Text> : null}
-      {data && data.items.length >= data.limit ? <Text style={styles.muted}>Showing your {data.limit} most recent listings.</Text> : null}
-    </Page>
-  </>
+    <FlatList data={resource.items} keyExtractor={item => item.id} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic" refreshing={resource.refreshing} onRefresh={refresh}
+      ListHeaderComponent={<View style={styles.header}><Text accessibilityRole="header" style={styles.title}>My listings</Text><Text style={styles.help}>Your homes, cars and boats, including saved drafts and archived listings.</Text>
+        <Button title="Create or recover a listing" onPress={() => router.push('/create-listing')} /><Button title="Private media vault" secondary onPress={() => router.push('/vault')} />
+        {resource.error && resource.data ? <Text accessibilityRole="alert" style={styles.error}>Could not refresh: {resource.error}</Text> : null}
+      </View>}
+      ListEmptyComponent={resource.loading ? <StatusView loading message="Loading your listings…" /> : resource.error ? <StatusView title="Listings unavailable" message={resource.error} onRetry={refresh} /> : <StatusView title="Your next listing starts here" message="Record a walkthrough, add the details and privately submit your ownership or listing-authority document for asset review." />}
+      renderItem={({ item }) => <OwnerListingCard listing={item} />}
+      ListFooterComponent={<View style={styles.header}>{resource.moreError ? <Text accessibilityRole="alert" style={styles.error}>{resource.moreError}</Text> : null}{resource.hasMore ? <Button title="Older listings" secondary busy={resource.loadingMore} onPress={() => { void resource.loadMore() }} /> : null}</View>} />
+  </SafeAreaView>
 }
-
-const styles = StyleSheet.create({
-  card: { padding: space.xl, borderRadius: radius.xl, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, gap: space.md }, top: { gap: space.sm }, title: { color: colors.text, fontFamily: fonts.semibold, fontSize: 18 },
-  status: { color: colors.secondary, fontFamily: fonts.medium, fontSize: 12 }, amount: { color: colors.accentBright, fontFamily: fonts.semibold, fontSize: 20 }, muted: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, lineHeight: 20 }, help: { color: colors.secondary, fontFamily: fonts.regular, fontSize: 13, lineHeight: 21 },
-  error: { color: colors.warning, fontFamily: fonts.regular, fontSize: 13, lineHeight: 21 },
-})
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: colors.background }, content: { width: '100%', maxWidth: 760, alignSelf: 'center', padding: space.xl, paddingBottom: space.xxl, gap: space.lg }, header: { gap: space.lg }, title: { color: colors.text, fontFamily: fonts.bold, fontSize: 30 }, help: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 22 }, error: { color: colors.warning, fontFamily: fonts.medium, fontSize: 13, lineHeight: 22 } })

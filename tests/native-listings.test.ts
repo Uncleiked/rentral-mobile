@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
-const mocks = vi.hoisted(() => ({ identity: vi.fn(), account: vi.fn(), findMany: vi.fn(), transaction: vi.fn(), location: vi.fn(), create: vi.fn(), update: vi.fn() }))
+const mocks = vi.hoisted(() => ({ identity: vi.fn(), account: vi.fn(), findMany: vi.fn(), transaction: vi.fn(), location: vi.fn(), create: vi.fn(), update: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn() }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: mocks.identity }))
 vi.mock('@/lib/accounts/bootstrap', () => ({ ensureAccountHandle: mocks.account }))
 vi.mock('@/lib/action-helpers', () => ({ revalidateProfilePaths: vi.fn(), requireUserId: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findMany: mocks.findMany }, $transaction: mocks.transaction } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: vi.fn().mockResolvedValue(true) }))
+vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepareStorage, claimStorageObjects: mocks.claimStorage }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/server', () => ({ after: vi.fn() }))
@@ -31,6 +33,8 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.stubEnv('MUX_ENABLED', 'false')
   mocks.identity.mockResolvedValue({ userId: 'actor-1', mode: 'bearer' })
+  mocks.prepareStorage.mockResolvedValue([])
+  mocks.claimStorage.mockResolvedValue(undefined)
   mocks.account.mockResolvedValue({ id: 'actor-1', username: 'member_handle', kyc_verified: false })
   mocks.create.mockResolvedValue({ id: listingId, lister: { username: 'member_handle' } })
   mocks.update.mockResolvedValue({ id: listingId, lister: { username: 'member_handle' } })
@@ -45,13 +49,19 @@ describe('native owner listing transport', () => {
     mocks.findMany.mockResolvedValue([{ id: listingId, category: 'house', listing_status: 'draft', base_rent_amount: '500000',
       asset_metadata: { listingTitle: 'Draft home', hardware_coordinates: 'private location' }, video_path: listing.videoPath,
       document_path: listing.documentPath, createdAt: new Date('2026-11-09T12:00:00.000Z'), email: 'private@example.test' }])
-    const response = await GET(new Request('https://rentral.example/api/v1/my-listings?userId=another-owner'))
+    const response = await GET(new Request('https://rentral.example/api/v1/my-listings?limit=20'))
     expect(response.status).toBe(200)
-    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { lister_id: 'actor-1' }, take: 100 }))
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { lister_id: 'actor-1' }, take: 21 }))
     const body = await response.json()
     expect(body.data.items).toEqual([{ id: listingId, category: 'house', title: 'Draft home', status: 'draft',
-      price: '500,000', pricePeriod: 'year', createdAt: '2026-11-09T12:00:00.000Z', hasVideo: true, hasDocument: true }])
+      price: '500,000', pricePeriod: 'year', createdAt: '2026-11-09T12:00:00.000Z', hasVideo: true, hasDocument: true, archivedAt: null }])
     expect(JSON.stringify(body)).not.toMatch(/private location|private@example|actor-1\/folder|hardware_coordinates/)
+  })
+
+  it('rejects owner injection and malformed archive cursors before querying', async () => {
+    expect((await GET(new Request('https://rentral.example/api/v1/my-listings?userId=another-owner'))).status).toBe(400)
+    expect((await GET(new Request('https://rentral.example/api/v1/my-listings?cursor=not-valid'))).status).toBe(400)
+    expect(mocks.findMany).not.toHaveBeenCalled()
   })
 
   it('uses the authenticated actor and shared transaction to submit without KYC', async () => {

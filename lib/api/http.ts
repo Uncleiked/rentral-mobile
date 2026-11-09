@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { AccountUnavailableError } from '@/lib/accounts/availability'
+import { mongoReadinessFailure } from '@/lib/database/readiness-errors'
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string) { super(message) }
@@ -11,6 +13,9 @@ export function apiSuccess<T>(data: T, status = 200): Response {
 }
 
 export function apiFailure(error: unknown, scope: string): Response {
+  const readiness = mongoReadinessFailure(error)
+  if (readiness) return apiFailure(new ApiError(readiness.status, readiness.code, readiness.message), scope)
+  if (error instanceof AccountUnavailableError) return apiFailure(new ApiError(409, error.code, error.message), scope)
   if (error instanceof ApiError) return Response.json({ success: false, error: error.message, code: error.code }, {
     status: error.status, headers: { ...privateHeaders, ...(error.status === 429 ? { 'Retry-After': '60' } : {}) },
   })

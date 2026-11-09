@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Prisma } from '@prisma/client'
 import { allocateHoldCredit, bookingPayableKobo, holdCreditTerms, holdCreditCanConfirm, reviewHoldCredit } from '@/lib/bookings/hold-credit'
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: async () => true }))
+vi.mock('@/lib/payments/allocations', () => ({ paymentFundsReserved: vi.fn(async () => false) }))
+import { paymentFundsReserved } from '@/lib/payments/allocations'
 
 const now = new Date('2030-01-01T12:00:00Z')
 const starts_at = new Date('2030-02-01T12:00:00Z'), ends_at = new Date('2030-02-03T12:00:00Z')
@@ -10,7 +12,7 @@ const hold = { id: holdId, listing_id: 'listing', seeker_id: 'renter', lister_id
   amount_kobo: BigInt(2000000), settlement_status: 'unsettled', expires_at: new Date('2030-01-02T12:00:00Z'), starts_at, ends_at }
 const rental = { ...hold, id: 'rental', kind: 'rental', status: 'requested', amount_kobo: BigInt(10000000), expires_at: null,
   pricing_snapshot: { period: 'day', days: 2, baseKobo: '10000000', totalKobo: '10000000', fees: [], holdBookingId: holdId } }
-const payment = { user_id: 'renter', kind: 'booking', status: 'succeeded', amount_kobo: BigInt(2000000), currency: 'NGN', paid_at: new Date('2030-01-01T11:00:00Z'), ledger: { kind: 'provider_collection' } }
+const payment = { id: 'payment', user_id: 'renter', kind: 'booking', status: 'succeeded', amount_kobo: BigInt(2000000), currency: 'NGN', paid_at: new Date('2030-01-01T11:00:00Z'), ledger: [{ kind: 'provider_collection' }] }
 
 describe('one-time holding credit', () => {
   it('allocates integer kobo and caps the balance deadline to the original hold', () => {
@@ -52,11 +54,19 @@ describe('one-time holding credit', () => {
   })
   it('requires the source payment to have a recorded collection ledger before consuming the hold', async () => {
     const update = vi.fn(), create = vi.fn()
-    const tx = { booking: { findUnique: vi.fn(async () => ({ ...hold, payments: [{ ...payment, ledger: null }], allocated_hold_credit: null })), update },
+    const tx = { booking: { findUnique: vi.fn(async () => ({ ...hold, payments: [{ ...payment, ledger: [] }], allocated_hold_credit: null })), update },
       holdCreditAllocation: { create } } as unknown as Prisma.TransactionClient
     await expect(allocateHoldCredit(tx, rental, now)).rejects.toThrow('recorded collection receipt')
     expect(update).not.toHaveBeenCalled()
     expect(create).not.toHaveBeenCalled()
+  })
+  it('does not convert money reserved by a pending refund or payout review', async () => {
+    vi.mocked(paymentFundsReserved).mockResolvedValueOnce(true)
+    const update = vi.fn(), create = vi.fn()
+    const tx = { booking: { findUnique: vi.fn(async () => ({ ...hold, payments: [payment], allocated_hold_credit: null })), update },
+      holdCreditAllocation: { create } } as unknown as Prisma.TransactionClient
+    await expect(allocateHoldCredit(tx, rental, now)).rejects.toThrow('financial review')
+    expect(update).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled()
   })
   it('routes cancelled/expired conversion funds to review without deleting the allocation', async () => {
     const updateMany = vi.fn()

@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
+import { activeAccountWhere } from '@/lib/accounts/availability'
+import { publicAvatarReference } from '@/lib/accounts/avatar-reference'
 import { platformEnabled } from '@/lib/platform'
 import { muxEnabled } from '@/lib/media/config'
 import { listingMediaStatuses } from '@/lib/media/status'
@@ -81,7 +83,7 @@ async function serializeListings(rows: ListingRow[], userId: string | null): Pro
       posterUrl: row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
       videoUrl: !useMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
       useMux: useMux && row.listing_status !== 'draft', username: row.lister.username,
-      avatarUrl: row.lister.avatar_url, isVerified: row.lister.kyc_verified,
+      avatarUrl: publicAvatarReference(row.lister.avatar_url, row.lister_id), isVerified: row.lister.kyc_verified,
       badges: listingBadges(row.category, metadata), saved: savedIds.has(row.id), savingAvailable,
       holdUntil: holdDeadlines.get(row.id) ?? null,
       intent: typeof metadata.rentalIntent === 'string' && ['rent', 'buy', 'squat', 'shortlet'].includes(metadata.rentalIntent) ? metadata.rentalIntent : 'rent',
@@ -89,7 +91,7 @@ async function serializeListings(rows: ListingRow[], userId: string | null): Pro
   })
 }
 
-export async function getDiscoveryListings(filters: DiscoveryFilters, userId: string | null = null): Promise<DiscoveryPage> {
+function discoveryConditions(filters: DiscoveryFilters): Prisma.InputJsonObject[] {
   const conditions: Prisma.InputJsonObject[] = [{ listing_status: 'active' }]
   if (filters.category !== 'all') conditions.push({ category: filters.category })
   // Regex syntax is data here: escape it so free-text search cannot introduce
@@ -115,6 +117,11 @@ export async function getDiscoveryListings(filters: DiscoveryFilters, userId: st
     { createdAt: { $lt: { $date: filters.cursor.createdAt } } },
     { createdAt: { $date: filters.cursor.createdAt }, _id: { $lt: filters.cursor.id } },
   ] })
+  return conditions
+}
+
+export async function getDiscoveryListings(filters: DiscoveryFilters, userId: string | null = null): Promise<DiscoveryPage> {
+  const conditions = discoveryConditions(filters)
   // Prisma's Mongo connector does not support PostgreSQL JSON-path filters.
   // Raw MQL only returns ids; all public fields use the same typed allowlist.
   const found: unknown = await prisma.listing.findRaw({
@@ -130,7 +137,7 @@ export async function getDiscoveryListings(filters: DiscoveryFilters, userId: st
   })
   if (!ids.length) return { listings: [], nextCursor: null }
   const rows = await prisma.listing.findMany({
-    where: { id: { in: ids }, listing_status: 'active' }, select: listingSelect,
+    where: { id: { in: ids }, listing_status: 'active', lister: { is: activeAccountWhere } }, select: listingSelect,
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: DISCOVERY_PAGE_SIZE + 1,
   })
   const pageRows = rows.slice(0, DISCOVERY_PAGE_SIZE)
@@ -141,10 +148,26 @@ export async function getDiscoveryListings(filters: DiscoveryFilters, userId: st
   }
 }
 
+/** Sponsored placement uses the same filters and typed public/media projection,
+ * preserving the paid-placement order without changing organic ranking. */
+export async function getPublicListingsByIds(ids: string[], userId: string | null = null, filters?: DiscoveryFilters): Promise<DiscoveryListing[]> {
+  if (ids.length > 12 || ids.some(id => !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))) throw new Error('INVALID_PUBLIC_LISTING_IDS')
+  const unique = [...new Set(ids)]
+  if (!unique.length) return []
+  const conditions = filters ? discoveryConditions({ ...filters, cursor: null }) : [{ listing_status: 'active' }]
+  const found: unknown = await prisma.listing.findRaw({ filter: { $and: [...conditions, { _id: { $in: unique } }] },
+    options: { projection: { _id: 1 }, limit: 12, maxTimeMS: { secs: 3, nanos: 0 } } })
+  if (!Array.isArray(found) || found.some(row => !row || typeof row !== 'object' || typeof row._id !== 'string' || !unique.includes(row._id))) throw new Error('INVALID_DISCOVERY_RESULT')
+  const rows = await prisma.listing.findMany({ where: { id: { in: found.map(row => row._id as string) }, listing_status: 'active', lister: { is: activeAccountWhere },
+    OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, select: listingSelect, take: 12 })
+  const listings = await serializeListings(rows, userId)
+  return unique.flatMap(id => { const row = listings.find(listing => listing.id === id); return row ? [row] : [] })
+}
+
 export async function getListingDetails(id: string, userId: string | null): Promise<ListingDetails | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null
   const row = await prisma.listing.findFirst({
-    where: { id, OR: [{ listing_status: 'active' }, ...(userId ? [{ lister_id: userId }] : [])] }, select: listingSelect,
+    where: { id, lister: { is: activeAccountWhere }, OR: [{ listing_status: 'active' }, ...(userId ? [{ lister_id: userId }] : [])] }, select: listingSelect,
   })
   if (!row) return null
   const [listing] = await serializeListings([row], userId)
@@ -157,10 +180,21 @@ export async function getListingDetails(id: string, userId: string | null): Prom
   }
 }
 
+/** Public host archives share the discovery allowlist/media and saved-state policy. */
+export async function getPublicHostListings(listerId: string, viewerId: string | null, cursor: DiscoveryCursor | null, limit: number): Promise<DiscoveryPage> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error('INVALID_ARCHIVE_LIMIT')
+  const rows = await prisma.listing.findMany({ where: { lister_id: listerId, listing_status: 'active', lister: { is: activeAccountWhere }, ...(cursor ? { OR: [
+    { createdAt: { lt: new Date(cursor.createdAt) } }, { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
+  ] } : {}) }, select: listingSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1 })
+  const pageRows = rows.slice(0, limit), last = pageRows.at(-1)
+  return { listings: await serializeListings(pageRows, viewerId),
+    nextCursor: rows.length > limit && last ? { id: last.id, createdAt: last.createdAt.toISOString() } : null }
+}
+
 export async function getSavedListings(userId: string): Promise<DiscoveryListing[]> {
   if (!platformEnabled()) return []
   const saves = await prisma.savedListing.findMany({
-    where: { user_id: userId, listing: { listing_status: 'active' } },
+    where: { user_id: userId, listing: { listing_status: 'active', lister: { is: activeAccountWhere } } },
     orderBy: { createdAt: 'desc' }, take: 100, select: { listing: { select: listingSelect } },
   })
   return serializeListings(saves.map(save => save.listing), userId)

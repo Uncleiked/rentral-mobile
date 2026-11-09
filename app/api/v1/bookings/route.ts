@@ -4,6 +4,7 @@ import { ApiError, apiFailure, apiSuccess, readApiJson } from '@/lib/api/http'
 import { publicBooking } from '@/lib/api/bookings'
 import { getBookingsForUser, requestBooking } from '@/lib/bookings/service'
 import { BookingError, bookingRequestSchema } from '@/lib/bookings/policy'
+import { MutationConflictError } from '@/lib/database/mutations'
 
 export const runtime = 'nodejs'
 
@@ -22,5 +23,6 @@ export async function POST(request: Request): Promise<Response> {
     const id = await requestBooking(identity.userId, input)
     revalidatePath('/marketplace/bookings')
     return apiSuccess({ id }, 201)
-  } catch (error) { return apiFailure(error instanceof BookingError ? new ApiError(400, 'BOOKING_UNAVAILABLE', error.message) : error, 'bookings') }
+  } catch (error) { return apiFailure(error instanceof MutationConflictError ? new ApiError(409, error.code, error.message)
+    : error instanceof BookingError ? new ApiError(400, 'BOOKING_UNAVAILABLE', error.message) : error, 'bookings') }
 }

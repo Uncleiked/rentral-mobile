@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { apiSuccess, readApiJson } from '@/lib/api/http'
-import { authenticateAccess, revokeSession, revokeRefreshToken } from '@/lib/auth/service'
+import { revokeAccessToken, revokeRefreshToken } from '@/lib/auth/service'
 import { authFailure, authLimit } from '@/lib/auth/api'
 import { AuthError } from '@/lib/auth/types'
 export const runtime = 'nodejs'
@@ -8,17 +8,16 @@ export async function POST(request: Request): Promise<Response> {
   try {
     authLimit(request)
     const header = request.headers.get('authorization')
-    let sessionId: string | null = null
+    let revoked = false
     if (header?.startsWith('Bearer ')) {
-      try { sessionId = (await authenticateAccess(header.slice(7))).sessionId }
+      try { revoked = await revokeAccessToken(header.slice(7)) }
       catch (error) { if (!(error instanceof AuthError) || error.status !== 401) throw error }
     }
-    if (sessionId) await revokeSession(sessionId)
-    else {
+    if (!revoked) {
       const input = z.object({ refreshToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict().parse(await readApiJson(request))
       // Possession of the refresh capability permits revoking this one session,
       // including when its access JWT has already expired.
-      await revokeRefreshToken(input.refreshToken)
+      if (!await revokeRefreshToken(input.refreshToken)) throw new AuthError(409, 'LOGOUT_UNCONFIRMED', 'Sign-out could not be confirmed because the session changed. Refresh account status and try again.')
     }
     return apiSuccess({ signedOut: true })
   } catch (error) { return authFailure(error) }

@@ -2,6 +2,7 @@ import { config, configurationError } from './config'
 import { sessionStorage } from './session-storage'
 import type { AuthSession } from './auth-types'
 import { validatedApiOrigin } from './api-config'
+import { runBeforeSignOut } from './sign-out-effects'
 
 const SESSION_KEY = 'rentral.jwt.session'
 const listeners = new Set<(session: AuthSession | null) => void>()
@@ -142,7 +143,7 @@ export async function signOut(): Promise<void> {
   signInAttempt++
   const started = ++generation
   const session = current
-  try { await save(null, started) }
+  try { if (session) await runBeforeSignOut(session); await save(null, started) }
   finally {
     // Revoke remotely even if keychain deletion fails; that failure still
     // rejects signOut and never reports that the local session was cleared.

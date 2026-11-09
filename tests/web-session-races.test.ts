@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { AuthError, type AuthSession } from '@/lib/auth/types'
 import { ACCESS_COOKIE, REFRESH_COOKIE } from '@/lib/auth/cookies'
 
-const mocks = vi.hoisted(() => ({ authenticate: vi.fn(), refresh: vi.fn(), cookies: vi.fn(), revoke: vi.fn(), revokeRefresh: vi.fn() }))
+const mocks = vi.hoisted(() => ({ authenticate: vi.fn(), refresh: vi.fn(), cookies: vi.fn(), revoke: vi.fn(), revokeProof: vi.fn(), revokeRefresh: vi.fn() }))
 vi.mock('@/lib/auth/service', () => ({
   authenticateAccess: mocks.authenticate, refreshSession: mocks.refresh, revokeSession: mocks.revoke, revokeRefreshToken: mocks.revokeRefresh,
+  revokeAccessToken: mocks.revokeProof,
   loginAccount: vi.fn(), registerAccount: vi.fn(), requestPasswordReset: vi.fn(),
 }))
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
@@ -13,6 +14,7 @@ vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 import { createClient } from '@/lib/server'
 import { updateSession } from '@/lib/proxy'
 import { refreshWebSession } from '@/lib/auth/web-refresh'
+import { requireApiIdentity } from '@/lib/api/auth'
 import { GET as getCookieSession } from '@/app/api/v1/auth/web-session/route'
 
 const user = { id: 'f305fc41-73fd-4b8d-a685-b25f3bb8a58b', email: 'member@fixture.invalid', is_anonymous: false as const, app_metadata: {}, user_metadata: {} }
@@ -32,8 +34,42 @@ function deferred() {
 }
 beforeEach(() => {
   vi.resetAllMocks()
-  mocks.authenticate.mockRejectedValue(new AuthError(401, 'UNAUTHORIZED', 'Expired access'))
+  mocks.authenticate.mockImplementation(async (token: string) => {
+    if (token === session.access_token) return { user, sessionId: 'owned-refreshed-session' }
+    throw new AuthError(401, 'UNAUTHORIZED', 'Expired access')
+  })
   mocks.refresh.mockResolvedValue(session)
+})
+afterEach(() => vi.unstubAllEnvs())
+
+describe('local Expo web preflight', () => {
+  it('permits the account restriction header on localhost OPTIONS without credentials or an authenticated identity', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const origin = 'http://localhost:8090'
+    const response = await updateSession(new NextRequest('http://localhost:3000/api/v1/me', { method: 'OPTIONS', headers: {
+      Origin: origin, 'Access-Control-Request-Method': 'PATCH', 'Access-Control-Request-Headers': 'authorization, content-type, x-rentral-account',
+    } }))
+    expect(response.status).toBe(204)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin)
+    expect(response.headers.get('Access-Control-Allow-Headers')?.toLowerCase().split(',').map(value => value.trim())).toContain('x-rentral-account')
+    expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull()
+    expect(response.headers.get('set-cookie')).toBeNull()
+    expect(mocks.authenticate).not.toHaveBeenCalled(); expect(mocks.refresh).not.toHaveBeenCalled()
+    mocks.cookies.mockResolvedValue(cookieStore({}))
+    await expect(requireApiIdentity(new Request('http://localhost:3000/api/v1/me', { headers: {
+      Origin: origin, Authorization: 'Bearer invalid-bearer', 'X-Rentral-Account': user.id,
+    } }))).rejects.toMatchObject({ status: 401, code: 'UNAUTHORIZED' })
+  })
+  it.each(['production', 'untrusted-origin'])('keeps the local allowance closed for%s', async kind => {
+    vi.stubEnv('NODE_ENV', kind === 'production' ? 'production' : 'development')
+    const response = await updateSession(new NextRequest('http://localhost:3000/api/v1/me', { method: 'OPTIONS', headers: {
+      Origin: kind === 'production' ? 'http://localhost:8090' : 'https://attacker.invalid',
+      'Access-Control-Request-Headers': 'x-rentral-account',
+    } }))
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull()
+    expect(response.headers.get('Access-Control-Allow-Headers')).toBeNull()
+    expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull()
+  })
 })
 
 describe('cookie refresh concurrency', () => {
@@ -49,7 +85,7 @@ describe('cookie refresh concurrency', () => {
     await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce())
     pending.resolve(session)
     const [firstResponse, secondResponse, authenticated] = await Promise.all([first, second, third])
-    expect(authenticated).toEqual({ data: { user }, error: null })
+    expect(authenticated).toEqual({ data: { user, sessionId: 'owned-refreshed-session' }, error: null })
     for (const response of [firstResponse, secondResponse]) {
       expect(response.headers.get('location')).toBeNull()
       expect(response.cookies.get(ACCESS_COOKIE)?.value).toBe(session.access_token)
@@ -77,10 +113,10 @@ describe('cookie refresh concurrency', () => {
     expect(mocks.refresh).not.toHaveBeenCalled()
   })
 
-  it('refreshes when the browser has naturally expired its short-lived access cookie', async () => {
+  it('refreshes legacy cookies that have no retained access proof', async () => {
     const store = cookieStore({ [REFRESH_COOKIE]: 'refresh-without-access' })
     mocks.cookies.mockResolvedValue(store)
-    expect(await (await createClient()).auth.getUser()).toEqual({ data: { user }, error: null })
+    expect(await (await createClient()).auth.getUser()).toEqual({ data: { user, sessionId: 'owned-refreshed-session' }, error: null })
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(store.get(ACCESS_COOKIE)?.value).toBe(session.access_token)
   })
@@ -135,6 +171,7 @@ describe('cookie refresh concurrency', () => {
 
 describe('cookie logout', () => {
   it('revokes a refresh-only session before expiring cookies', async () => {
+    mocks.revokeRefresh.mockResolvedValue(true)
     const store = cookieStore({ [REFRESH_COOKIE]: 'remaining-refresh' })
     mocks.cookies.mockResolvedValue(store)
     expect(await (await createClient()).auth.signOut()).toEqual({ error: null })
@@ -145,9 +182,21 @@ describe('cookie logout', () => {
   it('retains cookies when revocation cannot reach the database', async () => {
     const store = cookieStore({ [ACCESS_COOKIE]: 'known-access', [REFRESH_COOKIE]: 'remaining-refresh' })
     mocks.cookies.mockResolvedValue(store)
-    mocks.authenticate.mockRejectedValue(new AuthError(503, 'AUTH_UNAVAILABLE', 'Database unavailable'))
+    mocks.revokeProof.mockRejectedValue(new AuthError(503, 'AUTH_UNAVAILABLE', 'Database unavailable'))
     expect((await (await createClient()).auth.signOut()).error).toMatchObject({ status: 503 })
     expect(store.set).not.toHaveBeenCalled()
     expect(mocks.revokeRefresh).not.toHaveBeenCalled()
+  })
+  it('uses a signed expired access proof even when another request consumed the cookie refresh capability', async () => {
+    const store = cookieStore({ [ACCESS_COOKIE]: 'signed-expired-proof', [REFRESH_COOKIE]: 'already-consumed-refresh' })
+    mocks.cookies.mockResolvedValue(store); mocks.revokeProof.mockResolvedValue(true)
+    expect(await (await createClient()).auth.signOut()).toEqual({ error: null })
+    expect(mocks.revokeProof).toHaveBeenCalledWith('signed-expired-proof'); expect(mocks.revokeRefresh).not.toHaveBeenCalled()
+    expect(store.set).toHaveBeenCalledWith(expect.objectContaining({ name: ACCESS_COOKIE, value: '', maxAge: 0 }))
+  })
+  it('retains legacy cookies and reports an explicit uncertain logout after refresh rotation', async () => {
+    const store = cookieStore({ [REFRESH_COOKIE]: 'already-consumed-refresh' }); mocks.cookies.mockResolvedValue(store); mocks.revokeRefresh.mockResolvedValue(false)
+    expect((await (await createClient()).auth.signOut()).error).toMatchObject({ status: 409, code: 'LOGOUT_UNCONFIRMED' })
+    expect(store.set).not.toHaveBeenCalled()
   })
 })

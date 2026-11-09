@@ -4,10 +4,11 @@ import { getSession, invalidateSession } from './auth'
 export class ApiError extends Error {
   constructor(message: string, public readonly code: string, public readonly status: number) { super(message) }
 }
-export async function api<T>(path: string, options: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
+export async function api<T>(path: string, options: { method?: string; body?: unknown; signal?: AbortSignal; expectedUserId?: string } = {}): Promise<T> {
   if (configurationError) throw new ApiError(configurationError, 'CONFIGURATION_REQUIRED', 503)
   const session = await getSession()
   if (!session) throw new ApiError('Please sign in again.', 'UNAUTHORIZED', 401)
+  if (options.expectedUserId && session.user.id !== options.expectedUserId) throw new ApiError('Your signed-in account changed. Reopen this screen before continuing.', 'ACCOUNT_CHANGED', 409)
   const controller = new AbortController()
   const abort = (): void => controller.abort()
   options.signal?.addEventListener('abort', abort, { once: true })
@@ -16,7 +17,7 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   try {
     const response = await fetch(`${config.apiUrl}/api/v1${path}`, {
       method: options.method ?? 'GET', signal: controller.signal, credentials: 'omit',
-      headers: { Authorization: `Bearer ${session.access_token}`, Accept: 'application/json', ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      headers: { Authorization: `Bearer ${session.access_token}`, Accept: 'application/json', ...(options.expectedUserId ? { 'X-Rentral-Account': options.expectedUserId } : {}), ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
     })
     if (response.status === 401) {

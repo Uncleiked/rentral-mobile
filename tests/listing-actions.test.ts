@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({
-  userId: vi.fn(), transaction: vi.fn(), find: vi.fn(), lock: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), revalidate: vi.fn(), mediaCreate: vi.fn(), locationUpsert: vi.fn(), locationDelete: vi.fn(),
+  userId: vi.fn(), transaction: vi.fn(), find: vi.fn(), lock: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), revalidate: vi.fn(), mediaCreate: vi.fn(), locationUpsert: vi.fn(), locationDelete: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(),
 }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.userId, revalidateProfilePaths: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: mocks.lock }))
+vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepareStorage, claimStorageObjects: mocks.claimStorage }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
 vi.mock('next/server', () => ({ after: vi.fn() }))
 import { saveListing, saveDraft, updateListing } from '@/app/actions/listingActions'
+import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
 
 const input = {
   draftId: '27d5a2ee-62c1-4c5d-93de-7a0ee6d5728d', category: 'house',
@@ -22,6 +25,8 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.stubEnv('MUX_ENABLED', 'false')
   mocks.userId.mockResolvedValue('user-1')
+  mocks.prepareStorage.mockResolvedValue([])
+  mocks.claimStorage.mockResolvedValue(undefined)
   const tx = { listing: { findFirst: mocks.find, update: mocks.update, updateMany: mocks.updateMany, create: mocks.create }, mediaAsset: { create: mocks.mediaCreate }, listingLocation: { upsert: mocks.locationUpsert, deleteMany: mocks.locationDelete } }
   mocks.transaction.mockImplementation(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx))
   mocks.update.mockResolvedValue({ id: input.draftId, lister: { username: 'renter' } })
@@ -37,6 +42,14 @@ it.each([saveListing, saveDraft, updateListing])('blocks a direct mutation witho
   mocks.userId.mockResolvedValue(null)
   expect(await action(input)).toMatchObject({ success: false })
   expect(mocks.transaction).not.toHaveBeenCalled()
+})
+
+it.each([saveListing, saveDraft])('returns a definite closed-account rejection without ambiguous-save cleanup instructions', async action => {
+  vi.mocked(assertActiveAccounts).mockRejectedValueOnce(new AccountUnavailableError())
+  const result = await action({ ...input, listingId: input.draftId, wizardStep: 'details' })
+  expect(result).toMatchObject({ success: false, code: 'ACCOUNT_UNAVAILABLE' })
+  expect(result).not.toHaveProperty('uncertain', true)
+  expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled()
 })
 
 it('rejects references to another owner\'s media before writing', async () => {

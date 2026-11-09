@@ -1,18 +1,21 @@
 import { requireUserId } from '@/lib/action-helpers'
+import { currentStaffRole, hasStaffPermission } from '@/lib/auth/roles'
+import type { StaffPermission } from '@/lib/auth/roles-policy'
 
-/** Only server configuration can assign staff privileges. No editable user metadata. */
-export function isAdminId(id: string): boolean {
-  return (process.env.RENTRAL_ADMIN_IDS ?? '').split(',').map(value => value.trim()).filter(Boolean).includes(id)
+/** Legacy name retained for callers; persisted roles are the sole authority. */
+export async function isAdminId(id: string): Promise<boolean> {
+  return await currentStaffRole(id) === 'admin'
+}
+
+export async function requireStaffId(permission: StaffPermission = 'staff:workspace'): Promise<string | null> {
+  const id = await requireUserId()
+  return id && await hasStaffPermission(id, permission) ? id : null
 }
 
 export async function requireAdminId(): Promise<string | null> {
-  const id = await requireUserId()
-  return id && isAdminId(id) ? id : null
+  return requireStaffId('staff:manage')
 }
 
 export async function requireInsightsId(): Promise<string | null> {
-  const id = await requireUserId()
-  if (!id) return null
-  const allowed = (process.env.RENTRAL_INSIGHTS_IDS ?? '').split(',').map(value => value.trim())
-  return isAdminId(id) || allowed.includes(id) ? id : null
+  return requireStaffId('insights:view')
 }

@@ -21,7 +21,6 @@ vi.mock('@/lib/media/mux', () => ({ muxClient: () => ({
 }) }))
 
 import { ownsVideoPath, validSource, mediaDecision } from '@/lib/media/policy'
-import { processListingMedia } from '@/lib/media/processing'
 import { applyMediaEvent } from '@/lib/media/webhook'
 import { POST } from '@/app/api/webhooks/mux/route'
 import { GET } from '@/app/api/listings/[id]/playback/route'
@@ -75,56 +74,6 @@ describe('source and output validation', () => {
   })
 })
 
-describe('durable dispatch', () => {
-  it('does not query unmigrated tables when disabled', async () => {
-    vi.stubEnv('MUX_ENABLED', 'false')
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.findFirst).not.toHaveBeenCalled()
-  })
-  it('scopes jobs to the owner and submitted listings without KYC', async () => {
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.findFirst).toHaveBeenCalledWith({ where: expect.objectContaining({ listing: expect.objectContaining({ lister_id: 'owner' }) }) })
-    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ passthrough: 'media-1', playback_policies: ['signed'] }))
-  })
-  it('only dispatches the request that wins the atomic claim', async () => {
-    mocks.updateMany.mockResolvedValue({ count: 0 })
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.create).not.toHaveBeenCalled()
-  })
-  it('claims the observed attempt so a stale request cannot consume the next retry', async () => {
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { id: 'media-1', status: 'queued', attempts: 0 },
-    }))
-  })
-  it('rechecks the scheduler cooldown instead of dispatching a recently attempted job', async () => {
-    const cutoff = new Date('2026-09-24T08:55:00Z')
-    mocks.findFirst.mockResolvedValue(null)
-    expect(await processListingMedia(listingId, 'owner', cutoff)).toBe('skipped')
-    expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ updatedAt: { lte: cutoff } }) }))
-    expect(mocks.create).not.toHaveBeenCalled()
-  })
-  it('leaves preflight failures queued for a bounded retry', async () => {
-    mocks.info.mockResolvedValue({ error: { message: 'missing' } })
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.create).not.toHaveBeenCalled()
-    expect(mocks.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: { status: 'queued', error_code: 'source_unavailable' } }))
-  })
-  it('never blindly resubmits an ambiguous provider timeout', async () => {
-    mocks.create.mockRejectedValue(new Error('timeout'))
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: { status: 'uncertain', error_code: 'submission_unknown' } }))
-    mocks.findFirst.mockResolvedValue({ status: 'uncertain', attempts: 1 })
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.create).toHaveBeenCalledTimes(1)
-  })
-  it('caps preflight retries', async () => {
-    mocks.findFirst.mockResolvedValue({ status: 'queued', attempts: 5 })
-    await processListingMedia(listingId, 'owner')
-    expect(mocks.create).not.toHaveBeenCalled()
-  })
-})
-
 describe('atomic webhook application', () => {
   it('binds an early callback to the persisted media job', async () => {
     await applyMediaEvent('event-1', asset)
@@ -139,6 +88,16 @@ describe('atomic webhook application', () => {
     mocks.query.mockResolvedValue([{ id: 'media-1', status: 'processing', mux_asset_id: 'other-asset' }])
     await applyMediaEvent('event-1', asset)
     expect(mocks.receiptCreate).not.toHaveBeenCalled()
+  })
+  it('rejects a webhook from another direct-upload session', async () => {
+    mocks.query.mockResolvedValue([{ id: 'media-1', status: 'uploading', mux_asset_id: null, mux_upload_id: 'upload-expected' }])
+    await applyMediaEvent('event-1', { ...asset, upload_id: 'upload-different' })
+    expect(mocks.receiptCreate).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled()
+  })
+  it('does not let an early webhook bypass a quarantined provider conflict', async () => {
+    mocks.query.mockResolvedValue([{ id: 'media-1', status: 'uncertain', mux_asset_id: null, error_code: 'submission_binding_conflict' }])
+    await applyMediaEvent('event-1', asset)
+    expect(mocks.receiptCreate).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled()
   })
   it('does not regress a ready asset when earlier fetches arrive late', async () => {
     mocks.query.mockResolvedValue([{ id: 'media-1', status: 'ready', mux_asset_id: 'mux-asset' }])

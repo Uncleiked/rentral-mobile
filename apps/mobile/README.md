@@ -77,14 +77,25 @@ Forgot password uses the opt-in private development email outbox on the backend.
 
 ## Features
 
-- Explore with location/category/price filters and cursor pagination; listing details, signed walkthrough playback, sharing, and saves.
-- Booking requests/history and member conversations, older-message pagination, UUID message retries, and foreground refresh.
-- Optional profile edits, owner inventory, and native listing capture using fresh GPS, a silent continuous recording of at most 119 seconds, and private ownership documents.
+- Explore with category-specific filters, exact budgets/counts, cursor pagination, a focused walkthrough feed, device-scoped saved searches, listing details and saves.
+- Native booking quotes, holds/conversion, requests, participant detail/actions and inspection check-in. Paystack checkout opens its validated browser URL; only server reconciliation confirms payment. Durable actor-scoped commands preserve unknown booking outcomes without automatic replay.
+- Member conversations with listing shares, unread/read markers, bounded foreground activity polling, older-message pagination and encrypted exact-nonce recovery. Squat-Mates has separate opt-in preferences, explained overlap, accepted contacts, private messages, blocking and redress.
+- Optional profile/avatar edits, public profiles/reviews, notifications, analytics consent, account security/session controls, record export and guarded account closure.
+- Owner inventory, server draft save/resume/archive, posted listing editing and private vault. Native capture uses fresh GPS, a silent continuous recording of at most 119 seconds, and private asset ownership documents. SDK file uploads stream rather than buffering the full video in JavaScript.
+- Submitted owner details include the exact publication fee, Paystack checkout and explicit server/provider verification. Unknown payment actions survive restart without replay; a verified fee remains separate from human publication and media/address review.
+- Member financial request/history and recipient controls, lease renewal/termination requests, and account metrics. Staff settlement/review and Insights/campaign administration have explicit web handoffs.
+- Optional generic remote push in a configured development/production native build. Permission is requested only after opt-in; Expo Go and web cannot register remote updates. Native OS permission/provider delivery still requires physical-device acceptance.
+- Explicitly labeled sponsored Explore cards stay separate from ordinary results, show test/live mode and use the same filters. Optional visible-impression/click measurement follows the account analytics choice; ordinary result ranking and pagination stay independent.
 - Correct iOS MOV/QuickTime and Android MP4 uploads. Camera/location denial and failed uploads retain clear retry paths; files are never renamed to pretend they use another container.
 
 Native camera capture is unavailable in the Expo web preview; use Android/iOS for capture. Uploaded submissions retain existing review/publication rules and do not publish automatically. Supporting asset documents are not personal KYC.
 
-Booking cards link to the local web app for existing host status actions, payment checkout when configured, and inspection check-in. Resume existing web drafts on web. Check Bookings/My Listings after an ambiguous request outcome before sending another create request; message retries have a separate idempotency contract.
+Ordinary booking status actions and inspection check-in run in the native app.
+Check server state after an ambiguous mutation; recovery controls retain the exact
+command and never automatically repeat a provider or domain mutation. Browser
+handoffs may require a separate browser sign-in and never carry app credentials in
+the URL. Camera/GPS, large uploads, native share sheets, notification permission
+and actual provider delivery remain physical-device acceptance boundaries.
 
 ## Checks
 

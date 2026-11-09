@@ -3,6 +3,7 @@ import { z } from 'zod'
 import prisma from '@/lib/db'
 import type { Prisma } from '@prisma/client'
 import { lockRecord, withTransaction } from '@/lib/database/transactions'
+import { fetchBoundedProviderJson } from '@/lib/providers/bounded-json'
 
 export const SPATIAL_TOLERANCE_METERS = 100
 // WGS84 latitude/longitude, evaluated on the IUGG mean-radius sphere. This is
@@ -39,8 +40,8 @@ export function addressFingerprint(address: string): string {
 
 const geocodeResponse = z.object({ features: z.array(z.object({
   geometry: z.object({ coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]) }),
-  properties: z.object({ result_type: z.string(), rank: z.object({ confidence: z.number().min(0).max(1) }) }),
-})) })
+  properties: z.object({ result_type: z.string().max(100), country_code: z.string().length(2).optional(), rank: z.object({ confidence: z.number().min(0).max(1) }) }),
+})).max(1) })
 
 export async function verifyListingAddress(listingId: string): Promise<'matched' | 'mismatch' | 'unavailable'> {
   const listing = await prisma.listing.findUniqueOrThrow({ where: { id: listingId }, select: { text_address: true } })
@@ -53,11 +54,11 @@ export async function verifyListingAddress(listingId: string): Promise<'matched'
   url.searchParams.set('filter', 'countrycode:ng')
   url.searchParams.set('limit', '1')
   url.searchParams.set('apiKey', key)
-  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
-  if (!response.ok) throw new Error('GEOCODER_UNAVAILABLE')
-  const result = geocodeResponse.parse(await response.json()).features[0]
+  let result: z.infer<typeof geocodeResponse>['features'][number] | undefined
+  try { result = geocodeResponse.parse(await fetchBoundedProviderJson(url, { headers: { Accept: 'application/json' } }, { maximumBytes: 64 * 1024, timeoutMs: 10000 })).features[0] }
+  catch { throw new Error('GEOCODER_UNAVAILABLE') }
   // A city/district centroid cannot verify an individual asset address.
-  if (!result || result.properties.rank.confidence < 0.8 || !['building', 'amenity'].includes(result.properties.result_type)) return 'unavailable'
+  if (!result || (result.properties.country_code && result.properties.country_code.toLowerCase() !== 'ng') || result.properties.rank.confidence < 0.8 || !['building', 'amenity'].includes(result.properties.result_type)) return 'unavailable'
   const [longitude, latitude] = result.geometry.coordinates
   return withTransaction(async tx => {
     if (!await lockRecord(tx, 'listing', listingId)) return 'unavailable'

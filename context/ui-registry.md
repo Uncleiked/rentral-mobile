@@ -1,5 +1,105 @@
 # UI Registry
 
+Account-bound workspaces: the marketplace server layout supplies ApiActorScope.
+Commerce and matching controls use memoized scoped request hooks. The captured
+account restricts existing authentication; it never grants identity or a role.
+Changing the captured actor remounts children so old draft commands cannot carry
+across accounts. There is no added visual wrapper or theme.
+
+### Commercial purchases and sponsored placements — 2026-11-09
+
+`components/commerce/*` uses the existing surface-card/border-subtle/rounded-2xl
+cards with p-5–6, rounded-xl fields, semantic primary/secondary/muted text and
+minimum44px actions. Exact kobo formats as NGN; every purchase shows fixed days
+and test/live environment. Unknown writes retain their original command and
+offer readback before an explicit retry. Provider checkout is an inspected link,
+separate from paid/access state. Campaign review, payment and delivery eligibility
+remain visibly separate. Insights controls filter event/month groups and export
+only the shown thresholded coarse data. Sponsored cards sit outside organic
+ranking and visibly retain the Sponsored label.
+
+Dashboard tools expose matching, purchases, Insights, campaigns and refunds.
+Native Profile reuses the existing secondary Button and semantic muted help for
+the commerce web handoff; it explicitly states separate browser sign-in and
+passes no authentication token in the URL. Native sponsored placement patterns
+are recorded by the native owner after implementation.
+
+### Member dashboard activity — 2026-11-09
+
+Web `components/account/MemberActivityCards.tsx` and native `app/dashboard.tsx`
+use existing surface cards and semantic text. A short label, prominent observed
+value and explicit sample explanation form each card. No-sample and truncated
+histories display Unavailable. Response captions exclude unanswered turns;
+inspection captions describe recorded check-ins, and review counts state their
+all-time completed-booking scope. Native cards use radius.xl/space.xl and shared
+Page/Button; web uses rounded-2xl/border-subtle/p-5. Counts link to actual archives.
+
+### Native lease management — 2026-11-09
+
+`apps/mobile/app/leases.tsx` and `lease/[id].tsx` use Page, shared Field and
+Button, surface/border cards with radius.xl and space.xl padding. Headlines use
+20–22px semibold; body 14px/23 secondary; help 12–13px/21 muted; unconfirmed
+results use semantic warning text plus a visible history-check action. Date/time
+labels state their input format and device time zone. Evidence is private,
+10 MB bounded and explicitly uploaded before proposal submission. Counterparty
+reasons accompany accept/decline; staff review is a separate recorded step.
+
+### Conversation activity controls — 2026-11-09
+
+`components/messaging/ChatPanel.tsx` retains surface-card, border-subtle,
+rounded-2xl and p-4/sm:p-5. Activity is a small muted caption under the member
+name, announced politely. A labeled checkbox uses the existing accent and
+text-xs muted pattern. It shares only conversation-scoped activity while the
+view is visible; opting out clears the actor's ephemeral row. Read indicators
+reuse the message timestamp caption. No global last-seen timestamp is exposed.
+
+### Lease requests and lifecycle reviews — 2026-11-09
+
+Canonical pattern: root ui-registry.md entry of the same name. New shared web
+components: components/lifecycle/LeaseRequestForm.tsx, LeaseRequestsPage.tsx,
+LeaseCounterpartyControls.tsx and components/admin/LifecycleReviewControls.tsx.
+Cards reuse surface-card/border-subtle/rounded-2xl/p-5–6; fields reuse app
+background/rounded-xl/p-3; labels/help text-xs muted, body/status text-sm secondary.
+Actions keep minimum44px targets, accent hover/focus outlines and visible disabled
+states. Explicit booking outcomes extend existing ReviewControls. Preserve input
+and uploaded evidence on unconfirmed outcomes, with visible history refresh.
+
+### Staff financial workspace — 2026-11-09
+
+Files: components/admin/FinancialWorkspace.tsx, FinancialOperationReview.tsx,
+FinancialReceipts.tsx and financial-ui.ts. Shared field/button token strings
+match staff reviews: surface-card, border-subtle, rounded-2xl cards p-5/sm:p-6,
+rounded-xl fields p-3 with accent focus. Actions min-h-11, px-4/py-3 and visible
+focus outlines. Text uses primary/secondary/muted and semantic warning/accent.
+Money formats exact BigInt kobo; forms accept NGN with at most two decimals.
+Keep source payment IDs selectable/wrapped, available funds separate from totals,
+and approval/request/provider outcome distinct. Preserve uncertain immutable
+commands and require explicit readback before further instructions. Archive
+buttons preserve loaded records. No bank account numbers persist in this UI.
+
+### Native booking details — 2026-11-09
+
+Files: apps/mobile/app/booking/[id].tsx and src/components/booking-*.tsx.
+Summary/action cards use theme surface/border, radius24, padding24 and gap16.
+Headings20 semibold, labels13 muted, values14 medium; monetary values19 bold
+accent with tabular numerals. Error text13 warning. Inspection PIN30 bold with
+letter spacing5 is selectable and announced as individual digits. Android uses
+the SDK58 date dialog, iOS the date wheel with Done; web retains labeled fields.
+Keep rental start/end independent of the holding commitment window. Refresh
+explicitly after uncertain writes; disabled controls and visible status explain
+unconfirmed results. Listing hold CTA uses the same primary Button.
+
+### Staff role controls — 2026-11-09
+
+File: components/admin/StaffRoleControls.tsx.
+Surface: bg-surface-card, border-border-subtle, rounded-2xl, p-5, space-y-4.
+Fields: bg-background-app, rounded-xl, p-3, text-sm; semantic accent focus ring.
+Labels/help: text-xs text-text-muted; body/status text-sm text-text-secondary.
+Primary action: min-h-11, rounded-xl, px-5 py-3, bg-accent-primary,
+text-text-inverse, hover:bg-accent-hover, focus-visible outline and pending opacity.
+Long member IDs wrap; no personal emails are sent to this client component.
+Reuse the existing review form pattern and preserve the reason after failure.
+
 ### JWT/MongoDB account and local upload flow — 2026-11-09
 
 The **Local JWT account flow** in root `ui-registry.md` supersedes earlier
@@ -298,3 +398,254 @@ when an authorization or preview request fails.
 
 Prisma generation is now part of `pnpm build`. No UI components, tokens, layout,
 motion or responsive patterns changed in this build fix.
+
+### Native booking, member profiles and financial requests (2026-11-09)
+
+Files: apps/mobile/app/booking/[id].tsx, profile/[username].tsx, notifications.tsx,
+privacy.tsx, appeals.tsx, financial.tsx, financial-request.tsx, bank-recipient.tsx;
+apps/mobile/src/components/booking-*, public-member-view.tsx, member-avatar.tsx,
+avatar-editor.tsx, safety-notice-card.tsx and financial-operation-card.tsx.
+
+- Use existing semantic colors/fonts/space/radius tokens with native StyleSheet.
+  Cards use surface, border, radius.xl, padding24 and gap16. Screen titles use
+  bold30; card headings use semibold19–20; help uses muted12–13 with lineHeight21–22.
+- Money uses exact integer kobo formatting, accentBright, bold19–23 and tabular
+  numerals. Value/label rows wrap on narrow screens; all controls retain44px targets.
+- Native date/time dialogs and iOS wheels use the installed SDK58 Expo UI picker;
+  platform review/payout/bank menus use Expo UI Picker and privacy uses Switch.
+  Web uses the package fallback controls with accessible labels.
+- Public member sections and notification/financial archives use virtualized lists,
+  separate archive cursors, explicit older-page controls and visible retry copy.
+  Unread notifications use the semantic accent border. Photo previews use88px circles.
+- Reviewed safety notices use glass background/warning border and explicit fixed
+  public guidance. Reviews never invent a score or imply an ownership guarantee.
+  Private report/appeal text is not part of public profile notices.
+- Mutation feedback stays inline and selectable. Draft text survives failure;
+  unknown outcomes require status readback, and financial retries preserve the
+  exact actor-scoped durable request identifier. Confirmed collection, requests,
+  approvals, refunds and payouts remain separate visible states.
+- Bank account entry is masked and transient, cleared on leaving the form or a
+  confirmed save. Only bank code and last four digits appear in saved-recipient UI.
+- Verified controlled browser checks cover320/390/768 widths without horizontal
+  overflow; these checks do not establish physical-device/provider acceptance.
+
+### Account security and mailbox confirmation (2026-11-09)
+
+Files: components/profile/SecurityCard.tsx,
+components/account/EmailConfirmationForm.tsx, app/(auth)/confirm-email/page.tsx.
+
+| Property | Pattern |
+| --- | --- |
+| Surface | bg-surface-card, border-border-subtle, rounded-2xl, p-6 |
+| Fields | bg-background-app, rounded-xl, px-4 py-3, text-sm text-text-primary |
+| Focus | focus:border-accent-primary, focus:ring-1 focus:ring-accent-primary |
+| Primary action | bg-accent-primary, text-text-inverse, hover:bg-accent-hover |
+| Secondary action | bg-glass-light, border-glass-border-medium, hover:bg-glass-light-hover |
+| Body/help | text-text-secondary / text-text-muted, text-sm or text-xs |
+| Feedback | Inline role=alert text-trust-flagged; role=status text-accent-hover |
+
+All actions retain44px touch targets and wrap on small viewports. Passwords and
+codes stay transient; separate mailbox codes never enter URL query strings or
+browser persistence. Current inbox, pending confirmation and actual delivery mode
+remain distinct. Unknown email-request results require status readback. Session
+labels show creation/expiry and identify the current session without inventing
+device names. Refresh preserves visible account state on failure. The profile
+edit modal links to these controls instead of offering a retired email form.
+
+### Native host drafts, sealed editing and private vault (2026-11-09)
+
+Files: apps/mobile/app/create-listing.tsx, my-listings.tsx, owner-listing/[id].tsx,
+vault.tsx; apps/mobile/src/components/NativeListingFields.tsx, WalkthroughCapture.tsx,
+owner-listing-card.tsx, owner-listing-editor.tsx and owner-listing-media.tsx.
+
+- Retain semantic surface/border cards, radius.xl,16–24px padding and16px field gaps.
+  Full category forms use labeled inputs, wrapping ChoiceChips and SDK58 Expo UI
+  menus/switches. Optional fees use decimal keyboards and explicit naira labels.
+- Owner inventory uses paginated FlatList cards; vault captures use SectionList
+  groups by abstract area and Lagos calendar date. Keep distinct capture IDs even
+  when their addresses match. Only one opened walkthrough owns a player.
+- Device recovery and server draft confirmation have separate copy. Show a device
+  saved timestamp only after secure persistence confirms it. Recording, file copy,
+  upload, server save and review submission each expose their current phase.
+- Unknown upload/save outcomes retain originals and request identifiers. Controls
+  offer explicit status checks and exact-request retry; no fake uploaded media or
+  blind new request. An upload can be stopped while preserving its recovery state.
+- Posted editors display sealed media/location/document guidance. Unsaved fields
+  survive a failed update and stale revisions show comparison/reload choices.
+- Archive/restore retains private evidence and financial/booking history. Private
+  authority previews request fresh signed access and use the OS document viewer
+  from app-private cache on native. Exact saved GPS never enters resume DTOs.
+- Camera, precise-location permissions, background interruptions and large-file
+  behavior still require physical-device acceptance; isolated tests prove policies
+  and native File-body use without claiming a measured device memory result.
+
+### Native account security and code confirmation (2026-11-09)
+
+Files: apps/mobile/app/settings.tsx and confirm-email-change.tsx.
+
+- Account security uses the existing semantic cards and labeled password/email
+  fields; current/new password autofill roles are explicit. Sensitive inputs clear
+  when leaving a screen and are never device drafts or URL parameters.
+- Active sessions use virtualized date-based rows with current-session labels.
+  Do not invent device names, IP addresses or locations absent from server data.
+- Email changes show actual confirmation flags/deadlines for both addresses.
+  The public confirmation screen accepts a typed one-use code with a masked input.
+  Development outbox delivery has clear operator guidance without public file paths.
+- Server-required sign-in follows confirmed password/email/session results. A
+  failed local secure-storage clear has its own retry control and never pretends
+  the local session was removed. Unknown mutations are not replayed automatically.
+- Shared native Button now retains its explicit accessibility label while its
+  activity indicator replaces the visual title.
+
+### Squat-Mates member and independent review surfaces
+
+- Preferences, candidate explanations and privacy histories reuse semantic
+  `bg-surface-card`, `border-border-subtle`, `rounded-2xl`, `p-5`, `space-y-5`.
+- Form fields/controls use `rounded-xl`, `min-h-11`, muted labels and visible
+  accent focus outlines. New visibility remains explicitly unchecked.
+- Explain the overlap score with stated area/budget/routine reasons and its
+  limits. Never substitute a trust, credit or safety prediction.
+- Conversation bubbles preserve newlines and break long words; own messages use
+  `bg-accent-muted`. Read times reflect opened messages, not online presence.
+- Keep an uncertain send's draft and identifier, check history before retry, and
+  clear cached content when current authorization cannot be verified. Redress
+  forms can remain without a hidden profile or message payload.
+- Staff review/restoration uses the existing written-reason form, fixed privacy
+  guidance and status text; matching moderation does not create a public notice.
+
+### Native discovery filters and walkthrough feed
+
+- Advanced filters reuse marketplace policy names, exact-count labels and explicit
+  budget validation. Category changes clear incompatible fields; a fresh route
+  query avoids carrying stale constraints into the next search.
+- The filter form uses native Stack form-sheet presentation, semantic field
+  spacing and Expo UI transmission selection. Budgets show naira and the listing's
+  stated price period; no exact asset location is requested or displayed.
+- Walkthrough pages mount at most one player after an explicit Open action. Focus
+  and foreground visibility bound playback; full-height pages use actual scroll
+  geometry, while compact/large-type layouts use list viewability. An empty visible
+  window never activates the first off-screen item.
+- Video starts muted, exposes native playback controls and visible mute/pause
+  actions, and offers a fresh-link retry on failure. Keep media errors inside the
+  card so they do not hide listing navigation or saving.
+- Validated cursor pages retain known content after a temporary refresh failure.
+  Saving changes the displayed state only after the desired server acknowledgment.
+
+### Native booking request recovery
+
+- Recovery keeps original dates, booking kind and request identifier visible in
+  the existing semantic card. Saved requests block a new form until confirmed or
+  deliberately dismissed after history review.
+- An uncertain send offers explicit bounded history readback, then an exact retry.
+  An acknowledged booking uses a confirmation read without another creation POST.
+  Local dismissal explains that it does not cancel any server booking and requires
+  a second deliberate confirmation.
+- Restore never replays a mutation. Actor-scoped encrypted storage preserves the
+  immutable command before sending; storage failures and account changes remain
+  visible and never become a successful booking state.
+
+### Native messaging activity and private recovery
+
+- Inbox rows mark unread conversations explicitly and use virtualized cursor
+  history. Loading older rows pauses automatic reordering until a deliberate
+  refresh; focus refresh resumes live activity.
+- Thread headers show coarse online/typing state and disclose periodic updates.
+  Presence and typing stop outside the focused foreground conversation. Read
+  markers use displayed message identifiers rather than an invented read time.
+- Listing shares use a searchable active-listing picker and a removable preview
+  before sending. A share can stand alone without fabricated message text.
+- Unknown sends preserve the exact body, shared listing and client identifier in
+  actor/conversation-scoped encrypted recovery. Checking history and retrying are
+  separate actions; local dismissal requires an explicit warning and confirmation.
+- Disconnected message windows reset to the latest contiguous page with a visible
+  earlier-history explanation. Participant denial clears the cached thread and
+  composer; temporary failures retain known content with a retry control.
+
+### Native account export, closure and device searches
+
+- Account export uses the established semantic cards, a native resource picker,
+  visible record/page progress, cancellation and an explicit save/share action.
+  Files remain in private cache until deliberately removed; no public file URL is
+  used. Explain that records and uploaded files are separate and that pages can
+  reflect changes made while the export runs.
+- Account closure requires a transient masked password, explicit retained-record
+  acknowledgment and a separate final confirmation. Known obligations remain
+  actionable errors; an unknown result cannot trigger an automatic repeat.
+- Saved search cards show readable category/location/budget/count descriptions.
+  Label their device-only scope, keep them bound to the signed-in account, and
+  distinguish saved filters from saved listings or reservations.
+
+### Native Squat-Mates and private redress
+
+- Matching preferences reuse labeled semantic fields with native Expo UI area
+  checkboxes, routine pickers and an unchecked discoverability switch. Group
+  native controls inside an explicit Column with shared spacing tokens.
+- Candidate cards use the existing avatar/semantic card pattern and exact monthly
+  naira budgets. State the overlap percentage as a comparison of declared
+  preferences, show its reasons and never present it as a trust or safety score.
+- Contact requests display the correct waiting/invited state. Messaging controls
+  appear only after acceptance; closing, blocking and hiding visibility have
+  separate explicit controls and truthful retained-record explanations.
+- Matching message bubbles use the existing secondary/own-accent surfaces,
+  preserve line breaks and show read markers only from actual displayed-message
+  receipts. Pending sends are encrypted by actor/contact and resolved through an
+  echoed client nonce/body or an explicit exact retry.
+- Known access changes invalidate cached candidate/contact lists as well as the
+  current thread. An unavailable contact can retain minimal private report context
+  without showing its hidden profile or messages. Own block/report history stays
+  separate and does not claim that unblocking reopens a closed conversation.
+# Account records and closure controls
+
+Profile settings use the existing semantic surface-card/border-subtle/text-secondary palette, rounded-2xl cards, 44px minimum controls, and wrapping error/status copy. Resource exports are paged explicit downloads; closure requires a current password and an unchecked-by-default acknowledgement. Buttons disable during the request, stale forms carry the rendered account ID, and uncertain acknowledgements never imply success or automatic mutation retries.
+
+### Native remote updates and first-party privacy
+
+- Remote-update settings reuse semantic surface cards, visible device platform and
+  actual registration/revocation dates. Never display Expo tokens or installation
+  proof. The inbox remains reachable when remote push is unavailable.
+- Permission and registration require a deliberate opt-in on a supported native
+  build whose Expo project matches the server. Explain Expo Go, web, disabled
+  server and mismatched-project limitations without implying successful enrollment.
+- Revocation has an explicit confirmation. An unknown result keeps a private,
+  account-scoped recovery record, requires server review before an exact retry,
+  and clears only after confirmed server state or explicit local dismissal.
+- Generic notification taps open the authenticated inbox. Never trust a push
+  payload as a route, account identity or authorization decision.
+- Preference analytics starts with persisted opt-out, uses the existing native
+  privacy switch, and describes coarse first-party observations and retention.
+  Optional telemetry never interrupts browsing or claims a successful payment.
+
+### Native sponsored discovery
+
+- Sponsored cards reuse ordinary listing-card media, save controls, public detail
+  routes and semantic typography. Add an explicit Sponsored label, test/live
+  placement mode and the approved headline above each card.
+- Place paid rows in a separate group with an explanation and a Marketplace
+  results heading before organic rows. Paid retrieval never changes organic
+  cursor pagination or ordering; unavailable placements have an independent retry.
+- Measure an impression only after at least half a row remains visible for one
+  second in the focused foreground screen. Explicit clicks open the public asset
+  immediately; optional first-party measurement cannot block navigation.
+- Respect the same persisted analytics choice and local opt-out intent as coarse
+  Insights events. No mount-time impression, automatic event replay, raw query,
+  GPS or credential belongs in an observation payload.
+
+### Native owner publication payment
+
+- Submitted owner details include an inline Publication fee card with the exact
+  server amount, current Paystack test/live mode and separate recorded-payment
+  mode/reference/status. Payment verification never implies publication approval.
+- Checkout opens only a validated provider URL bound to the authoritative payment
+  ID/reference/environment and captured account/listing. Every browser open checks
+  fresh matching server state. A prepared link stays in memory for an explicit
+  same-link retry; a new readback invalidates the old rendered capability. A changed
+  intent, payment, mode, archive or scope can never revive the old URL.
+- Distinguish a historical successful receipt from current-mode fee verification.
+  A test or unknown-mode receipt never reads as a verified live publication fee.
+- Persist an encrypted actor/listing operation marker before checkout or provider
+  verification. Restoration performs no POST. An unknown action requires a
+  deliberate server readback before another payment action; a failed readback
+  retains recovery. Local storage failure must not send a new payment request.
+- Keep ordinary owner metadata, archive, document and review controls native.
+  Unavailable payment configuration explains the gate while showing actual
+  recorded state; no screen fabricates a paid fee or an active listing.

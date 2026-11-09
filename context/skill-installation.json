@@ -1,0 +1,135 @@
+{
+  "date": "2026-11-09",
+  "scope": "Codex user skills",
+  "installer": "Reviewed copy from official pinned Git sources; Python helper unavailable",
+  "skills": [
+    {
+      "name": "playwright",
+      "repo": "openai/skills",
+      "commit": "49f948faa9258a0c61caceaf225e179651397431",
+      "path": "skills/.curated/playwright",
+      "sha256": "11026cf34b5d10dcd4ce40db95bc93f20cfebd10c4645505418ed737f7fc7326",
+      "files": 9
+    },
+    {
+      "name": "security-best-practices",
+      "repo": "openai/skills",
+      "commit": "49f948faa9258a0c61caceaf225e179651397431",
+      "path": "skills/.curated/security-best-practices",
+      "sha256": "fe32ba35dc29954878f35d0e1113fb15565c1728b49f274223cada2b46879bf2",
+      "files": 13
+    },
+    {
+      "name": "security-threat-model",
+      "repo": "openai/skills",
+      "commit": "49f948faa9258a0c61caceaf225e179651397431",
+      "path": "skills/.curated/security-threat-model",
+      "sha256": "9d341446e77d0d13115e7c1571cc7adf0af49acf6a39a65d678f79550d19bddf",
+      "files": 5
+    },
+    {
+      "name": "expo-overview",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-overview",
+      "sha256": "37aea20cd8125544c516717d59c2b990503e05d17b7f183e6e831c583b5e2f16",
+      "files": 3
+    },
+    {
+      "name": "expo-project-structure",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-project-structure",
+      "sha256": "45ec5de9d1338294aed52688b70118ecc9d03bc1651ae20321f5063c1ac39d4d",
+      "files": 2
+    },
+    {
+      "name": "expo-router",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-router",
+      "sha256": "2bff4b5c7c1bc88b704d5fd54d27d06d38ba3d79be7f6d2c3541e7bce7cdce99",
+      "files": 8
+    },
+    {
+      "name": "expo-native-ui",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-native-ui",
+      "sha256": "80763b4c9114100cc99c127e0045159e14338a7278755bb84950759277465678",
+      "files": 9
+    },
+    {
+      "name": "expo-ui",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-ui",
+      "sha256": "434091e3294cef640ab66bdd626f033c6c3a01dbee2d66acb751b199af5b83b2",
+      "files": 7
+    },
+    {
+      "name": "expo-data-fetching",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-data-fetching",
+      "sha256": "19f0d9841fe3b921bebdd8d74e41ef751f7d1c6817c809b250c7721d84c653b4",
+      "files": 4
+    },
+    {
+      "name": "expo-animation",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-animation",
+      "sha256": "607123ad8b82468b0ac89797ed47385e49c1f06c639e1a5d4cc0986e3ec2b208",
+      "files": 4
+    },
+    {
+      "name": "expo-design-system",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-design-system",
+      "sha256": "eb80021ee165d2cad80bb5caa450f168165ce628f63da28b4aed7f00d3636037",
+      "files": 4
+    },
+    {
+      "name": "expo-dev-client",
+      "repo": "expo/skills",
+      "commit": "a9e5bd3fa00b4e61f632e43f85da73aee1942582",
+      "path": "plugins/expo/skills/expo-dev-client",
+      "sha256": "ff5d6849da5e43cb1e5e70e9adf89088bf5cba839d0374ea8f9f9b67f7857238",
+      "files": 2
+    },
+    {
+      "name": "mongodb-connection",
+      "repo": "mongodb/agent-skills",
+      "commit": "59c4a4ebed23666834c8c698a76afa91cd689365",
+      "path": "skills/mongodb-connection",
+      "sha256": "43e6b0eb1bbc3e78dd481034873f771d8b03b25913eb0b7c10dae0ba4724ed3f",
+      "files": 2
+    },
+    {
+      "name": "mongodb-schema-design",
+      "repo": "mongodb/agent-skills",
+      "commit": "59c4a4ebed23666834c8c698a76afa91cd689365",
+      "path": "skills/mongodb-schema-design",
+      "sha256": "ca0cb9ca320c084a25a5008dbe23e391d7543b45ee46a083ebeb95f353ab4aa6",
+      "files": 21
+    },
+    {
+      "name": "mongodb-query-optimizer",
+      "repo": "mongodb/agent-skills",
+      "commit": "59c4a4ebed23666834c8c698a76afa91cd689365",
+      "path": "skills/mongodb-query-optimizer",
+      "sha256": "206b16064f3ab0ed9a4269cc556f1b1ce355af1cb0b93b2395acc3944cc81890",
+      "files": 5
+    },
+    {
+      "name": "mongodb-search-and-ai",
+      "repo": "mongodb/agent-skills",
+      "commit": "59c4a4ebed23666834c8c698a76afa91cd689365",
+      "path": "skills/mongodb-search-and-ai",
+      "sha256": "ee4184f05fc53595ed05e16cba332d7c9266d1225a188f8a667c12494ef08d4c",
+      "files": 8
+    }
+  ]
+}

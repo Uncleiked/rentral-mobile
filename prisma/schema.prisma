@@ -14,6 +14,11 @@ model User {
   email            String   @unique
   password_hash    String?
   staff_role       String?
+  closed_at DateTime?
+  push_consent_version Int? @default(0)
+  analytics_consent Boolean? @default(false)
+  analytics_consent_at DateTime?
+  analytics_subjects Json?
   username         String?  @unique
   kyc_verified     Boolean  @default(false)
   account_type     String? // 'individual' or 'organization'
@@ -48,6 +53,8 @@ model User {
   renewals Renewal[]
   sessions AuthSession[]
   passwordResets PasswordReset[]
+  emailChanges EmailChange[]
+  authEmailDeliveries AuthEmailDelivery[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -67,6 +74,8 @@ model Listing {
   document_path    String? // compliance-docs object path
   listing_status   String  @default("draft") // 'draft' | 'pending_verification' | 'active'
   wizard_step      String? // resume point for drafts ('capture' | 'details' | 'documents' | 'checkout')
+  archived_at DateTime?
+  archived_status String?
   media            MediaAsset?
   savedBy          SavedListing[]
   bookings         Booking[]
@@ -91,6 +100,13 @@ model MediaAsset {
   source_path     String
   status          String   @default("queued")
   mux_asset_id    String?  @unique
+  mux_upload_id String? @unique
+  upload_bytes Int @default(0)
+  upload_reconcile_page Int @default(1)
+  upload_reconcile_candidates Json?
+  upload_completed_at DateTime?
+  upload_lease_token String?
+  upload_lease_expires_at DateTime?
   playback_id     String?  @unique
   duration        Float?
   attempts        Int      @default(0)
@@ -191,6 +207,7 @@ model Booking {
   reviews Review[]
   disputes Dispute[]
   renewals Renewal[]
+  terminations LeaseTermination[]
   allocated_hold_credit HoldCreditAllocation? @relation("HoldCreditSource")
   rental_hold_credit HoldCreditAllocation? @relation("HoldCreditTarget")
   @@index([listing_id, starts_at])
@@ -201,6 +218,8 @@ model Booking {
 
 model PaymentIntent {
   revision Int @default(0)
+  order_id String?
+  order CommercialOrder? @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   id String @id @map("_id") @default(uuid())
   booking_id String?
   listing_id String?
@@ -209,6 +228,7 @@ model PaymentIntent {
   listing Listing? @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   provider String @default("paystack")
+  provider_environment String?
   kind String
   reference String @unique
   idempotency_key String @unique
@@ -217,12 +237,13 @@ model PaymentIntent {
   customer_email String
   status String @default("created")
   checkout_url String?
-  provider_transaction_id String? @unique
+  provider_transaction_id String?
   paid_at DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   events PaymentEvent[]
-  ledger LedgerTransaction?
+  ledger LedgerTransaction[]
+  financialAllocations FinancialAllocation[]
   @@index([user_id, createdAt(sort: Desc)])
   @@index([booking_id])
   @@index([listing_id])
@@ -242,12 +263,16 @@ model PaymentEvent {
 
 model LedgerTransaction {
   id String @id @map("_id") @default(uuid())
-  payment_id String @unique
+  payment_id String
   payment PaymentIntent @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   currency String @default("NGN")
   kind String
+  business_key String? @unique
+  operation_id String?
   createdAt DateTime @default(now())
   entries LedgerEntry[]
+  @@index([payment_id])
+  @@index([operation_id])
 }
 
 model LedgerEntry {
@@ -279,6 +304,103 @@ model Conversation {
   @@unique([listing_id, seeker_id])
   @@index([seeker_id, updatedAt(sort: Desc)])
   @@index([lister_id, updatedAt(sort: Desc)])
+}
+
+model ConversationActivity {
+  id String @id @map("_id") @default(uuid())
+  conversation_id String
+  user_id String
+  last_seen_at DateTime
+  typing_until DateTime?
+  @@unique([conversation_id, user_id])
+}
+
+model PushDevice {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String
+  auth_session_id String?
+  installation_id String @unique
+  token_hash String @unique
+  proof_hash String
+  platform String
+  status String @default("active")
+  token_ciphertext String?
+  token_iv String?
+  token_tag String?
+  opted_in_at DateTime
+  revoked_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PushDelivery {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  notification_id String
+  device_id String
+  user_id String
+  token_hash String?
+  status String @default("pending")
+  ticket_id String? @unique
+  error_code String?
+  attempts Int @default(0)
+  claimed_at DateTime?
+  accepted_at DateTime?
+  receipt_checked_at DateTime?
+  next_check_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([notification_id, device_id])
+}
+
+model CommercialOrder {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String
+  client_id String
+  kind String
+  status String @default("created")
+  currency String @default("NGN")
+  amount_kobo BigInt
+  price_version String
+  service_days Int
+  billing_environment String
+  campaign_id String? @unique
+  paid_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  payments PaymentIntent[]
+  @@unique([user_id, client_id])
+}
+
+model InsightEntitlement {
+  id String @id @map("_id") @default(uuid())
+  user_id String
+  order_id String @unique
+  billing_environment String
+  starts_at DateTime
+  ends_at DateTime
+  status String @default("active")
+  createdAt DateTime @default(now())
+}
+
+model SponsoredCampaign {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String
+  listing_id String
+  order_id String? @unique
+  billing_environment String
+  status String @default("draft")
+  starts_at DateTime
+  ends_at DateTime
+  headline String
+  reviewed_by String?
+  reviewed_at DateTime?
+  decision_reason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Message {
@@ -321,6 +443,9 @@ model Dispute {
   reason String
   status String @default("open")
   resolution String?
+  resolved_by String?
+  resolved_at DateTime?
+  booking_resolution String?
   booking Booking @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   opener User @relation(fields: [opened_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   safetyNotices SafetyNotice[]
@@ -341,6 +466,12 @@ model Notification {
   read_at DateTime?
   dedupe_key String? @unique
   email_status String @default("pending")
+  email_claim_token String?
+  email_claimed_at DateTime?
+  email_attempts Int @default(0)
+  provider_message_id String?
+  email_delivered_at DateTime?
+  email_error_code String?
   user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdAt DateTime @default(now())
   @@index([user_id, createdAt(sort: Desc)])
@@ -348,13 +479,14 @@ model Notification {
 
 model AdminAudit {
   id String @id @map("_id") @default(uuid())
-  actor_id String
+  actor_id String?
+  operator_id String?
   action String
   target_type String
   target_id String
   reason String
   metadata Json?
-  actor User @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor User? @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdAt DateTime @default(now())
   @@index([actor_id, createdAt(sort: Desc)])
   @@index([target_type, target_id])
@@ -375,22 +507,183 @@ model DocumentReview {
 }
 
 model Renewal {
+  revision Int @default(0)
   id String @id @map("_id") @default(uuid())
   booking_id String
   user_id String
   reference String
   recipient_route String
   status String @default("pending_review")
+  original_ends_at DateTime?
+  requested_ends_at DateTime?
+  evidence_path String?
+  host_confirmed_at DateTime?
+  host_confirmed_by String?
+  reviewed_by String?
+  reviewed_at DateTime?
+  decision_reason String?
   booking Booking @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([booking_id, reference])
   @@index([user_id, createdAt(sort: Desc)])
+  @@index([status, createdAt, id])
+  @@index([booking_id, status])
+}
+
+model LeaseTermination {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  booking_id String
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requested_by String
+  reason String
+  evidence_path String?
+  original_ends_at DateTime
+  requested_end_at DateTime
+  counterparty_decision String @default("pending")
+  counterparty_decided_at DateTime?
+  counterparty_reason String?
+  status String @default("pending_counterparty")
+  reviewed_by String?
+  reviewed_at DateTime?
+  decision_reason String?
+  released_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([booking_id, status])
+  @@index([status, requested_end_at, id])
+  @@index([requested_by, createdAt(sort: Desc), id])
+}
+
+model WorkerState {
+  id String @id @map("_id")
+  revision Int @default(0)
+  cursor Json?
+  lease_token String?
+  lease_expires_at DateTime?
+  last_started_at DateTime?
+  last_completed_at DateTime?
+  last_error_code String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([lease_expires_at])
+}
+
+model WorkerFailure {
+  id String @id @map("_id")
+  job String
+  target_type String
+  target_id String
+  error_code String
+  attempts Int @default(0)
+  status String @default("open")
+  first_occurred_at DateTime @default(now())
+  last_occurred_at DateTime @default(now())
+  resolved_by String?
+  resolved_at DateTime?
+  resolution String?
+  @@index([status, last_occurred_at, id])
+  @@index([job, target_id])
+}
+
+model PaymentRecipient {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String
+  provider String @default("paystack")
+  provider_environment String
+  provider_code String?
+  bank_code String
+  account_last4 String
+  account_fingerprint String
+  fingerprint_version String @default("v1")
+  status String @default("pending")
+  resolved_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([user_id, status, createdAt(sort: Desc)])
+  @@index([provider, provider_environment, provider_code])
+}
+
+model FinancialOperation {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  provider String @default("paystack")
+  provider_environment String
+  kind String
+  payment_id String?
+  booking_id String?
+  recipient_id String?
+  reference String @unique
+  idempotency_key String @unique
+  amount_kobo BigInt
+  currency String @default("NGN")
+  status String @default("requested")
+  retained_kobo BigInt @default(0)
+  policy_version String?
+  provider_id String?
+  provider_status String?
+  failure_code String?
+  requested_by String
+  participant_ids String[] @default([])
+  approved_by String?
+  approved_at DateTime?
+  reason String
+  attempted_at DateTime?
+  completed_at DateTime?
+  reconcile_after DateTime?
+  lease_token String?
+  lease_expires_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  allocations FinancialAllocation[]
+  @@index([booking_id, createdAt(sort: Desc)])
+  @@index([status, reconcile_after])
+  @@index([participant_ids, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([provider, provider_environment, kind, provider_id])
+}
+
+// Immutable reservation of previously collected funds, not evidence of a transfer.
+model FinancialAllocation {
+  id String @id @map("_id") @default(uuid())
+  operation_id String
+  payment_id String
+  operation FinancialOperation @relation(fields: [operation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment PaymentIntent @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  amount_kobo BigInt
+  createdAt DateTime @default(now())
+  @@unique([operation_id, payment_id])
+  @@index([payment_id])
+}
+
+model ProviderReceipt {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  provider String @default("paystack")
+  provider_environment String
+  event_key String @unique
+  entity_kind String
+  provider_id String?
+  reference String?
+  payload_hash String
+  hints Json?
+  status String @default("pending")
+  attempts Int @default(0)
+  lease_token String?
+  lease_expires_at DateTime?
+  next_attempt_at DateTime?
+  last_error_code String?
+  received_at DateTime @default(now())
+  processed_at DateTime?
+  @@index([status, next_attempt_at])
+  @@index([provider, provider_environment, reference])
 }
 
 // Consent-based, coarse telemetry. Never store raw user IDs, search text or GPS.
 model MarketEvent {
+  campaign_id String?
   id String @id @map("_id") @default(uuid())
   subject_hash String
   event_type String
@@ -502,4 +795,170 @@ model PasswordReset {
 
   @@index([user_id, expires_at])
   @@index([expires_at])
+}
+
+// A persistent serialization point for file attachment/deletion. Tombstones
+// deliberately have no TTL: an immutable object path must never be resurrected.
+model StorageObject {
+  id String @id @map("_id")
+  bucket String
+  path String
+  owner_id String
+  state String
+  revision Int @default(0)
+  digest String?
+  size_bytes Int?
+  content_type String?
+  operation_token String?
+  lease_expires_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bucket, path])
+  @@index([owner_id, state, createdAt])
+  @@index([state, lease_expires_at])
+}
+
+// An immutable acknowledgement committed with its resource. Never expires:
+// an uncertain client can reconcile the same command without creating twice.
+model MutationReceipt {
+  id String @id @map("_id")
+  actor_id String
+  scope String
+  client_id String
+  input_hash String
+  resource_id String
+  createdAt DateTime @default(now())
+  @@unique([actor_id, scope, client_id])
+  @@index([resource_id])
+}
+
+model EmailChange {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  old_email String
+  new_email String
+  credential_fingerprint String
+  status String @default("pending")
+  old_token_hash String @unique
+  new_token_hash String @unique
+  old_confirmed_at DateTime?
+  new_confirmed_at DateTime?
+  expires_at DateTime
+  completed_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([user_id, createdAt(sort: Desc)])
+  @@index([expires_at])
+}
+
+model AuthEmailDelivery {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String?
+  user User? @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  kind String
+  dedupe_key String @unique
+  encrypted_payload String?
+  key_id String
+  status String @default("pending")
+  attempts Int @default(0)
+  provider_message_id String?
+  lease_token String?
+  lease_expires_at DateTime?
+  next_attempt_at DateTime?
+  last_error_code String?
+  expires_at DateTime
+  sent_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, next_attempt_at, id])
+  @@index([lease_expires_at])
+  @@index([user_id, createdAt(sort: Desc)])
+  @@index([expires_at])
+}
+
+model MatchProfile {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String @unique
+  is_visible Boolean @default(false)
+  moderation_status String @default("clear")
+  moderation_reason String?
+  moderated_by String?
+  moderated_at DateTime?
+  bio String @default("")
+  neighborhoods String[]
+  monthly_min_kobo BigInt
+  monthly_max_kobo BigInt
+  smoking String
+  pets String
+  guests String
+  quiet_hours String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([is_visible, moderation_status, updatedAt(sort: Desc), id])
+}
+
+model MatchConnection {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  lower_user_id String
+  upper_user_id String
+  requested_by String
+  status String @default("requested")
+  last_requested_at DateTime
+  last_activity_at DateTime @default(now())
+  last_message_id String?
+  accepted_at DateTime?
+  closed_at DateTime?
+  lower_read_at DateTime?
+  upper_read_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([lower_user_id, upper_user_id])
+  @@index([lower_user_id, status, last_activity_at, id])
+  @@index([upper_user_id, status, last_activity_at, id])
+  @@index([requested_by, last_requested_at])
+}
+
+model MatchMessage {
+  id String @id @map("_id") @default(uuid())
+  connection_id String
+  sender_id String
+  client_id String
+  body String
+  createdAt DateTime @default(now())
+  @@unique([sender_id, client_id])
+  @@index([connection_id, createdAt, id])
+}
+
+model MatchBlock {
+  id String @id @map("_id") @default(uuid())
+  blocker_id String
+  blocked_id String
+  createdAt DateTime @default(now())
+  @@unique([blocker_id, blocked_id])
+  @@index([blocked_id])
+}
+
+model MatchReport {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  connection_id String?
+  opened_by String
+  subject_id String
+  reason String
+  evidence_message_id String?
+  status String @default("open")
+  reviewed_by String?
+  reviewed_at DateTime?
+  resolution String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, createdAt, id])
+  @@index([opened_by, createdAt])
+  @@index([subject_id, createdAt])
 }
