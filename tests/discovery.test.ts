@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ findMany: vi.fn(), findFirst: vi.fn(), saves: vi.fn(), media: vi.fn(), holds: vi.fn() }))
-vi.mock('@/lib/db', () => ({ default: { listing: { findMany: mocks.findMany, findFirst: mocks.findFirst }, savedListing: { findMany: mocks.saves }, booking: { findMany: mocks.holds } } }))
+const mocks = vi.hoisted(() => ({ findRaw: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), saves: vi.fn(), media: vi.fn(), holds: vi.fn() }))
+vi.mock('@/lib/db', () => ({ default: { listing: { findRaw: mocks.findRaw, findMany: mocks.findMany, findFirst: mocks.findFirst }, savedListing: { findMany: mocks.saves }, booking: { findMany: mocks.holds } } }))
 vi.mock('@/lib/media/status', () => ({ listingMediaStatuses: mocks.media }))
 vi.mock('@/lib/media/config', () => ({ muxEnabled: () => process.env.MUX_ENABLED === 'true' }))
 vi.mock('@/lib/profile-data', () => ({ formatListingPrice: (value: unknown) => String(value), listingPriceDenomination: (category: string) => category === 'house' ? 'year' : 'day' }))
@@ -20,6 +20,7 @@ beforeEach(() => {
   vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'false')
   vi.stubEnv('MUX_ENABLED', 'false')
   mocks.findMany.mockResolvedValue([row])
+  mocks.findRaw.mockResolvedValue([{ _id: id }])
   mocks.findFirst.mockResolvedValue(row)
   mocks.media.mockResolvedValue(new Map())
   mocks.saves.mockResolvedValue([]); mocks.holds.mockResolvedValue([])
@@ -28,7 +29,9 @@ afterEach(() => vi.unstubAllEnvs())
 
 it('queries active inventory with stable ordered pagination and server-side filters', async () => {
   await getDiscoveryListings(parseDiscoveryFilters({ category: 'house', q: 'Lekki', bedrooms: '0', minPrice: '1000000' }), 'viewer')
-  expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 19, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], where: { AND: expect.arrayContaining([{ listing_status: 'active' }, { category: 'house' }, { text_address: { contains: 'Lekki', mode: 'insensitive' } }, { asset_metadata: { path: ['bedrooms'], equals: '0' } }]) } }))
+  expect(mocks.findRaw).toHaveBeenCalledWith({ filter: { $and: expect.arrayContaining([{ listing_status: 'active' }, { category: 'house' }, { text_address: { $regex: 'Lekki', $options: 'i' } }, { 'asset_metadata.bedrooms': '0' }, { base_rent_amount: { $gte: 1000000 } }]) }, options: { projection: { _id: 1 }, sort: { createdAt: -1, _id: -1 }, limit: 19, maxTimeMS: { secs: 3, nanos: 0 } } })
+  expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 19, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], where: { id: { in: [id] }, listing_status: 'active' } }))
+  expect(mocks.findMany.mock.calls[0][0].select).not.toHaveProperty('privateLocation')
   expect(mocks.saves).not.toHaveBeenCalled()
   expect(mocks.holds).not.toHaveBeenCalled()
 })
@@ -59,6 +62,12 @@ it('does not offer a Mux listing before its video is ready', async () => {
   expect((await getDiscoveryListings(parseDiscoveryFilters({}))).listings[0]).toMatchObject({ useMux: true, videoUrl: null })
 })
 
+it('shows the public title entered in the native listing form', async () => {
+  mocks.findMany.mockResolvedValue([{ ...row, asset_metadata: { ...row.asset_metadata, listingTitle: '  Sunny Lekki studio  ' } }])
+  const result = await getDiscoveryListings(parseDiscoveryFilters({}))
+  expect(result.listings[0].title).toBe('Sunny Lekki studio')
+})
+
 it('limits private detail lookup to the viewer’s own inventory or active listings', async () => {
   await getListingDetails(id, 'viewer')
   expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id, OR: [{ listing_status: 'active' }, { lister_id: 'viewer' }] } }))
@@ -68,7 +77,40 @@ it('limits private detail lookup to the viewer’s own inventory or active listi
 
 it('builds the next cursor from the last returned row, including timestamp ties', async () => {
   mocks.findMany.mockResolvedValue(Array.from({ length: 19 }, (_, index) => ({ ...row, id: `${String(index).padStart(8, '0')}-62c1-4c5d-93de-7a0ee6d5728d` })))
+  mocks.findRaw.mockResolvedValue(Array.from({ length: 19 }, (_, index) => ({ _id: `${String(index).padStart(8, '0')}-62c1-4c5d-93de-7a0ee6d5728d` })))
   const result = await getDiscoveryListings(parseDiscoveryFilters({}))
   expect(result.listings).toHaveLength(18)
   expect(result.nextCursor).toEqual({ id: '00000017-62c1-4c5d-93de-7a0ee6d5728d', createdAt: row.createdAt.toISOString() })
+})
+
+it('treats Mongo operator and regex text as a literal search and uses extended JSON cursor dates', async () => {
+  const cursor = `${row.createdAt.toISOString()}~${id}`
+  await getDiscoveryListings(parseDiscoveryFilters({ q: '.*[$where](Lekki)', state: 'Lag(os)', cursor, intent: 'rent', captain: 'no' }))
+  const { filter } = mocks.findRaw.mock.calls[0][0]
+  const search = filter.$and.find((item: Record<string, unknown>) => item.text_address)
+  expect(search.text_address).toEqual({ $regex: '\\.\\*\\[\\$where\\]\\(Lekki\\)', $options: 'i' })
+  expect(filter.$and).toContainEqual({ 'asset_metadata.state': { $regex: 'Lag\\(os\\)', $options: 'i' } })
+  expect(filter.$and).toContainEqual({ $or: [{ createdAt: { $lt: { $date: row.createdAt.toISOString() } } }, { createdAt: { $date: row.createdAt.toISOString() }, _id: { $lt: id } }] })
+  expect(filter.$and).toContainEqual({ $or: [{ 'asset_metadata.rentalIntent': 'rent' }, { 'asset_metadata.rentalIntent': null }] })
+})
+
+it('does not perform a typed record read when Mongo finds no ids', async () => {
+  mocks.findRaw.mockResolvedValue([])
+  expect(await getDiscoveryListings(parseDiscoveryFilters({}))).toEqual({ listings: [], nextCursor: null })
+  expect(mocks.findMany).not.toHaveBeenCalled()
+})
+
+it('retains a continuation after records become private between id and public-field reads', async () => {
+  const available = Array.from({ length: 17 }, (_, index) => ({ ...row, id: `${String(index).padStart(8, '0')}-62c1-4c5d-93de-7a0ee6d5728d` }))
+  mocks.findRaw.mockResolvedValue(Array.from({ length: 19 }, (_, index) => ({ _id: `${String(index).padStart(8, '0')}-62c1-4c5d-93de-7a0ee6d5728d` })))
+  mocks.findMany.mockResolvedValue(available)
+  const result = await getDiscoveryListings(parseDiscoveryFilters({}))
+  expect(result.listings).toHaveLength(17)
+  expect(result.nextCursor?.id).toBe(available[16].id)
+})
+
+it('fails closed on an unexpected raw id shape before fetching public records', async () => {
+  mocks.findRaw.mockResolvedValue([{ _id: { $oid: 'unexpected-objectid' }, geometry: { coordinates: [3.4, 6.45] } }])
+  await expect(getDiscoveryListings(parseDiscoveryFilters({}))).rejects.toThrow('INVALID_DISCOVERY_RESULT')
+  expect(mocks.findMany).not.toHaveBeenCalled()
 })

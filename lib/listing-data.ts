@@ -18,35 +18,17 @@ import {
   type ListingCategory,
 } from '@/store/useRentralStore'
 
-type DraftRow = {
-  id: string
-  category: string
-  text_address: string | null
-  base_rent_amount: unknown
-  asset_metadata: unknown
-  wizard_step: string | null
-  video_path: string | null
-  poster_path: string | null
-  document_path: string | null
-  has_coords: boolean
-}
-
-// Serializes a draft for wizard resume. Coordinates never leave the server —
-// only the has_coords boolean travels (spatial privacy invariant). One raw
-// query (Prisma can't select the Unsupported geography column at all, so a
-// second findFirst just for the other columns would be a pure-waste round-trip).
+// Private location is stored separately. Resume only selects the relation's id,
+// so the coordinates cannot enter the serialized draft accidentally.
 export async function getDraftForOwner(draftId: string): Promise<DraftPayload | null> {
   const userId = await requireUserId()
   if (!userId) return null
 
-  const rows = await prisma.$queryRaw<DraftRow[]>`
-    SELECT "id", "category", "text_address", "base_rent_amount", "asset_metadata",
-           "wizard_step", "video_path", "poster_path", "document_path",
-           ("hardware_coordinates" IS NOT NULL) AS has_coords
-    FROM "Listing"
-    WHERE "id" = ${draftId} AND "lister_id" = ${userId} AND "listing_status" = ${LISTING_STATUS.DRAFT}
-  `
-  const row = rows[0]
+  const row = await prisma.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: {
+    id: true, category: true, text_address: true, base_rent_amount: true, asset_metadata: true,
+    wizard_step: true, video_path: true, poster_path: true, document_path: true,
+    privateLocation: { select: { id: true } },
+  } })
   if (!row || !LISTING_CATEGORIES.includes(row.category as ListingCategory)) return null
 
   const wizardStep = (DRAFT_WIZARD_STEPS as readonly string[]).includes(row.wizard_step ?? '')
@@ -64,7 +46,7 @@ export async function getDraftForOwner(draftId: string): Promise<DraftPayload | 
     posterPath: row.poster_path,
     documentPath: row.document_path,
     documentName: originalNameFromPath(row.document_path),
-    hasCoords: row.has_coords,
+    hasCoords: Boolean(row.privateLocation),
   }
 }
 
@@ -122,8 +104,8 @@ export async function getMarketplaceFeed(): Promise<FeedListing[]> {
   const useMux = muxEnabled()
   const media = await listingMediaStatuses(rows.map(row => row.id))
   return rows.flatMap((row) => {
-    // Posted rows always have a video (DB CHECK) and posted listers always
-    // have a username (onboarding gate) — the guards are for type narrowing.
+    // Posted rows need usable media and a public handle. Account helpers fill
+    // missing handles before listing mutations; no identity wizard is required.
     const videoUrl = useMux ? '' : row.video_path ? listingMediaUrl(row.id, 'video') : null
     if ((!useMux && !videoUrl) || !row.lister.username || (useMux && media.get(row.id)?.status !== 'ready')) return []
 

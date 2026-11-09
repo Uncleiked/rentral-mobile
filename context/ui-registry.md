@@ -1,5 +1,39 @@
 # UI Registry
 
+### JWT/MongoDB account and local upload flow — 2026-11-09
+
+The **Local JWT account flow** in root `ui-registry.md` supersedes earlier
+Supabase/OAuth/verification entries. Visual tokens stay the same; native account
+forms support email/password and one-use reset codes, never KYC. Local upload and
+media controls reuse existing Field/Button/StatusView patterns with truthful
+permission/progress/retry states. Browser continuation buttons explain that web
+sign-in may be needed. Uploaded avatars are verified owner files with relative
+public URLs; private walkthrough/document links expire and never contain app JWTs.
+
+### Expo native components — 2026-11-09
+
+Canonical native pattern details are mirrored in root `ui-registry.md` under
+**Expo native foundations and components**. Files: `apps/mobile/src/theme.ts`,
+`src/components/{Button,Field,Page,StatusView,ListingCard,Walkthrough,BookingRequest,
+BookingCard,ConversationCard,MessageBubble,ProfileEditor,ChoiceChips,
+NativeListingFields,NativeVideoPreview,WalkthroughCapture}.tsx` and native routes.
+
+- All colors come from semantic native tokens; Inter is bundled. Page background
+  and safe areas use background; cards use surface,1px border,24px radius and
+ 16/24px padding. Heading17–20px, body13/14px, help12/13px muted/secondary.
+- Buttons:52px minimum,16px radius, accentBright/inverse; secondary glass/border.
+  Inputs:52px minimum,12px radius, surface/border, accent focus; accessible labels.
+- Structural/status pills and44px choices use glass or selected accentMuted with
+  accentBright text. Booking totals use actual integer-kobo formatting; gross,
+  holding credit and additional amount remain distinct.
+- Conversation cards use16px radius/padding; own messages accentMuted and other
+  messages surface,14px body/10px timestamp. No fabricated read/online states.
+- Camera/preview use9:16 media,24px radius and pause on blur/background. Capture
+  shows GPS status without raw coordinates; actual MOV/MP4 containers are retained.
+- Auth uses the existing local photograph and semantic scrim. Profile fields are
+  optional and there are no KYC/onboarding controls. Owner documents are private
+  asset evidence; successful submission displays existing review state.
+
 ### Holding credit and rental balance
 
 Updated 2026-11-07. Files: `components/bookings/BookingRequestForm.tsx`, `BookingControls.tsx`, `ListingBookingActions.tsx`, booking details/new routes.

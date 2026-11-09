@@ -14,7 +14,7 @@ export async function startConversationAction(listingId: unknown): Promise<Actio
     const parsed = z.uuid().safeParse(listingId)
     if (!parsed.success) return { success: false, error: 'Choose an available listing.' }
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Complete identity verification to start a conversation.' }
+    if (!userId) return { success: false, error: 'Sign in to start a conversation.' }
     const id = await beginConversation(userId, parsed.data)
     revalidatePath('/marketplace/messages')
     return { success: true, data: id }
@@ -27,7 +27,7 @@ export async function sendMessageAction(input: unknown): Promise<ActionResult<st
   try {
     if (!platformEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Complete identity verification to send messages.' }
+    if (!userId) return { success: false, error: 'Sign in to send messages.' }
     const id = await persistMessage(userId, input)
     revalidatePath('/marketplace/messages')
     revalidatePath('/marketplace/notifications')

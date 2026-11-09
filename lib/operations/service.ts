@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { muxConfigured, muxEnabled } from '@/lib/media/config'
 import { addressFingerprint, SPATIAL_TOLERANCE_METERS } from '@/lib/listings/spatial'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
 
 export async function getAdminQueue() {
   const [listings, disputes, renewals, audit] = await Promise.all([
@@ -19,15 +20,15 @@ export async function getAdminQueue() {
 }
 
 export async function moderateListing(actorId: string, listingId: string, operation: 'approve_document' | 'reject_document' | 'publish' | 'suspend', reason: string): Promise<void> {
-  await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT id FROM "Listing" WHERE id=${listingId} FOR UPDATE`
-    await tx.$queryRaw`SELECT u.id FROM "User" u INNER JOIN "Listing" l ON l.lister_id=u.id WHERE l.id=${listingId} FOR UPDATE OF u`
+  await withTransaction(async tx => {
+    await lockRecord(tx, 'listing', listingId)
     const listing = await tx.listing.findUniqueOrThrow({ where: { id: listingId },
       include: { lister: { select: { id: true, kyc_verified: true, username: true } }, documentReview: true,
         verification: true, media: true, payments: { where: { kind: 'listing_fee', status: 'succeeded' } } } })
+    await lockRecord(tx, 'user', listing.lister_id)
     if (listing.lister_id === actorId) throw new Error('Staff cannot moderate their own listing.')
     if (operation === 'publish') {
-      if (listing.listing_status !== 'pending_verification' || !listing.lister.kyc_verified || !listing.lister.username ||
+      if (listing.listing_status !== 'pending_verification' || !listing.lister.id ||
         !listing.document_path || listing.documentReview?.status !== 'approved' || !listing.documentReview.reviewed_by ||
         listing.verification?.spatial_status !== 'matched' || !listing.text_address ||
         listing.verification.address_hash !== addressFingerprint(listing.text_address) ||
@@ -35,7 +36,7 @@ export async function moderateListing(actorId: string, listingId: string, operat
         listing.verification.distance_meters < 0 || listing.verification.distance_meters > SPATIAL_TOLERANCE_METERS ||
         !muxEnabled() || !muxConfigured() || listing.media?.status !== 'ready' ||
         !listing.payments.some(payment => payment.amount_kobo === BigInt(100000) && payment.currency === 'NGN' && payment.user_id === listing.lister_id)) {
-        throw new Error('Publication requires current identity, human document approval, a matching address, ready video and a verified publication fee.')
+        throw new Error('Publication requires an active owner account, human document approval, a matching address, ready video and a verified publication fee.')
       }
       await tx.listing.update({ where: { id: listingId }, data: { listing_status: 'active' } })
     } else if (operation === 'suspend') {
@@ -57,7 +58,8 @@ export async function moderateListing(actorId: string, listingId: string, operat
 }
 
 export async function resolveDispute(actorId: string, disputeId: string, reason: string): Promise<void> {
-  await prisma.$transaction(async tx => {
+  await withTransaction(async tx => {
+    await lockRecord(tx, 'dispute', disputeId)
     const report = await tx.dispute.findUniqueOrThrow({ where: { id: disputeId }, include: { booking: true } })
     if ([report.booking.seeker_id, report.booking.lister_id].includes(actorId)) throw new Error('Staff cannot resolve their own dispute.')
     const updated = await tx.dispute.updateMany({ where: { id: disputeId, status: 'open' }, data: { status: 'resolved', resolution: reason } })

@@ -1,5 +1,9 @@
 export type MediaStatus = 'queued' | 'submitting' | 'uncertain' | 'processing' | 'ready' | 'errored'
 
+// Mongo distinguishes an omitted optional field from an explicit null. Both
+// represent a submission that has not acquired a provider asset identifier.
+export const unboundAssetWhere = { OR: [{ mux_asset_id: null }, { mux_asset_id: { isSet: false } }] }
+
 export function ownsVideoPath(userId: string, path: string): boolean {
   return ownsListingMediaPath(userId, path, 'video')
 }
@@ -7,12 +11,12 @@ export function ownsVideoPath(userId: string, path: string): boolean {
 export function ownsListingMediaPath(userId: string, path: string, kind: 'video' | 'poster'): boolean {
   const parts = path.split('/')
   return parts.length === 3 && parts[0] === userId && parts.every(part => /^[\w.-]+$/.test(part) && !part.includes('..')) &&
-    (kind === 'video' ? /\.(webm|mp4)$/ : /\.jpg$/).test(parts[2])
+    (kind === 'video' ? /\.(webm|mp4|mov)$/ : /\.jpg$/).test(parts[2])
 }
 
 export function validSource(info: { size?: number; contentType?: string }): boolean {
   return typeof info.size === 'number' && info.size > 0 && info.size <= 209715200 &&
-    ['video/mp4', 'video/webm'].includes(info.contentType?.split(';')[0] ?? '')
+    ['video/mp4', 'video/webm', 'video/quicktime'].includes(info.contentType?.split(';')[0] ?? '')
 }
 
 export function mediaDecision(asset: {

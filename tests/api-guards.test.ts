@@ -53,9 +53,15 @@ describe('API identity and authorization', () => {
     expect(mocks.getUser).toHaveBeenCalledWith()
   })
 
-  it('uses current database verification, not user-editable metadata', async () => {
-    mocks.profile.mockResolvedValue({ kyc_verified: false, username: 'member', account_type: 'individual', individualProfile: { id: 'profile' }, organizationProfile: null })
-    await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/bookings`, { headers: { authorization: 'Bearer token' } }), { verified: true })).rejects.toMatchObject({ status: 403, code: 'VERIFICATION_REQUIRED' })
+  it('allows an authenticated account with no KYC, username or completed profile', async () => {
+    mocks.profile.mockResolvedValue({ id: 'member', kyc_verified: false, username: null, account_type: null, individualProfile: null, organizationProfile: null })
+    await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/bookings`, { headers: { authorization: 'Bearer token' } }), { verified: true })).resolves.toMatchObject({ mode: 'bearer' })
+    expect(mocks.profile).toHaveBeenCalledWith({ where: { id: `api-user-${identityNumber}` }, select: { id: true } })
+  })
+
+  it('still rejects a missing account before a protected mutation', async () => {
+    mocks.profile.mockResolvedValue(null)
+    await expect(requireApiIdentity(new Request(`${appUrl}/api/v1/bookings`, { headers: { authorization: 'Bearer token' } }), { verified: true })).rejects.toMatchObject({ status: 403, code: 'ACCOUNT_REQUIRED' })
   })
 
   it('rejects expired credentials and anonymous Supabase accounts', async () => {

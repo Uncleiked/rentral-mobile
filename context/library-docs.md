@@ -1,13 +1,51 @@
 ## Rentral Library Docs & Integration Patterns
 
-### Current Implementation Corrections (2026-09-24)
+### Current integration rules (2026-11-09)
+
+- npm 11.19.1 workspaces/Node 24.x replace pnpm. Next.js 16.4.5 includes the reviewed
+  security update. Follow installed Next docs for cookies/proxy/route APIs.
+- Prisma 6.19.3 is pinned for MongoDB; Prisma 7 is not a supported Mongo upgrade.
+  npm build generates the client before Next. Setup creates reviewed partial
+  indexes, validators and readiness marker; do not use SQL migrations/db push.
+- Mongo transactions require a replica set. withTransaction retries only bounded
+  conflicts; lockRecord performs actual revision writes. Shared services own
+  rental overlap, ledger balance and hold-credit rules. Provider calls stay outside.
+- jose signs local HS256 access tokens and separate purpose-bound file tokens.
+  AuthSession and current User.staff_role are authoritative; scrypt-v1 uses
+  N=32768/r=8/p=3, random salts, constant-time verification and no plaintext storage.
+  Access tokens last 15 minutes, refresh/session lifetime of 30 days, refresh hashes rotate once. Do not embed
+  JWT_SECRET or database credentials in any EXPO_PUBLIC setting.
+- Expo SDK 58/React 19.3/RN 0.88.1 uses Router, SecureStore, camera/location,
+  document picker, native video and Inter. Match versions with expo install --check.
+  Native clients use local JWT API endpoints; OAuth/PKCE/Supabase are removed.
+- Local filesystem adapters validate actual upload type/magic/size and owner paths;
+  private signed URLs expire within 300 seconds and support Range/HEAD. iOS MOV
+  stays video/quicktime; Android MP4/web WebM keep their real formats. No bucket
+  migration or hosted Storage service is needed for this implementation.
+- Didit initiation/browser SDK and KYC/profile access gates are removed. Historical
+  signed webhook receipts remain local records and never change marketplace access.
+- Development password-reset codes use the private opt-in local email outbox;
+  production delivery remains unavailable. File routes never expose that outbox.
+- Optional media/payment/AI/geocoding providers remain separately configured and
+  gated. Existing timeout/idempotency/uncertain-result constraints still apply.
+- Oluso monitoring requires both OLUSO_ENABLED=true and OLUSO_API_KEY. It is
+  optional; missing monitoring configuration must not break backend startup.
+- Vitest covers isolated policies and services; the owned Mongo Docker runner
+  proves actual transaction/storage invariants without using application data.
+  Browser/bundle/fixture results do not establish physical-device/provider release.
+
+### Historical integration notes (2026-09-24 / 2026-11-07)
+
+The remaining Supabase/PostgreSQL, pnpm, OAuth, staging and migration snippets are
+retained as history and do not override the current rules above. Financial/provider
+limits still apply until replaced by accepted implementation and evidence.
 
 Build correction (2026-11-07): `pnpm build` explicitly runs `prisma generate`
 before Next.js. Never rely on an existing local `.prisma/client` or dependency
 postinstall behavior. Prisma config omits its optional datasource when DIRECT_URL
 is absent, allowing code generation without database credentials. Migration
 commands still require a configured datasource and are not part of the build.
-Node24.x is selected in package.json to match the supported local/runtime major.
+Node 24.x is selected in package.json to match the supported local/runtime major.
 
 Use `context/production-plan.md` for the current architecture. The snippets below include historical APIs and must be verified against current provider documentation before implementation.
 

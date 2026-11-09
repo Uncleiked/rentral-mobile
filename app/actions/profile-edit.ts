@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
 import { captureServerEvent } from '@/lib/posthog'
 import { requireUserId, revalidateProfilePaths } from '@/lib/action-helpers'
+import { verifiedAvatarReference } from '@/lib/local-storage/avatars'
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/
 const MAX_BIO_LENGTH = 280
@@ -85,7 +86,7 @@ export async function updateProfileIdentity(data: { username: string; bio: strin
       return { success: false, error: 'That username is already taken.' }
     }
 
-    console.error('[actions/profile-edit] updateProfileIdentity failed:', error)
+    console.error('[actions/profile-edit] Profile update failed:', error instanceof Error ? error.name : 'UnknownError')
     return { success: false, error: 'Could not save your profile. Please try again.' }
   }
 }
@@ -96,10 +97,10 @@ export async function requestEmailChange(newEmail: string): Promise<ActionResult
     return { success: false, error: 'Enter a valid email address.' }
   }
 
-  const supabase = await createClient()
+  const client = await createClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await client.auth.getUser()
 
   if (!user) {
     return { success: false, error: 'Not authenticated' }
@@ -108,7 +109,7 @@ export async function requestEmailChange(newEmail: string): Promise<ActionResult
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const next = encodeURIComponent('/marketplace/profile?email_change=check')
 
-  const { error } = await supabase.auth.updateUser(
+  const { error } = await client.auth.updateUser(
     { email: parsed.data },
     { emailRedirectTo: `${appUrl}/auth/callback?next=${next}` }
   )
@@ -127,15 +128,16 @@ export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> 
     return { success: false, error: 'Not authenticated' }
   }
 
-  const parsed = z.string().trim().url().safeParse(avatarUrl)
+  const parsed = z.string().trim().min(1).max(1500).safeParse(avatarUrl)
   if (!parsed.success) {
     return { success: false, error: 'Invalid image URL.' }
   }
 
   try {
+    const reference = await verifiedAvatarReference(parsed.data, userId)
     const dbUser = await prisma.user.update({
       where: { id: userId },
-      data: { avatar_url: parsed.data },
+      data: { avatar_url: reference },
       select: { username: true },
     })
 
@@ -144,7 +146,7 @@ export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> 
     await captureServerEvent(userId, 'profile_updated', { field: 'avatar' })
     return { success: true }
   } catch (error) {
-    console.error('[actions/profile-edit] updateAvatarUrl failed:', error)
-    return { success: false, error: 'Could not save your photo. Please try again.' }
+    console.error('[actions/profile-edit] Photo update failed:', error instanceof Error ? error.name : 'UnknownError')
+    return { success: false, error: 'Choose a JPEG, PNG or WEBP photo uploaded to your own account, then try again.' }
   }
 }

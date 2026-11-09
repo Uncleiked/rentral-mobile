@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-text-primary tracking-wide mb-2">Reset Password</h1>
           <p className="text-sm text-text-secondary">
-            Enter your email and we&apos;ll send you a link to get back into your account.
+            Enter your email to request a password reset code.
           </p>
         </div>
 
@@ -54,7 +54,8 @@ export default function ForgotPasswordPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-sm text-text-primary font-medium">Check your email for the reset link.</p>
+            <p className="text-sm text-text-primary font-medium">For this local setup, check the backend’s private email outbox for your code.</p>
+            <Link href="/reset-password" className="text-sm font-medium text-accent-hover">Use reset code</Link>
             <Link 
               href="/sign-in" 
               className="bg-glass-light border border-glass-border-medium text-text-primary font-bold uppercase tracking-wide text-xs py-3 px-4 rounded-xl hover:bg-glass-light-hover active:scale-95 transition-all backdrop-blur-md"
@@ -84,7 +85,7 @@ export default function ForgotPasswordPage() {
               className="mt-2 bg-accent-primary text-text-inverse font-bold uppercase tracking-wide text-xs py-3 px-4 rounded-xl hover:bg-accent-hover active:scale-95 transition-all shadow-lg text-center disabled:opacity-70 disabled:cursor-not-allowed"
               disabled={isLoading}
             >
-              {isLoading ? 'Sending...' : 'Send Reset Link'}
+              {isLoading ? 'Requesting...' : 'Request reset code'}
             </button>
             
             <div className="mt-4 text-center">

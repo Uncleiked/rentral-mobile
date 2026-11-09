@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/server'
 import { captureServerEvent } from '@/lib/posthog'
-import { onboardingComplete } from '@/lib/auth-policy'
 import { emailChangeSchema } from '@/lib/schemas'
 import { authErrorMessage } from '@/lib/auth-errors'
 
@@ -31,7 +30,7 @@ export async function login(formData: FormData): Promise<AuthResult> {
   if (userError || !user) return { error: authErrorMessage(userError) }
   await captureServerEvent(user.id, 'user_signed_in')
 
-  return { success: true, redirectTo: onboardingComplete(user) ? '/marketplace' : '/onboarding' }
+  return { success: true, redirectTo: '/marketplace' }
 }
 
 export async function signup(formData: FormData): Promise<AuthResult> {
@@ -41,7 +40,7 @@ export async function signup(formData: FormData): Promise<AuthResult> {
   const password = String(formData.get('password') ?? '')
   const parsed = emailChangeSchema.safeParse({ email })
   if (!parsed.success) return { error: 'Enter a valid email address.' }
-  if (password.length < 6) return { error: 'Password must be at least 6 characters.' }
+  if (password.length < 8) return { error: 'Password must be at least 8 characters.' }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const { data, error } = await supabase.auth.signUp({
@@ -66,5 +65,5 @@ export async function signup(formData: FormData): Promise<AuthResult> {
     }
   }
 
-  return { success: true, redirectTo: '/onboarding' }
+  return { success: true, redirectTo: '/marketplace' }
 }

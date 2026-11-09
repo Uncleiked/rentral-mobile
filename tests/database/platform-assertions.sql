@@ -3,6 +3,10 @@ DECLARE t text;
 BEGIN
   IF (SELECT count(*) FROM public."User") <> 3 THEN RAISE EXCEPTION 'Auth signup trigger did not produce profiles'; END IF;
   IF (SELECT public FROM storage.buckets WHERE id='listings-media') THEN RAISE EXCEPTION 'Original media bucket must be private'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id='listings-media' AND file_size_limit=209715200
+    AND allowed_mime_types @> ARRAY['video/webm','video/mp4','video/quicktime','image/jpeg']) THEN
+    RAISE EXCEPTION 'Native QuickTime support must preserve the bounded existing media formats';
+  END IF;
   IF (SELECT public FROM storage.buckets WHERE id='compliance-docs') IS DISTINCT FROM false THEN RAISE EXCEPTION 'Existing compliance bucket must be private'; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname='supabase_realtime' AND tablename='Message') THEN RAISE EXCEPTION 'Message publication missing'; END IF;
   FOREACH t IN ARRAY ARRAY['User','IndividualProfile','OrganizationProfile','Listing','Booking','PaymentIntent','PaymentEvent','LedgerTransaction','LedgerEntry','AdminAudit','Notification','MarketEvent','ListingVerification','DocumentReview','Renewal'] LOOP

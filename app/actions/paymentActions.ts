@@ -11,7 +11,7 @@ export async function startBookingPaymentAction(bookingId: string): Promise<Acti
   if (!paymentsEnabled()) return { success: false, error: 'Online payments are being prepared. Your booking remains unpaid.' }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Sign in and complete verification before paying.' }
+    if (!userId) return { success: false, error: 'Sign in before paying.' }
     const url = await startBookingPayment(userId, z.string().uuid().parse(bookingId))
     revalidatePath(`/marketplace/bookings/${bookingId}`)
     return { success: true, data: url }
@@ -25,7 +25,7 @@ export async function reconcilePaymentAction(reference: string): Promise<ActionR
   if (!paymentsEnabled()) return { success: false, error: 'Online payments are not available yet.' }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Sign in and complete verification.' }
+    if (!userId) return { success: false, error: 'Sign in to continue.' }
     const status = await reconcilePayment(userId, z.string().regex(/^rentral-[a-f0-9-]{36}$/).parse(reference))
     revalidatePath('/marketplace/bookings')
     return { success: true, data: status }
@@ -38,7 +38,7 @@ export async function startListingFeePaymentAction(listingId: string): Promise<A
   if (!paymentsEnabled()) return { success: false, error: 'Online payments are being prepared. Your listing remains unpaid.' }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Complete identity verification before paying.' }
+    if (!userId) return { success: false, error: 'Sign in before paying.' }
     const url = await startListingFeePayment(userId, z.string().uuid().parse(listingId))
     revalidatePath('/marketplace/listing')
     return { success: true, data: url }

@@ -12,7 +12,16 @@ const eslintConfig = defineConfig([
     ".next-verify/**",
     "out/**",
     "build/**",
+    "test-results/**",
+    "playwright-report/**",
+    "apps/mobile/.expo/**",
+    "apps/mobile/dist/**",
     "next-env.d.ts",
+    "**/.expo/**",
+    "apps/mobile/dist/**",
+    "apps/mobile/android/**",
+    "apps/mobile/ios/**",
+    ".npm-migration-backup/**",
   ]),
 ]);
 

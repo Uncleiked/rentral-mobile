@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { platformEnabled } from '@/lib/platform'
 import { conversationMember, messageInput, type ChatThread } from './policy'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
 
 export async function getInbox(userId: string) {
   if (!platformEnabled()) return []
@@ -51,27 +52,31 @@ export async function getThread(userId: string, id: string, beforeId?: string): 
 }
 
 export async function beginConversation(userId: string, listingId: string): Promise<string> {
-  const listing = await prisma.listing.findFirst({
-    where: { id: listingId, listing_status: 'active', lister_id: { not: userId }, lister: { kyc_verified: true } },
-    select: { id: true, lister_id: true },
+  return withTransaction(async tx => {
+    await lockRecord(tx, 'listing', listingId)
+    if (!await lockRecord(tx, 'user', userId)) throw new Error('FORBIDDEN')
+    const listing = await tx.listing.findFirst({
+      where: { id: listingId, listing_status: 'active', lister_id: { not: userId } },
+      select: { id: true, lister_id: true },
+    })
+    if (!listing) throw new Error('LISTING_UNAVAILABLE')
+    const conversation = await tx.conversation.upsert({
+      where: { listing_id_seeker_id: { listing_id: listing.id, seeker_id: userId } },
+      create: { listing_id: listing.id, seeker_id: userId, lister_id: listing.lister_id },
+      update: {}, select: { id: true },
+    })
+    return conversation.id
   })
-  if (!listing) throw new Error('LISTING_UNAVAILABLE')
-  const conversation = await prisma.conversation.upsert({
-    where: { listing_id_seeker_id: { listing_id: listing.id, seeker_id: userId } },
-    create: { listing_id: listing.id, seeker_id: userId, lister_id: listing.lister_id },
-    update: {}, select: { id: true },
-  })
-  return conversation.id
 }
 
 export async function persistMessage(userId: string, input: unknown): Promise<string> {
   const data = messageInput.parse(input)
-  return prisma.$transaction(async tx => {
+  return withTransaction(async tx => {
     // Serialize the sender's retries and rate counter, including across threads.
-    // The same lock keeps a concurrent identity revocation authoritative.
-    await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`
-    const sender = await tx.user.findUnique({ where: { id: userId }, select: { kyc_verified: true } })
-    if (!sender?.kyc_verified) throw new Error('FORBIDDEN')
+    // Account deletion and retries must not race message persistence.
+    await lockRecord(tx, 'user', userId)
+    const sender = await tx.user.findUnique({ where: { id: userId }, select: { id: true } })
+    if (!sender) throw new Error('FORBIDDEN')
     const thread = await tx.conversation.findUnique({ where: { id: data.conversationId },
       select: { seeker_id: true, lister_id: true } })
     if (!thread || !conversationMember(userId, thread)) throw new Error('FORBIDDEN')

@@ -1,10 +1,11 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ cookies: vi.fn(), consent: vi.fn(), setCookie: vi.fn(), authenticated: vi.fn(), create: vi.fn(), remove: vi.fn(), query: vi.fn() }))
+const mocks = vi.hoisted(() => ({ cookies: vi.fn(), consent: vi.fn(), setCookie: vi.fn(), authenticated: vi.fn(), create: vi.fn(), remove: vi.fn(), query: vi.fn(), lock: vi.fn() }))
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
-vi.mock('@/lib/db', () => ({ default: { marketEvent: { createMany: mocks.create, deleteMany: mocks.remove }, $queryRaw: mocks.query } }))
+vi.mock('@/lib/db', () => ({ default: { marketEvent: { deleteMany: mocks.remove, aggregateRaw: mocks.query } } }))
+vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ marketEvent: { upsert: mocks.create } }) }))
 import { recordInsightAction } from '@/app/actions/analyticsActions'
 import { getMarketInsights } from '@/lib/analytics/insights'
 
@@ -13,6 +14,7 @@ const input = { event: 'search', category: 'house', intent: 'rent', neighborhood
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true'); vi.stubEnv('RENTRAL_ANALYTICS_ENABLED', 'true'); vi.stubEnv('ANALYTICS_HASH_SECRET', secret)
   mocks.cookies.mockResolvedValue({ get: mocks.consent, set: mocks.setCookie }); mocks.consent.mockReturnValue({ value: 'yes' }); mocks.authenticated.mockResolvedValue('raw-user-1')
+  mocks.lock.mockResolvedValue(true)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -34,17 +36,35 @@ describe('consented aggregate analytics boundaries', () => {
     expect(await recordInsightAction(input)).toMatchObject({ success: true })
     const saved = mocks.create.mock.calls[0][0]
     const expected = createHmac('sha256', secret).update(`${new Date().toISOString().slice(0, 7)}:raw-user-1`).digest('hex')
-    expect(saved).toMatchObject({ data: [{ subject_hash: expected, event_type: 'search', category: 'house', neighborhood: 'yaba', budget_band: '1m-3m', bedrooms: 2 }], skipDuplicates: true })
+    expect(saved).toMatchObject({ create: { subject_hash: expected, event_type: 'search', category: 'house', neighborhood: 'yaba', budget_band: '1m-3m', bedrooms: 2 }, update: {} })
+    expect(saved.where.dedupe_key).toBe(saved.create.dedupe_key)
+    expect(mocks.lock).toHaveBeenCalledWith(expect.any(Object), 'user', 'raw-user-1')
     expect(JSON.stringify(saved)).not.toContain('raw-user-1')
   })
-  it('uses a current-month distinct-contributor threshold inside the aggregate SQL', async () => {
+  it('does not record an event after the authenticated account disappears', async () => {
+    mocks.lock.mockResolvedValue(false)
+    expect(await recordInsightAction(input)).toMatchObject({ success: false })
+    expect(mocks.create).not.toHaveBeenCalled()
+  })
+  it('uses a UTC current-month distinct-contributor threshold inside the Mongo pipeline', async () => {
     mocks.query.mockResolvedValue([])
     expect(await getMarketInsights()).toEqual([])
-    const [parts, threshold] = mocks.query.mock.calls[0]
-    const query = parts.join('')
-    expect(query).toContain("date_trunc('month', now())")
-    expect(query).toContain('HAVING count(DISTINCT subject_hash)>=')
-    expect(threshold).toBe(10)
-    expect(query).not.toContain('SELECT subject_hash')
+    const { pipeline } = mocks.query.mock.calls[0][0]
+    const now = new Date()
+    expect(pipeline[0]).toEqual({ $match: { createdAt: { $gte: { $date: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString() } } } })
+    expect(pipeline[1].$group._id.subject).toBe('$subject_hash')
+    expect(pipeline[2].$group.people).toEqual({ $sum: 1 })
+    expect(pipeline[3]).toEqual({ $match: { people: { $gte: 10 } } })
+    expect(pipeline.at(-1).$project).not.toHaveProperty('subject_hash')
+  })
+  it('parses coarse aggregate counts including Mongo extended JSON long values', async () => {
+    mocks.query.mockResolvedValue([{ category: 'house', intent: 'rent', neighborhood: 'yaba', budget_band: '1m-3m', people: { $numberLong: '10' }, searches: 30 }])
+    expect(await getMarketInsights()).toEqual([{ category: 'house', intent: 'rent', neighborhood: 'yaba', budget_band: '1m-3m', people: 10, searches: 30 }])
+  })
+  it.each([
+    { people: 9 }, { subject_hash: 'private-contributor' }, { neighborhood: 'Exact street address' }, { people: { $numberLong: '9007199254740992' } },
+  ])('rejects private, malformed or under-threshold aggregate output %o', async change => {
+    mocks.query.mockResolvedValue([{ category: 'house', intent: 'rent', neighborhood: 'yaba', budget_band: '1m-3m', people: 10, searches: 30, ...change }])
+    await expect(getMarketInsights()).rejects.toThrow()
   })
 })

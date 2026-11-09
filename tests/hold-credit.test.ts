@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Prisma } from '@prisma/client'
 import { allocateHoldCredit, bookingPayableKobo, holdCreditTerms, holdCreditCanConfirm, reviewHoldCredit } from '@/lib/bookings/hold-credit'
+vi.mock('@/lib/database/transactions', () => ({ lockRecord: async () => true }))
 
 const now = new Date('2030-01-01T12:00:00Z')
 const starts_at = new Date('2030-02-01T12:00:00Z'), ends_at = new Date('2030-02-03T12:00:00Z')
@@ -9,7 +10,7 @@ const hold = { id: holdId, listing_id: 'listing', seeker_id: 'renter', lister_id
   amount_kobo: BigInt(2000000), settlement_status: 'unsettled', expires_at: new Date('2030-01-02T12:00:00Z'), starts_at, ends_at }
 const rental = { ...hold, id: 'rental', kind: 'rental', status: 'requested', amount_kobo: BigInt(10000000), expires_at: null,
   pricing_snapshot: { period: 'day', days: 2, baseKobo: '10000000', totalKobo: '10000000', fees: [], holdBookingId: holdId } }
-const payment = { user_id: 'renter', status: 'succeeded', amount_kobo: BigInt(2000000), currency: 'NGN', paid_at: new Date('2030-01-01T11:00:00Z') }
+const payment = { user_id: 'renter', kind: 'booking', status: 'succeeded', amount_kobo: BigInt(2000000), currency: 'NGN', paid_at: new Date('2030-01-01T11:00:00Z'), ledger: { kind: 'provider_collection' } }
 
 describe('one-time holding credit', () => {
   it('allocates integer kobo and caps the balance deadline to the original hold', () => {
@@ -49,6 +50,14 @@ describe('one-time holding credit', () => {
     const tx = { $queryRaw: vi.fn(), booking: { findUnique: vi.fn(async () => ({ ...hold, payments: [payment], allocated_hold_credit: null })), update: vi.fn() }, user: { findFirst: vi.fn(async () => ({ id: 'renter' })) }, holdCreditAllocation: { create: vi.fn() } } as unknown as Prisma.TransactionClient
     expect(await allocateHoldCredit(tx, { ...rental, amount_kobo: hold.amount_kobo, pricing_snapshot: { ...rental.pricing_snapshot, totalKobo: '2000000' } }, now)).toMatchObject({ status: 'confirmed', expires_at: null, pricing_snapshot: { payableKobo: '0' } })
   })
+  it('requires the source payment to have a recorded collection ledger before consuming the hold', async () => {
+    const update = vi.fn(), create = vi.fn()
+    const tx = { booking: { findUnique: vi.fn(async () => ({ ...hold, payments: [{ ...payment, ledger: null }], allocated_hold_credit: null })), update },
+      holdCreditAllocation: { create } } as unknown as Prisma.TransactionClient
+    await expect(allocateHoldCredit(tx, rental, now)).rejects.toThrow('recorded collection receipt')
+    expect(update).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+  })
   it('routes cancelled/expired conversion funds to review without deleting the allocation', async () => {
     const updateMany = vi.fn()
     const tx = { holdCreditAllocation: { findUnique: vi.fn(async () => ({ hold_booking_id: holdId, rental_booking_id: rental.id })) }, booking: { updateMany } } as unknown as Prisma.TransactionClient
@@ -57,8 +66,9 @@ describe('one-time holding credit', () => {
   })
   it('rechecks the original source before confirming additional money', async () => {
     const source = { ...hold, status: 'converted', payments: [payment] }
-    const tx = { holdCreditAllocation: { findUnique: vi.fn(async () => ({ amount_kobo: hold.amount_kobo, hold_booking: source })) } } as unknown as Prisma.TransactionClient
-    const target = { ...rental, status: 'awaiting_payment', hold_credit_kobo: hold.amount_kobo }
+    const tx = { holdCreditAllocation: { findUnique: vi.fn(async () => ({ amount_kobo: hold.amount_kobo, currency: 'NGN', hold_booking: source })) } } as unknown as Prisma.TransactionClient
+    const target = { ...rental, status: 'awaiting_payment', hold_credit_kobo: hold.amount_kobo, expires_at: new Date('2030-01-01T12:30:00Z'),
+      pricing_snapshot: { ...rental.pricing_snapshot, holdCreditKobo: '2000000', payableKobo: '8000000' } }
     expect(await holdCreditCanConfirm(tx, target, now)).toBe(true)
     expect(await holdCreditCanConfirm(tx, target, hold.expires_at)).toBe(false)
     source.settlement_status = 'requires_review'

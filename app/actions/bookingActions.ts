@@ -16,7 +16,7 @@ export async function requestBookingAction(input: unknown): Promise<ActionResult
   if (!platformEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Sign in and complete verification to book.' }
+    if (!userId) return { success: false, error: 'Sign in to book.' }
     const id = await requestBooking(userId, input)
     revalidatePath('/marketplace/bookings')
     return { success: true, data: { id } }
@@ -27,7 +27,7 @@ export async function updateBookingAction(id: string, operation: unknown): Promi
   if (!platformEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Complete verification to manage bookings.' }
+    if (!userId) return { success: false, error: 'Sign in to manage bookings.' }
     await changeBookingStatus(userId, z.string().uuid().parse(id), z.enum(BOOKING_OPERATIONS).parse(operation))
     revalidatePath('/marketplace/bookings'); revalidatePath(`/marketplace/bookings/${id}`)
     return { success: true, data: undefined }
@@ -38,7 +38,7 @@ export async function checkInBookingAction(id: string, input: unknown): Promise<
   if (!platformEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Complete verification to check in.' }
+    if (!userId) return { success: false, error: 'Sign in to check in.' }
     await checkInBooking(userId, z.string().uuid().parse(id), input)
     revalidatePath(`/marketplace/bookings/${id}`)
     return { success: true, data: undefined }
@@ -49,7 +49,7 @@ export async function issueHandshakeCodeAction(id: string): Promise<ActionResult
   if (!platformEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Complete verification to check in.' }
+    if (!userId) return { success: false, error: 'Sign in to check in.' }
     return { success: true, data: await issueHandshakeCode(userId, z.string().uuid().parse(id)) }
   } catch (error) { return fail(error) }
 }

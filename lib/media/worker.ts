@@ -1,7 +1,7 @@
 import prisma from '@/lib/db'
 import { muxConfigured, muxEnabled } from './config'
 import { muxClient } from './mux'
-import { mediaDecision } from './policy'
+import { mediaDecision, unboundAssetWhere } from './policy'
 import { processListingMedia, type MediaDispatchResult } from './processing'
 
 const BATCH_SIZE = 2
@@ -56,12 +56,12 @@ export async function runMediaWorker(): Promise<MediaWorkerSummary> {
   }
   const orderBy = [{ updatedAt: 'asc' as const }, { id: 'asc' as const }]
   const stale = await prisma.mediaAsset.findMany({
-    where: { status: 'submitting', mux_asset_id: null, updatedAt: { lte: new Date(Date.now() - STALE_SUBMISSION_MS) } },
+    where: { status: 'submitting', ...unboundAssetWhere, updatedAt: { lte: new Date(Date.now() - STALE_SUBMISSION_MS) } },
     select: { id: true, updatedAt: true }, orderBy, take: BATCH_SIZE,
   })
   for (const job of stale) {
     const result = await prisma.mediaAsset.updateMany({
-      where: { id: job.id, status: 'submitting', mux_asset_id: null, updatedAt: job.updatedAt },
+      where: { id: job.id, status: 'submitting', ...unboundAssetWhere, updatedAt: job.updatedAt },
       data: { status: 'uncertain', error_code: 'submission_unknown' },
     })
     summary.staleSubmissions += result.count
@@ -79,7 +79,7 @@ export async function runMediaWorker(): Promise<MediaWorkerSummary> {
   const queued = await prisma.mediaAsset.findMany({
     where: {
       status: 'queued', attempts: { lt: 5 }, updatedAt: { lte: cutoff },
-      listing: { lister: { kyc_verified: true }, listing_status: { in: ['pending_verification', 'active'] } },
+      listing: { listing_status: { in: ['pending_verification', 'active'] } },
     },
     select: { listing_id: true, listing: { select: { lister_id: true } } }, orderBy, take: BATCH_SIZE,
   })

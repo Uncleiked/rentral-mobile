@@ -1,5 +1,45 @@
 ## Rentral Code Standards
 
+### Current standards (2026-11-09)
+
+Use Node 24.x and npm 11.19.1 workspaces, npm scripts and package-lock.json. The
+user's npm instruction supersedes older pnpm rules. Keep Prisma 6.19.3 for the
+MongoDB connector; generated-client build/type checks remain mandatory.
+
+Web files follow the installed Next.js16 documentation. Native files use strict
+Expo SDK 58 TypeScript, Expo Router defaults, StyleSheet, semantic src/theme.ts
+tokens and bundled Inter; the native workspace has its own typecheck. Never send
+Prisma, MongoDB connections, JWT_SECRET or private server modules to the app.
+EXPO_PUBLIC_API_URL is the only optional public mobile configuration.
+
+Authenticate JWTs against current database sessions and roles; never trust
+decoded/editable profile metadata. Signed-in members do not require KYC, a chosen
+username or profile completion. Preserve historical identity evidence truthfully.
+Ownership, participant, staff, asset-review and payment checks remain required.
+
+Use reviewed Mongo indexes/validators/readiness setup; never use old SQL migrations
+or db push. Critical multi-document writes use withTransaction and actual revision
+locks, common listing first for reservations. Recheck overlaps and exact integer
+kobo balances. Keep provider HTTP, password hashing and external side effects
+outside retry callbacks; never blindly retry ambiguous payments or listing creates.
+Immutable ledgers/audits/hold allocations must not be edited or deleted.
+
+Private GPS belongs in ListingLocation only. Return allowlisted public data and
+coarse neighborhoods. Files must pass ownership, actual byte/type/magic, path and
+link checks; private files need scoped short-lived signed URLs. Never serve the
+development email outbox, metadata or tombstone markers.
+
+Keep real-provider/device acceptance separate from unit, mock-browser and fixture
+evidence. Use only explicitly owned disposable databases in automated integration
+tests; never select or reset the configured application database. No hosted writes
+or data imports are part of this implementation.
+
+### Historical standards below
+
+The remaining baseline is preserved for history. Its Supabase/PostGIS, OAuth,
+mandatory-identity, package-manager and provider examples are superseded by the
+current standards above; applicable UI, strict typing and financial safeguards stay.
+
 Implementation rules and strict conventions for the Rentral marketplace. Any AI agent or engineer operating on this codebase must adhere to these guidelines without exception. These rules prevent pattern drift, enforce spatial security, and maintain the integrity of our zero-trust architecture.
 
 ## Engineering Mindset & Spatial Security

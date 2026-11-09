@@ -42,5 +42,5 @@ export async function decideSafetyAppealAction(input: unknown): Promise<ActionRe
     await decideSafetyAppeal(actor, input)
     revalidateSafety()
     return { success: true, data: undefined }
-  } catch { return { success: false, error: 'Decision not saved. Use an independent reviewer with current identity verification and explain the decision in at least 30 characters.' } }
+  } catch { return { success: false, error: 'Decision not saved. Use an independent reviewer with staff access and explain the decision in at least 30 characters.' } }
 }

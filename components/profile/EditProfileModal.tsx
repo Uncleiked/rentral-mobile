@@ -203,10 +203,10 @@ export function EditProfileModal({ profile, isOpen, onClose }: EditProfileModalP
 
         <div className="h-px bg-border-subtle" />
 
-        {/* Read-only KYC fields */}
+        {/* Previously saved personal details */}
         <div className="flex flex-col gap-4">
           <p className="text-xs text-text-muted leading-relaxed">
-            These details come from identity verification and can&apos;t be changed here.
+            These are your previously saved personal details. Your public username and bio can be updated above.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

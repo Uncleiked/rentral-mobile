@@ -1,8 +1,38 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import prisma from '@/lib/db'
+import type { Prisma } from '@prisma/client'
+import { lockRecord, withTransaction } from '@/lib/database/transactions'
 
 export const SPATIAL_TOLERANCE_METERS = 100
+// WGS84 latitude/longitude, evaluated on the IUGG mean-radius sphere. This is
+// a bounded local proximity test, not an ellipsoidal survey or proof of presence.
+const EARTH_MEAN_RADIUS_METERS = 6371008.8
+export type GeographicPoint = { longitude: number; latitude: number }
+const geographicPoint = z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90) })
+const storedPoint = z.object({ type: z.literal('Point'), coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]) }).strict()
+
+export function distanceMetersWgs84(from: GeographicPoint, to: GeographicPoint): number {
+  geographicPoint.parse(from); geographicPoint.parse(to)
+  const radians = Math.PI / 180
+  const latitudeDelta = (to.latitude - from.latitude) * radians
+  const longitudeDelta = (to.longitude - from.longitude) * radians
+  const halfChord = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(from.latitude * radians) * Math.cos(to.latitude * radians) * Math.sin(longitudeDelta / 2) ** 2
+  return 2 * EARTH_MEAN_RADIUS_METERS * Math.asin(Math.sqrt(Math.min(1, Math.max(0, halfChord))))
+}
+
+function decodePoint(value: unknown): GeographicPoint | null {
+  const parsed = storedPoint.safeParse(value)
+  return parsed.success ? { longitude: parsed.data.coordinates[0], latitude: parsed.data.coordinates[1] } : null
+}
+
+export async function listingProximity(tx: Prisma.TransactionClient, listingId: string, longitude: number, latitude: number, maxMeters: number): Promise<boolean> {
+  const caller = geographicPoint.safeParse({ longitude, latitude })
+  if (!caller.success || !Number.isFinite(maxMeters) || maxMeters < 0) return false
+  const location = await tx.listingLocation.findUnique({ where: { listing_id: listingId }, select: { geometry: true } })
+  const recorded = decodePoint(location?.geometry)
+  return recorded !== null && distanceMetersWgs84(recorded, caller.data) <= maxMeters
+}
 export function addressFingerprint(address: string): string {
   return createHash('sha256').update(address.trim().toLowerCase().replace(/\s+/g, ' ')).digest('hex')
 }
@@ -29,16 +59,18 @@ export async function verifyListingAddress(listingId: string): Promise<'matched'
   // A city/district centroid cannot verify an individual asset address.
   if (!result || result.properties.rank.confidence < 0.8 || !['building', 'amenity'].includes(result.properties.result_type)) return 'unavailable'
   const [longitude, latitude] = result.geometry.coordinates
-  const rows = await prisma.$queryRaw<{ distance: number | null }[]>`
-    SELECT extensions.ST_Distance(hardware_coordinates,
-      extensions.ST_SetSRID(extensions.ST_MakePoint(${longitude},${latitude}),4326)::extensions.geography) AS distance
-    FROM "Listing" WHERE id=${listingId} AND text_address=${listing.text_address}
-  `
-  const distance = rows[0]?.distance
-  const status = typeof distance === 'number' && Number.isFinite(distance)
-    ? distance <= SPATIAL_TOLERANCE_METERS ? 'matched' : 'mismatch' : 'unavailable'
-  await prisma.listingVerification.upsert({ where: { listing_id: listingId },
-    create: { listing_id: listingId, address_hash: hash, spatial_status: status, distance_meters: distance },
-    update: { address_hash: hash, spatial_status: status, distance_meters: distance, checked_at: new Date() } })
-  return status
+  return withTransaction(async tx => {
+    if (!await lockRecord(tx, 'listing', listingId)) return 'unavailable'
+    const current = await tx.listing.findUnique({ where: { id: listingId }, select: { text_address: true } })
+    // A delayed geocoder response cannot approve an address edited meanwhile.
+    if (!current?.text_address || addressFingerprint(current.text_address) !== hash) return 'unavailable'
+    const location = await tx.listingLocation.findUnique({ where: { listing_id: listingId }, select: { geometry: true } })
+    const recorded = decodePoint(location?.geometry)
+    const distance = recorded ? distanceMetersWgs84(recorded, { longitude, latitude }) : null
+    const status = distance === null ? 'unavailable' : distance <= SPATIAL_TOLERANCE_METERS ? 'matched' : 'mismatch'
+    await tx.listingVerification.upsert({ where: { listing_id: listingId },
+      create: { listing_id: listingId, address_hash: hash, spatial_status: status, distance_meters: distance },
+      update: { address_hash: hash, spatial_status: status, distance_meters: distance, checked_at: new Date() } })
+    return status
+  })
 }

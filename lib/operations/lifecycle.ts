@@ -1,21 +1,22 @@
 import prisma from '@/lib/db'
 import { platformEnabled } from '@/lib/platform'
 import { expireListingReservations } from '@/lib/bookings/service'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
+import { ensureNotification } from './notifications'
 
 export async function runLifecycleBatch(): Promise<{ expiredListings: number; reminders: number; emails: number; prunedEvents: number }> {
   if (!platformEnabled() || process.env.LIFECYCLE_WORKER_ENABLED !== 'true') throw new Error('WORKER_DISABLED')
   const now = new Date()
-  const expiredListings = await prisma.$transaction(async tx => {
-    const listings = await tx.$queryRaw<{ id: string }[]>`
-      SELECT l.id FROM "Listing" l WHERE EXISTS (SELECT 1 FROM "Booking" b
-        WHERE b.listing_id=l.id AND b.expires_at<=${now} AND
-        (b.status='awaiting_payment' OR (b.status='confirmed' AND b.kind='hold')))
-      ORDER BY l.id LIMIT 20 FOR UPDATE OF l SKIP LOCKED
-    `
-    for (const listing of listings) {
-      await expireListingReservations(tx, listing.id, now)
-    }
-    return listings.length
+  const expirationFilter = { expires_at: { lte: now }, OR: [{ status: 'awaiting_payment' }, { status: 'confirmed', kind: 'hold' }] }
+  const candidates = await prisma.booking.groupBy({ by: ['listing_id'], where: expirationFilter,
+    orderBy: { listing_id: 'asc' }, take: 20 })
+  let expiredListings = 0
+  for (const candidate of candidates) expiredListings += await withTransaction(async tx => {
+    if (!await lockRecord(tx, 'listing', candidate.listing_id)) return 0
+    const pending = await tx.booking.findFirst({ where: { listing_id: candidate.listing_id, ...expirationFilter }, select: { id: true } })
+    if (!pending) return 0
+    await expireListingReservations(tx, candidate.listing_id, now)
+    return 1
   })
   const leases = await prisma.booking.findMany({
     where: { kind: 'rental', status: { in: ['confirmed', 'completed'] }, listing: { category: 'house' },
@@ -23,11 +24,13 @@ export async function runLifecycleBatch(): Promise<{ expiredListings: number; re
       ends_at: { gt: now, lte: new Date(now.getTime() + 30 * 86400000) } },
     select: { id: true, seeker_id: true, ends_at: true }, take: 50, orderBy: { ends_at: 'asc' },
   })
-  const reminders = leases.length ? await prisma.notification.createMany({ skipDuplicates: true, data: leases.map(lease => ({
-    user_id: lease.seeker_id, kind: 'renewal', title: 'Your lease is nearing renewal',
-    body: 'Record your renewal and who received the payment. References remain pending until supported evidence is reviewed.',
-    href: '/marketplace/renewals', dedupe_key: `renewal:${lease.id}:${lease.ends_at.toISOString()}`,
-  })) }) : { count: 0 }
+  let reminders = 0
+  for (const lease of leases) reminders += await withTransaction(async tx => {
+    if (!await lockRecord(tx, 'booking', lease.id)) return 0
+    return await ensureNotification(tx, { user_id: lease.seeker_id, kind: 'renewal', title: 'Your lease is nearing renewal',
+      body: 'Record your renewal and who received the payment. References remain pending until supported evidence is reviewed.',
+      href: '/marketplace/renewals', dedupe_key: `renewal:${lease.id}:${lease.ends_at.toISOString()}` }) ? 1 : 0
+  })
   let emails = 0
   const key = process.env.RESEND_API_KEY, from = process.env.RENTRAL_EMAIL_FROM
   if (key && from) {
@@ -51,5 +54,5 @@ export async function runLifecycleBatch(): Promise<{ expiredListings: number; re
     }
   }
   const pruned = await prisma.marketEvent.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - 90 * 86400000) } } })
-  return { expiredListings, reminders: reminders.count, emails, prunedEvents: pruned.count }
+  return { expiredListings, reminders, emails, prunedEvents: pruned.count }
 }

@@ -1,6 +1,51 @@
 ## Rentral: Multi-Asset Spatial Trust Architecture
 
-> Current implementation and production design: [Architecture and Delivery Plan](production-plan.md), reviewed 2026-09-24. The older examples below describe the original target and contain outdated routes/provider assumptions. Use the new plan when they conflict.
+## Current architecture — 2026-11-09
+
+- Node 24.x/npm 11.19.1 workspace: Next.js 16.4.5 web/API and Expo SDK 58 native app.
+- MongoDB via pinned Prisma 6.19.3. Do not upgrade to Prisma 7 until its MongoDB
+  connector is supported and accepted. Mongo requires a replica set; reviewed
+  indexes/validators/readiness marker come from `npm run db:setup`, not SQL
+  migrations or `prisma db push`.
+- Local JWT email/password accounts: salted scrypt-v1 hashes; access tokens for 15 minutes,
+  hashed one-use rotating refresh/session lifetime of 30 days; every access reads the current
+  private AuthSession and User staff_role. JWT_SECRET stays backend-only.
+- Web HttpOnly cookies and native bearer transport call the same server domain
+  services. Native code never imports Prisma, filesystem access or server secrets.
+  Cookie refresh shares bounded in-flight work; direct refresh remains strict CAS.
+- Local filesystem storage under RENTRAL_STORAGE_DIR (default workspace/storage).
+  Owner-scoped streamed uploads validate size/type/magic/path; private reads need
+  short-lived purpose/bucket/path-bound JWTs and support Range/HEAD.
+- KYC initiation/onboarding/profile gates are removed. Existing identity history
+  remains truthful, separate from authentication and authorization. Supporting
+  asset documents/publication review are still required where applicable.
+- Actual revision writes lock shared listing/booking/user records before state
+  checks. Bounded conflict retries contain database work only. Rental/hold overlap
+  protection, balanced immutable ledger inserts and one-use paid-hold allocation
+  are enforced in shared services. Provider HTTP never runs inside retry callbacks.
+- Capture GPS is private ListingLocation geometry, not a public Listing scalar.
+  Bounded Haversine checks replace PostGIS distance SQL; public projections never
+  return raw coordinates. Monthly Insights count distinct contributors and hide
+  cohorts below ten people.
+- Central Prisma guards reject direct/nested mutation of ledger/audit/allocation
+  records; cross-document balance/allocation constraints remain service-owned.
+  This is not protection against privileged raw database administration.
+
+The user selected local operation. Setup preserves existing nonempty environment
+values; no legacy data import, hosted write, provider activation or deployment
+ran. Supabase has no active role. Historical PostgreSQL migrations are archived
+source and must not be replayed into Mongo. Existing financial/provider gates
+and acceptance requirements remain in force. See [API](mobile-api.md),
+[implementation](expo-implementation.md), and [setup](../README.md).
+
+Oluso monitoring is optional and starts only when OLUSO_ENABLED=true and
+OLUSO_API_KEY are configured; unconfigured monitoring does not block startup.
+
+## Historical architecture below — superseded stack and examples
+
+> Historical target: [Architecture and Delivery Plan](production-plan.md), reviewed
+> 2026-09-24. Preserve its provider/financial constraints, but use the current
+> architecture above for stack, authentication, persistence and local setup.
 
 ### Stack Overview
 

@@ -3,12 +3,17 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
+  url = env("MONGODB_URL")
+  relationMode = "prisma"
 }
 
 model User {
-  id               String   @id @default(uuid())
+  revision Int @default(0)
+  id               String   @id @map("_id") @default(uuid())
   email            String   @unique
+  password_hash    String?
+  staff_role       String?
   username         String?  @unique
   kyc_verified     Boolean  @default(false)
   account_type     String? // 'individual' or 'organization'
@@ -41,19 +46,21 @@ model User {
   adminActions AdminAudit[]
   documentReviews DocumentReview[]
   renewals Renewal[]
+  sessions AuthSession[]
+  passwordResets PasswordReset[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
 
 model Listing {
-  id               String  @id @default(uuid())
+  revision Int @default(0)
+  id               String  @id @map("_id") @default(uuid())
   lister_id        String
-  lister           User    @relation(fields: [lister_id], references: [id], onDelete: Cascade)
+  lister           User    @relation(fields: [lister_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   category         String // 'house' | 'car' | 'boat'
-  // Nullable to allow partial 'draft' rows; a DB CHECK constraint
-  // (Listing_posted_complete_check) forces completeness for any other status.
+  // Drafts may be partial; submission/publication services validate completeness.
   text_address     String?
-  base_rent_amount Decimal? @db.Decimal(12, 2)
+  base_rent_amount Float?
   asset_metadata   Json?
   video_path       String? // listings-media object path ({uid}/{mediaFolder}/video_raw.ext)
   poster_path      String? // listings-media object path (JPEG frame)
@@ -68,10 +75,7 @@ model Listing {
   payments         PaymentIntent[]
   documentReview   DocumentReview?
   verification     ListingVerification?
-  // Written only via raw SQL (ST_SetSRID/ST_MakePoint) inside the save
-  // transaction; Prisma excludes Unsupported columns from every query result,
-  // which enforces the "never expose raw hardware coordinates" invariant.
-  hardware_coordinates Unsupported("extensions.geography(Point, 4326)")?
+  privateLocation  ListingLocation?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -80,9 +84,10 @@ model Listing {
 }
 
 model MediaAsset {
-  id              String   @id @default(uuid())
+  revision Int @default(0)
+  id              String   @id @map("_id") @default(uuid())
   listing_id      String   @unique
-  listing         Listing  @relation(fields: [listing_id], references: [id], onDelete: Restrict)
+  listing         Listing  @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   source_path     String
   status          String   @default("queued")
   mux_asset_id    String?  @unique
@@ -90,26 +95,26 @@ model MediaAsset {
   duration        Float?
   attempts        Int      @default(0)
   error_code      String?
-  createdAt       DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   receipts        MediaWebhookReceipt[]
 
   @@index([status, updatedAt])
 }
 
 model MediaWebhookReceipt {
-  event_id        String   @id
+  event_id        String   @id @map("_id")
   media_id        String
-  media           MediaAsset @relation(fields: [media_id], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  media           MediaAsset @relation(fields: [media_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt       DateTime @default(now())
 
   @@index([media_id])
 }
 
 model IndividualProfile {
-  id            String   @id @default(uuid())
+  id            String   @id @map("_id") @default(uuid())
   userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   full_name     String
   date_of_birth String
   phone_number  String
@@ -121,9 +126,9 @@ model IndividualProfile {
 }
 
 model OrganizationProfile {
-  id                String   @id @default(uuid())
+  id                String   @id @map("_id") @default(uuid())
   userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   organization_name String
   phone_number      String
   country           String
@@ -133,53 +138,55 @@ model OrganizationProfile {
 }
 
 model WebhookLog {
-  id           String   @id @default(uuid())
+  id           String   @id @map("_id") @default(uuid())
   event_id     String   @unique
   webhook_type String
   status       String?
   session_id   String?
   raw_body     String
   processed_at DateTime?
-  event_created_at DateTime? @db.Timestamptz(3)
-  metadata_synced_at DateTime? @db.Timestamptz(3)
+  event_created_at DateTime?
+  metadata_synced_at DateTime?
   created_at   DateTime @default(now())
 
   @@index([session_id, event_created_at(sort: Desc)])
 }
 
 model SavedListing {
+  id String @id @default(uuid()) @map("_id")
   user_id String
   listing_id String
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  listing Listing @relation(fields: [listing_id], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  @@id([user_id, listing_id])
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+  @@unique([user_id, listing_id])
   @@index([listing_id])
 }
 
 model Booking {
-  id String @id @default(uuid())
+  revision Int @default(0)
+  id String @id @map("_id") @default(uuid())
   listing_id String
   seeker_id String
   lister_id String
-  listing Listing @relation(fields: [listing_id], references: [id], onDelete: Restrict)
-  seeker User @relation("BookingSeeker", fields: [seeker_id], references: [id], onDelete: Restrict)
-  lister User @relation("BookingLister", fields: [lister_id], references: [id], onDelete: Restrict)
+  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  seeker User @relation("BookingSeeker", fields: [seeker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lister User @relation("BookingLister", fields: [lister_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   kind String
   status String @default("requested")
-  starts_at DateTime @db.Timestamptz(3)
-  ends_at DateTime @db.Timestamptz(3)
-  expires_at DateTime? @db.Timestamptz(3)
+  starts_at DateTime
+  ends_at DateTime
+  expires_at DateTime?
   amount_kobo BigInt
   hold_credit_kobo BigInt @default(0)
   currency String @default("NGN")
   settlement_status String @default("unsettled")
   pricing_snapshot Json?
   handshake_code_hash String?
-  seeker_checked_in_at DateTime? @db.Timestamptz(3)
-  lister_checked_in_at DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  seeker_checked_in_at DateTime?
+  lister_checked_in_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   payments PaymentIntent[]
   reviews Review[]
   disputes Dispute[]
@@ -193,13 +200,14 @@ model Booking {
 }
 
 model PaymentIntent {
-  id String @id @default(uuid())
+  revision Int @default(0)
+  id String @id @map("_id") @default(uuid())
   booking_id String?
   listing_id String?
   user_id String
-  booking Booking? @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  listing Listing? @relation(fields: [listing_id], references: [id], onDelete: Restrict)
-  user User @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  booking Booking? @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  listing Listing? @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   provider String @default("paystack")
   kind String
   reference String @unique
@@ -210,9 +218,9 @@ model PaymentIntent {
   status String @default("created")
   checkout_url String?
   provider_transaction_id String? @unique
-  paid_at DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  paid_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   events PaymentEvent[]
   ledger LedgerTransaction?
   @@index([user_id, createdAt(sort: Desc)])
@@ -221,52 +229,52 @@ model PaymentIntent {
 }
 
 model PaymentEvent {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   payment_id String
-  payment PaymentIntent @relation(fields: [payment_id], references: [id], onDelete: Restrict)
+  payment PaymentIntent @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   event_key String @unique
   event_type String
   payload_hash String
-  processed_at DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  processed_at DateTime?
+  createdAt DateTime @default(now())
   @@index([payment_id])
 }
 
 model LedgerTransaction {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   payment_id String @unique
-  payment PaymentIntent @relation(fields: [payment_id], references: [id], onDelete: Restrict)
+  payment PaymentIntent @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   currency String @default("NGN")
   kind String
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime @default(now())
   entries LedgerEntry[]
 }
 
 model LedgerEntry {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   transaction_id String
-  transaction LedgerTransaction @relation(fields: [transaction_id], references: [id], onDelete: Restrict)
+  transaction LedgerTransaction @relation(fields: [transaction_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   account_key String
   direction String
   amount_kobo BigInt
   currency String @default("NGN")
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime @default(now())
   @@index([transaction_id])
   @@index([account_key, createdAt])
 }
 
 model Conversation {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   listing_id String
   seeker_id String
   lister_id String
-  listing Listing @relation(fields: [listing_id], references: [id], onDelete: Restrict)
-  seeker User @relation("ConversationSeeker", fields: [seeker_id], references: [id], onDelete: Restrict)
-  lister User @relation("ConversationLister", fields: [lister_id], references: [id], onDelete: Restrict)
-  seeker_read_at DateTime? @db.Timestamptz(3)
-  lister_read_at DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  seeker User @relation("ConversationSeeker", fields: [seeker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lister User @relation("ConversationLister", fields: [lister_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  seeker_read_at DateTime?
+  lister_read_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   messages Message[]
   @@unique([listing_id, seeker_id])
   @@index([seeker_id, updatedAt(sort: Desc)])
@@ -274,115 +282,116 @@ model Conversation {
 }
 
 model Message {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   conversation_id String
   sender_id String
   body String
   client_id String
   shared_listing_id String?
-  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Restrict)
-  sender User @relation(fields: [sender_id], references: [id], onDelete: Restrict)
-  sharedListing Listing? @relation(fields: [shared_listing_id], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sender User @relation(fields: [sender_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sharedListing Listing? @relation(fields: [shared_listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
   @@unique([sender_id, client_id])
   @@index([conversation_id, createdAt, id])
   @@index([shared_listing_id])
 }
 
 model Review {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   booking_id String
   author_id String
   subject_id String
   rating Int
   comment String
-  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  author User @relation("ReviewAuthor", fields: [author_id], references: [id], onDelete: Restrict)
-  subject User @relation("ReviewSubject", fields: [subject_id], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  author User @relation("ReviewAuthor", fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subject User @relation("ReviewSubject", fields: [subject_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
   @@unique([booking_id, author_id])
   @@index([subject_id, createdAt(sort: Desc)])
   @@index([author_id])
 }
 
 model Dispute {
-  id String @id @default(uuid())
+  revision Int @default(0)
+  id String @id @map("_id") @default(uuid())
   booking_id String
   opened_by String
   reason String
   status String @default("open")
   resolution String?
-  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  opener User @relation(fields: [opened_by], references: [id], onDelete: Restrict)
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opener User @relation(fields: [opened_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   safetyNotices SafetyNotice[]
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([booking_id])
   @@index([opened_by])
   @@index([status, createdAt])
 }
 
 model Notification {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   user_id String
   kind String
   title String
   body String
   href String?
-  read_at DateTime? @db.Timestamptz(3)
+  read_at DateTime?
   dedupe_key String? @unique
   email_status String @default("pending")
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
   @@index([user_id, createdAt(sort: Desc)])
 }
 
 model AdminAudit {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   actor_id String
   action String
   target_type String
   target_id String
   reason String
   metadata Json?
-  actor User @relation(fields: [actor_id], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  actor User @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
   @@index([actor_id, createdAt(sort: Desc)])
   @@index([target_type, target_id])
 }
 
 model DocumentReview {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   listing_id String @unique
   status String @default("pending")
   findings Json
   reviewed_by String?
-  listing Listing @relation(fields: [listing_id], references: [id], onDelete: Restrict)
-  reviewer User? @relation(fields: [reviewed_by], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewer User? @relation(fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([status, createdAt])
   @@index([reviewed_by])
 }
 
 model Renewal {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   booking_id String
   user_id String
   reference String
   recipient_route String
   status String @default("pending_review")
-  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  user User @relation(fields: [user_id], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@unique([booking_id, reference])
   @@index([user_id, createdAt(sort: Desc)])
 }
 
 // Consent-based, coarse telemetry. Never store raw user IDs, search text or GPS.
 model MarketEvent {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   subject_hash String
   event_type String
   category String
@@ -391,34 +400,35 @@ model MarketEvent {
   budget_band String
   bedrooms Int?
   dedupe_key String @unique
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime @default(now())
   @@index([createdAt, category, neighborhood])
   @@index([subject_hash, createdAt])
 }
 
 model ListingVerification {
-  listing_id String @id
+  listing_id String @id @map("_id")
   address_hash String
   spatial_status String @default("pending")
   distance_meters Float?
-  checked_at DateTime @default(now()) @db.Timestamptz(3)
-  listing Listing @relation(fields: [listing_id], references: [id], onDelete: Restrict)
+  checked_at DateTime @default(now())
+  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model SafetyNotice {
-  id String @id @default(uuid())
+  revision Int @default(0)
+  id String @id @map("_id") @default(uuid())
   subject_id String
   dispute_id String
   issued_by String
   category String
   private_reason String
   status String @default("active")
-  removed_at DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
-  subject User @relation("SafetySubject", fields: [subject_id], references: [id], onDelete: Restrict)
-  issuer User @relation("SafetyIssuer", fields: [issued_by], references: [id], onDelete: Restrict)
-  dispute Dispute @relation(fields: [dispute_id], references: [id], onDelete: Restrict)
+  removed_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  subject User @relation("SafetySubject", fields: [subject_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  issuer User @relation("SafetyIssuer", fields: [issued_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dispute Dispute @relation(fields: [dispute_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   appeal SafetyAppeal?
   @@unique([dispute_id, subject_id])
   @@index([issued_by])
@@ -426,31 +436,70 @@ model SafetyNotice {
 }
 
 model SafetyAppeal {
-  id String @id @default(uuid())
+  revision Int @default(0)
+  id String @id @map("_id") @default(uuid())
   notice_id String @unique
   appellant_id String
   statement String
   status String @default("pending")
   decided_by String?
   decision_reason String?
-  decided_at DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
-  notice SafetyNotice @relation(fields: [notice_id], references: [id], onDelete: Restrict)
-  appellant User @relation("SafetyAppellant", fields: [appellant_id], references: [id], onDelete: Restrict)
-  decider User? @relation("SafetyDecider", fields: [decided_by], references: [id], onDelete: Restrict)
+  decided_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  notice SafetyNotice @relation(fields: [notice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appellant User @relation("SafetyAppellant", fields: [appellant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decider User? @relation("SafetyDecider", fields: [decided_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@index([status, createdAt])
   @@index([appellant_id, createdAt(sort: Desc)])
   @@index([decided_by])
 }
 
 model HoldCreditAllocation {
-  id String @id @default(uuid())
+  id String @id @map("_id") @default(uuid())
   hold_booking_id String @unique
   rental_booking_id String @unique
   amount_kobo BigInt
   currency String @default("NGN")
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  hold_booking Booking @relation("HoldCreditSource", fields: [hold_booking_id], references: [id], onDelete: Restrict)
-  rental_booking Booking @relation("HoldCreditTarget", fields: [rental_booking_id], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  hold_booking Booking @relation("HoldCreditSource", fields: [hold_booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rental_booking Booking @relation("HoldCreditTarget", fields: [rental_booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+// Private capture geometry is deliberately outside the public Listing record.
+// `id` is the listing UUID; never serialize this collection to a client.
+model ListingLocation {
+  id String @id @map("_id")
+  listing_id String @unique
+  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  geometry Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuthSession {
+  id String @id @default(uuid()) @map("_id")
+  user_id String
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refresh_hash String @unique
+  expires_at DateTime
+  revoked_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([user_id, expires_at])
+  @@index([expires_at])
+}
+
+model PasswordReset {
+  id String @id @default(uuid()) @map("_id")
+  user_id String
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  token_hash String @unique
+  expires_at DateTime
+  used_at DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([user_id, expires_at])
+  @@index([expires_at])
 }

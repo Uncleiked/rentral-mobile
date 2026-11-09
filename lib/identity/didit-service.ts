@@ -1,25 +1,23 @@
-import { Prisma } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
-import prisma from '@/lib/db'
-import { createAdminClient } from '@/lib/admin'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { diditLogBody, diditVerificationStatus, sameDiditEvent, verificationRestrictionRank, IdentityProcessingError, type DiditEnvelope } from './didit-policy'
 
 const sessionEvents = ['status.updated', 'data.updated']
 type EventResult = { eventId: string; userId: string | null; needsSync: boolean; applied: boolean; verificationStatus?: string; accountType?: string | null }
 
-function decisionInput(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-  if (value === undefined || value === null) return Prisma.JsonNull
-  const parsed = z.json().parse(value)
-  return parsed === null ? Prisma.JsonNull : parsed
+function decisionInput(value: unknown): Prisma.InputJsonValue | null {
+  if (value === undefined || value === null) return null
+  return z.json().parse(value)
 }
 
-/** Row lock serializes session changes and event application; no network in SQL. */
+/** Actual account writes serialize historical session decisions inside Mongo. */
 export async function applyDiditEvent(event: DiditEnvelope): Promise<EventResult> {
   const sessionId = event.session_id ?? event.business_session_id ?? null
   const sessionEvent = sessionEvents.includes(event.webhook_type)
   if (sessionEvent && (!event.vendor_data || !sessionId || !event.workflow_id || !event.status)) throw new IdentityProcessingError(400, 'missing session fields')
-  return prisma.$transaction(async tx => {
-    if (sessionEvent && event.vendor_data) await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${event.vendor_data} FOR UPDATE`
+  return withTransaction(async tx => {
+    if (sessionEvent && event.vendor_data) await lockRecord(tx, 'user', event.vendor_data)
     const log = await tx.webhookLog.upsert({
       where: { event_id: event.event_id }, update: {},
       create: { event_id: event.event_id, webhook_type: event.webhook_type, status: event.status ?? null,
@@ -61,44 +59,21 @@ export async function applyDiditEvent(event: DiditEnvelope): Promise<EventResult
       data: { kyc_verified: status === 'verified', verification_status: status, didit_decision: decisionInput(event.decision) },
     })
     if (changed.count !== 1) throw new IdentityProcessingError(503, 'session changed; retry')
-    // DB application and the ordering marker commit atomically. Auth metadata is
-    // a retriable navigation cache; sensitive actions check the current DB row.
+    // Historical identity data and ordering markers commit atomically. These
+    // values never grant JWT permissions or gate marketplace access.
     await tx.webhookLog.update({ where: { event_id: event.event_id }, data: { processed_at: now, event_created_at: eventTime, metadata_synced_at: null } })
     return { eventId: event.event_id, userId: event.vendor_data, needsSync: true, applied: true, verificationStatus: status, accountType: user.account_type }
   })
 }
 
-const snapshotSelect = {
-  id: true, account_type: true, verification_kind: true, verification_status: true,
-  kyc_verified: true, username: true, didit_session_id: true, didit_workflow_id: true,
-  individualProfile: { select: { id: true } }, organizationProfile: { select: { id: true } },
-} satisfies Prisma.UserSelect
-type Snapshot = Prisma.UserGetPayload<{ select: typeof snapshotSelect }>
-
-function appMetadata(user: Snapshot) {
-  const profile = user.account_type === 'individual' ? user.individualProfile : user.account_type === 'organization' ? user.organizationProfile : null
-  return { account_type: user.account_type, verification_kind: user.verification_kind,
-    verification_status: user.verification_status, kyc_verified: user.kyc_verified,
-    username: user.username, profile_completed: Boolean(profile) }
-}
-
-function fingerprint(user: Snapshot): string {
-  return JSON.stringify({ ...appMetadata(user), session: user.didit_session_id, workflow: user.didit_workflow_id })
-}
-
 export async function reconcileDiditMetadata(userId: string, eventId: string): Promise<void> {
-  // Network calls stay outside DB locks. An older in-flight write must reread the
-  // current decision and correct itself if a revocation committed while it ran.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const before = await prisma.user.findUnique({ where: { id: userId }, select: snapshotSelect })
-    if (!before) throw new IdentityProcessingError(503, 'identity reconciliation unavailable')
-    const { error } = await createAdminClient().auth.admin.updateUserById(userId, { app_metadata: appMetadata(before) })
-    if (error) throw new IdentityProcessingError(503, 'identity reconciliation unavailable')
-    const after = await prisma.user.findUnique({ where: { id: userId }, select: snapshotSelect })
-    if (after && fingerprint(before) === fingerprint(after)) {
-      await prisma.webhookLog.update({ where: { event_id: eventId }, data: { metadata_synced_at: new Date() } })
-      return
-    }
-  }
-  throw new IdentityProcessingError(503, 'identity changed during reconciliation; retry')
+  // Local JWT authentication has no external identity metadata cache to update.
+  // Finalize only the historical receipt; no provider or Auth service is called.
+  await withTransaction(async tx => {
+    await lockRecord(tx, 'user', userId)
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } })
+    const event = await tx.webhookLog.findUnique({ where: { event_id: eventId }, select: { processed_at: true } })
+    if (!user || !event?.processed_at) throw new IdentityProcessingError(503, 'identity reconciliation unavailable')
+    await tx.webhookLog.update({ where: { event_id: eventId }, data: { metadata_synced_at: new Date() } })
+  })
 }

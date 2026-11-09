@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({ transaction: vi.fn(), lock: vi.fn(), user: vi.
   count: vi.fn(), create: vi.fn(), update: vi.fn(), notify: vi.fn(), shared: vi.fn(), verified: vi.fn(), authenticated: vi.fn(), markRead: vi.fn(), messages: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, conversation: { findFirst: mocks.thread, updateMany: mocks.markRead }, message: { findMany: mocks.messages } } }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.verified, requireUserId: mocks.authenticated }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import { getThread, persistMessage } from '@/lib/messaging/service'
@@ -31,11 +32,15 @@ describe('messaging authorization and durable retries', () => {
     expect(mocks.messages).not.toHaveBeenCalled()
     expect(mocks.thread).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: threadId, OR: [{ seeker_id: 'outsider' }, { lister_id: 'outsider' }] } }))
   })
-  it('serializes sender work and rechecks revoked KYC inside the transaction', async () => {
-    mocks.user.mockResolvedValue({ kyc_verified: false })
+  it('serializes sender work and rejects a missing account inside the transaction', async () => {
+    mocks.user.mockResolvedValue(null)
     await expect(persistMessage('seeker', input)).rejects.toThrow('FORBIDDEN')
-    expect(mocks.lock.mock.calls[0][0].join('')).toContain('FOR UPDATE')
+    expect(mocks.lock.mock.calls[0]).toEqual(['user', 'seeker'])
     expect(mocks.thread).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled()
+  })
+  it('allows a participant without identity verification', async () => {
+    mocks.user.mockResolvedValue({ id: 'seeker', kyc_verified: false })
+    expect(await persistMessage('seeker', input)).toBe('message-1')
   })
   it('returns the durable ID on a retry without extra messages or notifications', async () => {
     mocks.duplicate.mockResolvedValue({ id: 'already-saved', conversation_id: threadId })
@@ -54,7 +59,7 @@ describe('messaging authorization and durable retries', () => {
     await expect(persistMessage('seeker', input)).rejects.toThrow('RATE_LIMITED')
     expect(mocks.create).not.toHaveBeenCalled()
   })
-  it('checks current verified identity at the action boundary', async () => {
+  it('checks authenticated account access at the action boundary', async () => {
     mocks.verified.mockResolvedValue(null)
     expect(await sendMessageAction(input)).toMatchObject({ success: false })
     expect(mocks.transaction).not.toHaveBeenCalled()

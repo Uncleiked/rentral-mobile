@@ -4,6 +4,10 @@ import prisma from '@/lib/db'
 import { platformEnabled } from '@/lib/platform'
 import { bookingRequestSchema, bookingTransition, bookingQuoteSchema, checkInSchema, nairaToKobo, quoteBookingBreakdown, HOLD_WINDOW_MS, PAYMENT_WINDOW_MS, BookingError, type BookingOperation } from './policy'
 import { allocateHoldCredit, reviewHoldCredit, holdCreditTerms } from './hold-credit'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
+import { listingProximity } from '@/lib/listings/spatial'
+import { bookingWindowAvailable } from './availability'
+import { ensureNotification } from '@/lib/operations/notifications'
 
 const bookingSelect = {
   id: true, listing_id: true, seeker_id: true, lister_id: true, kind: true, status: true,
@@ -47,9 +51,11 @@ export async function expireListingReservations(tx: Prisma.TransactionClient, li
   for (const conversion of conversions) await reviewHoldCredit(tx, conversion.id)
   await tx.booking.updateMany({ where: { listing_id: listingId, expires_at: { lte: now }, status: 'awaiting_payment' }, data: { status: 'expired' } })
   await tx.booking.updateMany({ where: { listing_id: listingId, expires_at: { lte: now }, status: 'confirmed', kind: 'hold' }, data: { status: 'expired', settlement_status: 'requires_review' } })
-  if (holds.length) await tx.notification.createMany({ data: holds.flatMap(hold => [hold.seeker_id, hold.lister_id].map(user_id => ({ user_id,
-    kind: 'hold_expired', title: 'Holding period ended', body: 'The holding period ended. Any compensation or refund is awaiting settlement review.',
-    href: `/marketplace/bookings/${hold.id}`, dedupe_key: `hold-expired:${hold.id}:${user_id}` }))), skipDuplicates: true })
+  for (const hold of holds) for (const user_id of [hold.seeker_id, hold.lister_id]) {
+    await ensureNotification(tx, { user_id, kind: 'hold_expired', title: 'Holding period ended',
+      body: 'The holding period ended. Any compensation or refund is awaiting settlement review.',
+      href: `/marketplace/bookings/${hold.id}`, dedupe_key: `hold-expired:${hold.id}:${user_id}` })
+  }
 }
 
 /** Call under the listing lock: a confirmed live hold protects the entire asset. */
@@ -74,9 +80,9 @@ export async function requestBooking(userId: string, input: unknown): Promise<st
   const parsed = bookingRequestSchema.parse(input)
   const start = new Date(parsed.startsAt), end = new Date(parsed.endsAt), now = new Date()
   if ((!parsed.holdBookingId && start.getTime() < now.getTime() - 60000) || end <= now) throw new BookingError('Choose an available rental period.')
-  return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${parsed.listingId} FOR UPDATE`
-    const listing = await tx.listing.findFirst({ where: { id: parsed.listingId, listing_status: 'active', lister: { kyc_verified: true } }, select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true } })
+  return withTransaction(async tx => {
+    await lockRecord(tx, 'listing', parsed.listingId)
+    const listing = await tx.listing.findFirst({ where: { id: parsed.listingId, listing_status: 'active' }, select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true } })
     if (!listing || !listing.base_rent_amount) throw new BookingError('This listing is unavailable.')
     if (listing.lister_id === userId) throw new BookingError('You cannot book your own listing.')
     await expireListingReservations(tx, listing.id, now)
@@ -98,12 +104,12 @@ export async function requestBooking(userId: string, input: unknown): Promise<st
 }
 
 export async function changeBookingStatus(userId: string, id: string, operation: BookingOperation): Promise<void> {
-  await prisma.$transaction(async tx => {
+  await withTransaction(async tx => {
     const owned = await tx.booking.findFirst({ where: { id, OR: [{ seeker_id: userId }, { lister_id: userId }] }, select: { listing_id: true } })
     if (!owned) throw new BookingError('Booking not found.')
-    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${owned.listing_id} FOR UPDATE`
+    await lockRecord(tx, 'listing', owned.listing_id)
     await expireListingReservations(tx, owned.listing_id, new Date())
-    await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${id} FOR UPDATE`
+    await lockRecord(tx, 'booking', id)
     const booking = await tx.booking.findUniqueOrThrow({ where: { id }, include: { payments: { where: { status: { in: ['succeeded', 'requires_review'] } }, select: { id: true } } } })
     if (operation === 'complete' && booking.kind !== 'rental') throw new BookingError('Inspections require both participants to check in on site.')
     const status = bookingTransition(booking.status, operation, userId === booking.lister_id, userId === booking.seeker_id, booking.payments.length > 0, booking.ends_at <= new Date())
@@ -111,10 +117,11 @@ export async function changeBookingStatus(userId: string, id: string, operation:
     let credit: Awaited<ReturnType<typeof allocateHoldCredit>> = null
     if (operation === 'accept') {
       await assertNoOtherHold(tx, booking.listing_id, booking.seeker_id)
-      const listing = await tx.listing.findFirst({ where: { id: booking.listing_id, listing_status: 'active', lister: { kyc_verified: true } }, select: { id: true } })
+      const listing = await tx.listing.findFirst({ where: { id: booking.listing_id, listing_status: 'active' }, select: { id: true } })
       const isConversion = Boolean(bookingQuoteSchema.safeParse(booking.pricing_snapshot).data?.holdBookingId)
       if (!listing || booking.ends_at <= new Date() || (!isConversion && booking.starts_at <= new Date())) throw new BookingError('This listing or booking period is no longer available.')
       credit = await allocateHoldCredit(tx, booking, new Date())
+      if (!await bookingWindowAvailable(tx, booking)) throw new BookingError('These rental dates overlap an existing reservation. Choose another period.')
     }
     if (operation === 'cancel' && booking.hold_credit_kobo > BigInt(0)) await reviewHoldCredit(tx, id)
     const nextStatus = credit?.status ?? status
@@ -135,18 +142,17 @@ export async function issueHandshakeCode(userId: string, id: string): Promise<st
 export async function checkInBooking(userId: string, id: string, input: unknown): Promise<void> {
   const parsed = checkInSchema.parse(input)
   if (Math.abs(Date.now() - Date.parse(parsed.capturedAt)) > 120000) throw new BookingError('Your location reading is too old. Request a fresh location and retry.')
-  await prisma.$transaction(async tx => {
+  await withTransaction(async tx => {
     const scoped = await tx.booking.findFirst({ where: { id, OR: [{ seeker_id: userId }, { lister_id: userId }] }, select: { listing_id: true, seeker_id: true } })
     if (!scoped) throw new BookingError('Confirmed inspection not found.')
-    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${scoped.listing_id} FOR UPDATE`
+    await lockRecord(tx, 'listing', scoped.listing_id)
     await assertNoOtherHold(tx, scoped.listing_id, scoped.seeker_id)
-    await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${id} FOR UPDATE`
+    await lockRecord(tx, 'booking', id)
     const booking = await tx.booking.findFirst({ where: { id, kind: 'inspection', status: 'confirmed', OR: [{ seeker_id: userId }, { lister_id: userId }] } })
     if (!booking) throw new BookingError('Confirmed inspection not found.')
     const now = new Date()
     if (Math.abs(now.getTime() - booking.starts_at.getTime()) > 4 * 60 * 60 * 1000) throw new BookingError('Check in within four hours of the inspection time.')
-    const proximity = await tx.$queryRaw<{ nearby: boolean }[]>`SELECT extensions.ST_DWithin("hardware_coordinates", extensions.ST_SetSRID(extensions.ST_MakePoint(${parsed.longitude}, ${parsed.latitude}),4326)::extensions.geography,20) AS nearby FROM "Listing" WHERE "id" = ${booking.listing_id}`
-    if (!proximity[0]?.nearby) throw new BookingError('Move closer to the listed asset and try again. Check-in requires being within 20 metres.')
+    if (!await listingProximity(tx, booking.listing_id, parsed.longitude, parsed.latitude, 20)) throw new BookingError('Move closer to the listed asset and try again. Check-in requires being within 20 metres.')
     const isSeeker = booking.seeker_id === userId
     if (!isSeeker && (!parsed.code || createHash('sha256').update(`${id}:${parsed.code}`).digest('hex') !== booking.handshake_code_hash)) throw new BookingError('Ask the renter for the current six-digit check-in code.')
     const otherCheckIn = isSeeker ? booking.lister_checked_in_at : booking.seeker_checked_in_at

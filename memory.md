@@ -1,60 +1,68 @@
-﻿# Memory — Rentral local configuration and continuation
+# Memory — Rentral local Expo, MongoDB and JWT migration
 
-Last updated: 2026-11-07 (Africa/Lagos).
-
-## Authority and current state
-
-User cancelled staging. Use .env.local for development/tests; do not ask for staging setup again. The local app connects to HOSTED Supabase. Automatic approval review rejected applying twelve migrations, then the user explicitly answered KEEP THE HOSTED DATABASE UNCHANGED. Do not apply them, retry or ask again. NO hosted writes ran. Never reset shared data, expose secrets, enable financial/provider flags, commit or push without authorization. Use pnpm10.28.2 via Corepack.
+Last updated: 2026-11-09 (Africa/Lagos); final source validation passed and commit/push authorized.
 
 ## What was built
 
-Latest task: user pasted a Vercel build log (commit82e806a). A fresh install lacked
-the generated Prisma namespace, failing TypeScript. Changed build to prisma generate
-&& next build, kept strict type checking, selected Node24.x matching local v24.22.1.
-Prisma config omits optional datasource without DIRECT_URL so generation requires
-no migration credentials. Builds never run migration/deploy commands. Clean-client
-verification and the production build both passed; final results recorded below.
+Expo Android/iOS client in apps/mobile: Explore/search/filtering, signed listing video/details, saves, bookings/history, inbox/chat, optional account edits and owner camera/GPS/document listing submission. Native cards open web for existing host status actions/checkout/check-in; existing web drafts resume on web.
 
-Broad existing implementation saved: GSAP homepage, responsive feed/grid/discovery/details/saves, real profiles/dashboard, owner Media Vault, category metadata/120s capture, booking/GPS+code inspections, signed Paystack collection and balanced ledger, private messages, mobile-ready API, reviews/disputes, document/admin queues, renewals, optional consented native Insights and lifecycle worker.
+Removed all KYC onboarding/forms/initiation and profile-completion access gates across web/API/domain services. Historical verification evidence remains truthful; no account is marked verified as a bypass. Authentication, ownership, participants, staff and publication/payment checks remain.
 
-Added one-time paid hold-to-rental credit with immutable allocations, exact remainder, concurrency protection and settlement-review states for abandoned conversions. Added staff-reviewed safety notices, affected-user appeals even after KYC revocation, independent reviewer decisions and immutable audit/private evidence. Added compliance-docs restrictive ownership/private-bucket migration. Both feature notes and UI registries saved. All source migrations now total20 through 20261107190000.
+Migrated active persistence to Prisma 6.19.3 MongoDB with reviewed indexes/validators/readiness marker. Shared service changes preserve actual transaction locking, rental/hold overlap exclusion, integer-kobo balanced ledger, immutable audits/allocations, one-use paid hold credit, monthly privacy cohorts and private ListingLocation GPS.
 
-Added pnpm check:local, setup:local:ca and audit:local. Supabase public CA saved in ignored certificates/supabase-ca.crt; SUPABASE_DB_CA_CERT_PATH added to ignored .env.local preserving existing credentials/settings. Verified TLS helper supports pg runtime and Prisma CLI. A pooler's upstream pg_stat_ssl differs from the client's verified TLS socket; corrected preflight's false failure. Filled shareable example backed up in ignored .env.staging.example.private-backup-* before restoring placeholders; active env files preserved. Memory encoding repaired to UTF-8.
+Added local JWT email/password accounts and private session records, development reset-code recovery, current database staff roles, refresh rotation, cookie/native adapters and race protections. Added local filesystem uploads and purpose-bound signed private Range/HEAD downloads with byte/MIME/magic/path/link validation and immutable object paths.
 
-## Decisions
+Current READMEs and context/expo-implementation.md / mobile-api.md document local setup/contracts. Earlier README is archived at context/legacy-web-readme.md. Top current notes in overview/architecture/standards/library/build-plan/progress explicitly supersede old stack guidance.
 
-Keep Next16/React19 modular monolith, strict TypeScript, Prisma/Supabase/PostGIS, Supabase Auth/Didit and pnpm; older Gemini Clerk/SmileID/Stripe sketches do not override current code. Squat-Mates AI stays later. No POS agents or loans. Camera/GPS/AI never guarantees ownership or fraud prevention. Offline bank references stay pending evidence review, not verified fact or credit scores. Collection API support alone does not establish escrow. No provider flags changed.
+## Decisions made
 
-## Verification
+User authority: npm 11.19.1 workspaces, Node 24.x, Expo SDK 58, MongoDB and user information, JWT auth, local uploads, everything local. Do not restore pnpm, Supabase/OAuth/KYC or PostgreSQL assumptions from old context. Prisma 6.19.3 remains pinned because Prisma 7 is not an accepted Mongo connector path.
 
-Latest Vercel fix verification: pnpm build passed with fresh generation and strict
-TypeScript; pnpm test passed357/36 and lint passed. Frozen-lockfile offline install
-in a new credential-free TEMP directory succeeded. Confirmed no generated app
-client beforehand; prisma generate then exported Prisma and User/Booking/SafetyNotice/
-SafetyAppeal/HoldCreditAllocation. A TypeScript probe importing Prisma.UserSelect
-and Prisma.HoldCreditAllocationSelect compiled successfully without DIRECT_URL or
-DATABASE_URL. No cached client or database connection was used in that proof.
-No Vercel deployment, commit or push was performed; user must publish the saved fix
-and redeploy with Build Command pnpm build. Node major is selected as24.x.
+Use npm install; npm run setup:local; start compose.mongodb.yml replica set; npm run db:setup; npm run dev; npm run mobile separately. Setup fills missing/empty local settings and preserves existing nonempty values. Existing ignored MONGODB_URL was preserved; no URI/key is recorded here. JWT secret is backend-only. Mobile only needs optional EXPO_PUBLIC_API_URL; development normally discovers the Expo computer.
 
-- pnpm check:local --remote PASS: required config, matching project, both Auth/Storage keys and both PostgreSQL URLs with verified TLS.
-- Read-only audit: eight completed source-matching migrations, twelve pending; no failed/unknown/changed/gapped history; correct extensions.PostGIS; zero malformed Didit JSON. Current grants/public-media/signup findings match pending hardening. Exact list in context/local-development.md. No hosted mutation ran.
-- pnpm test:357 tests across36 files PASS, including CA and migration-audit regressions.
-- pnpm lint and pnpm typecheck PASS after source/audit freeze.
-- pnpm exec prisma validate PASS. Production build PASS against .env.local using RENTRAL_BUILD_DIR=.next-verify.
-- Playwright:all56 PASS at320/390/768/1440px: public/auth/nav/reduced-motion/API/worker/private-route guards, including appeals. Desktop/phone screenshots inspected.
-- Isolated Docker PostGIS:all20 migrations replayed, private Storage/RLS/Realtime, balanced append-only ledger, safety-appeal and hold-credit invariants PASS. Real rental, duplicate-payment and hold-credit races produced one winner/receipt/allocation with exact balance.
-- Mocks/public browser checks/local SQL do not establish authenticated member/staff, provider, real phone, custody, refund or payout acceptance.
+Mongo requires a replica set. Setup is local by default; remote setup requires separate explicit manual authorization/override. Never use prisma db push, replay historical SQL, import legacy data, or reset the application's database. No hosted changes or old-data import occurred.
 
-## Runtime and handoff
+Passwords: scrypt-v1, N=32768/r=8/p=3, random salts. Access tokens last 15 minutes; one-use refresh credentials rotate within a 30-day session and are stored only as hashes. Every access checks a live non-revoked AuthSession and current staff_role. Development recovery requires AUTH_DEV_EMAIL_OUTBOX=true and writes only private RENTRAL_STORAGE_DIR/mail-outbox; production delivery is unavailable.
 
-Our refreshed production preview runs at http://localhost:3100 with .env.local and .next-verify; unified exec session78644 replaces our old3439 preview. No user development server was stopped. Screenshots in ignored test-results/. Avoid printing raw server logs containing sensitive payloads. Task Docker rentral-platform-test remains running, exact label rentral.task=platform-verification, no published ports. pnpm test:database resets only its marker-protected fixture; never reads app env or contacts hosted Supabase. Coordinate one run at a time.
+Financial/provider constraints remain. No escrow/custody/refund/payout/default-compensation guarantee, live provider activation, deployment or store build/submission. Supporting asset documents are listing review, not personal KYC. The user explicitly authorized committing/pushing the completed source to https://github.com/Uncleiked/rentral-mobile.git; verify Git history/remote and the final delivery response for its outcome.
 
-Source saved in working tree; no commit/push. Latest context/local-development.md, progress-tracker.md, release-readiness.md and both UI registries record current state. Feature notes: hold-credit-implementation.md and safety-appeals-implementation.md. Prior production-plan/architecture remains the baseline.
+## Problems solved
+
+Mongo transaction locking must write revision fields; unchanged updates/read locks do not serialize. Bounded conflict retries were expanded after real concurrent fixture evidence. Nullable unique indexes and readiness marker are prepared explicitly; missing setup fails closed before runtime Prisma operations.
+
+Private GPS moved out of default Listing projections. Haversine checks replace PostGIS SQL and do not claim spheroid equivalence. Mongo optional null/missing media CAS conditions handle both representations.
+
+Old-password login cannot create a new session after password reset: session creation locks/rechecks the verified hash snapshot. Password changes revoke all old sessions and outstanding reset codes. Direct refresh uses strict CAS; web cookie calls share only bounded pending hashed-key work. Losing refresh responses preserve winning cookies; missing access cookies can refresh. Explicit bearer failures never use cookies. Outages remain 503 rather than successful signed-out responses.
+
+Expo TS app.config helper resolution and initial '/' route were repaired earlier. Local JWT now removes PKCE/OAuth callback requirements. Native iOS footage remains real MOV/QuickTime, never a renamed MP4. Actual files/permissions still require phone testing.
+
+Oluso's unconditional startup dependency was repaired: monitoring is optional
+and requires both OLUSO_ENABLED=true and OLUSO_API_KEY. Missing monitoring setup
+must not stop the local app.
+
+The restricted production build could not fetch its configured Google Inter font.
+An allowed-network retry passed without a source workaround; fresh web builds
+need that font download unless already cached.
+
+## Current state
+
+Source delivery is authorized to Uncleiked/rentral-mobile; the coordinating agent handles commit/push. No deployment or store submission is part of this task. npm/Next 16.4.5 security update installed. Persistent local Mongo compose source exists; no persistent dev container was started automatically.
+
+Final checks: npm test 583/58 files passed; 16 ordinary-run fixture tests skipped and separately 16/16 real Mongo passed. Root lint clean. Mobile strict typecheck/Expo compatibility/Doctor 20/20 and Android+iOS Hermes (~3 MB each)/web exports passed. Scan of 85 exported artifacts found zero actual private JWT/Mongo/database values.
+
+Actual Next.js+Mongo localhost HTTP 34 checks passed: JWT/no-KYC/profile, upload/GPS, discovery/signed MOV 206/HEAD, saves/chat/booking isolation, browser cookies/proxy refresh, CSRF/bearer precedence, outbox 404/reset/logout. All test processes/containers were cleaned and generated Next files restored. Ignored report: test-results/localhost-d6caf8d21aa8/report.json. Production build passed with Next.js 16.4.5, strict TypeScript and 48 generated static pages. Earlier mocked Supabase transport smoke is historical.
+
+npm audit --omit=dev reports 8 toolchain dependency findings (3 high Prisma CLI/config/deepmerge; 5 moderate Expo CLI/fingerprint/glob/minimatch). No audit-clean or production-readiness claim. Keep supported Prisma 6 Mongo/Expo versions while tracking safe updates; do not force breaking upgrades/downgrades.
+
+Tests must use only uniquely owned disposable local Mongo/storage fixtures with strict URI/owner/marker checks, process-only test env and label-verified cleanup. Never point automated tests at configured application data. Old PostgreSQL harness/migrations are historical.
 
 ## Next session starts with
 
-1. Keep hosted Supabase unchanged per the user's explicit refusal. Continue source and isolated fixture work. For Vercel, push the reviewed build fix when authorized and redeploy using pnpm build; no migrations are bundled into that command. Keep schema-dependent/provider gates off.
-2. Provider work needs approved OPay merchant product API contracts, Paystack sandbox, Mux/Gemini/Geoapify settings and reachable callbacks. Keep individual gates disabled until acceptance.
-3. Remaining implementation: bank recipients, actual refund/payout reconciliation, automatic holding-default70/30 settlement, auditable ranking, ads/paid Insights entitlements. Richer analytics needs enough consented evidence. No financing/guaranteed predictive claims.
-4. Complete authenticated staff/member appeal journeys, real camera/GPS phones, provider/device/accessibility/load/backup/monitoring checks and deployment. Operating evidence-retention and merchant/custody arrangements remain required. No production release claimed.
+1. Read current README, architecture/current notes, progress tracker and this handoff. Verify final checks/fixture cleanup recorded by the coordinating agent; run npm scripts against source, not historical commands.
+2. For local use, start the supplied replica set and run db:setup explicitly. Check configured endpoint choice without printing credentials; setup preserves any prior nonempty URI. Do not silently replace user settings.
+3. Test physical Android and iOS login/reset, camera/GPS/permissions, capture/upload/playback, LAN access, refresh/logout and network-interruption behavior. Use compatible Expo Go or an owner-controlled local development build.
+4. Keep optional providers disabled until separate accepted configuration/tests. Publication and real payments may remain unavailable without them. Complete provider/operational/security acceptance before considering any release.
+
+## Open questions
+
+Physical-device acceptance and final production/provider operations remain incomplete. Production recovery email delivery is not configured. No legacy data import strategy has been authorized. Git history/remote and the coordinating agent's final response record the authorized source commit/push outcome.

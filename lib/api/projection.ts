@@ -5,6 +5,7 @@ export function publicListing(listing: DiscoveryListing) {
     id: listing.id, title: listing.title, category: listing.category, location: listing.location,
     price: listing.price, pricePeriod: listing.priceDenomination, intent: listing.intent,
     posterUrl: listing.posterUrl, videoUrl: listing.videoUrl, useMux: listing.useMux,
+    mediaEndpoint: `/api/v1/listings/${encodeURIComponent(listing.id)}/media`,
     badges: listing.badges, saved: listing.saved, savingAvailable: listing.savingAvailable,
     holdUntil: listing.holdUntil ?? null,
     host: { username: listing.username, avatarUrl: listing.avatarUrl, identityVerified: listing.isVerified },
@@ -12,7 +13,7 @@ export function publicListing(listing: DiscoveryListing) {
 }
 
 export function publicListingDetails(listing: ListingDetails) {
-  const metadataKeys = ['bedrooms', 'bathrooms', 'kitchens', 'sizeSqm', 'amenities', 'floors', 'state', 'neighborhood', 'propertyType', 'preferences', 'transmission', 'mileageKm', 'seats', 'fuelType', 'vesselType', 'capacityPersons', 'hasCaptain', 'rentalIntent', 'pricePeriod', 'hostCapacity', 'agencyFee', 'legalFee', 'cautionFee', 'serviceCharge']
+  const metadataKeys = ['listingTitle', 'description', 'bedrooms', 'bathrooms', 'kitchens', 'sizeSqm', 'amenities', 'floors', 'state', 'neighborhood', 'propertyType', 'preferences', 'landlordPreferences', 'transmission', 'mileageKm', 'seats', 'fuelType', 'vesselType', 'capacityPersons', 'hasCaptain', 'rentalIntent', 'pricePeriod', 'hostCapacity', 'agencyFee', 'legalFee', 'cautionFee', 'serviceCharge']
   const metadata = Object.fromEntries(metadataKeys.flatMap(key => {
     const value = listing.metadata[key]
     return value !== undefined ? [[key, value]] : []

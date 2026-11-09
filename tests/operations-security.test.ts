@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), findListing: vi.fn(), updateListing: vi.fn(), review: vi.fn(), audit: vi.fn(), notify: vi.fn(), report: vi.fn(), updateReport: vi.fn(), automatedListing: vi.fn(), geocode: vi.fn(), analyze: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, listing: { findUnique: mocks.automatedListing }, adminAudit: { create: mocks.audit } } }))
 vi.mock('@/lib/documents/analyze', () => ({ analyzeListingDocument: mocks.analyze }))
 vi.mock('@/lib/listings/spatial', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/listings/spatial')>(), verifyListingAddress: mocks.geocode }))
@@ -49,10 +50,9 @@ describe('server-owned staff access and publication', () => {
     expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ actor_id: 'staff', action: 'publish' }) }))
   })
-  it.each(['identity', 'username', 'document', 'human', 'address', 'distance', 'media', 'fee', 'feeAmount', 'feeOwner', 'status'])('fails closed when publication lacks %s', async missing => {
+  it.each(['account', 'document', 'human', 'address', 'distance', 'media', 'fee', 'feeAmount', 'feeOwner', 'status'])('fails closed when publication lacks %s', async missing => {
     const listing = eligibleListing()
-    if (missing === 'identity') listing.lister.kyc_verified = false
-    if (missing === 'username') listing.lister.username = ''
+    if (missing === 'account') listing.lister.id = ''
     if (missing === 'document') listing.documentReview.status = 'needs_review'
     if (missing === 'human') listing.documentReview.reviewed_by = ''
     if (missing === 'address') listing.verification.address_hash = 'stale-address-hash'
@@ -65,6 +65,14 @@ describe('server-owned staff access and publication', () => {
     mocks.findListing.mockResolvedValue(listing)
     await expect(moderateListing('staff', listingId, 'publish', 'Synthetic reason')).rejects.toThrow('Publication requires')
     expect(mocks.updateListing).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
+  })
+  it('publishes an otherwise approved listing without owner KYC or a chosen username', async () => {
+    const listing = eligibleListing()
+    listing.lister.kyc_verified = false
+    listing.lister.username = ''
+    mocks.findListing.mockResolvedValue(listing)
+    await moderateListing('staff', listingId, 'publish', 'Reviewed listing evidence')
+    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
   })
   it('prevents self moderation, draft document approval and self dispute resolution', async () => {
     await expect(moderateListing('host', listingId, 'approve_document', 'Synthetic reason')).rejects.toThrow('own listing')

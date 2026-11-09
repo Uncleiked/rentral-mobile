@@ -14,7 +14,7 @@ const categories = [
 ];
 
 const trustSteps = [
-  { number: "01", icon: BadgeCheck, title: "Know who you’re renting from.", description: "Identity checks help you connect with the person behind the listing. Look for the verification status on their profile." },
+  { number: "01", icon: BadgeCheck, title: "Know who you’re renting from.", description: "Member profiles and reviews help you learn about the person behind a listing. Ask questions before making a booking." },
   { number: "02", icon: Camera, title: "See beyond the perfect photo.", description: "Recorded walkthroughs give you a closer look. Explore the space, ask better questions, and decide with more context." },
   { number: "03", icon: ShieldCheck, title: "Keep the important details close.", description: "Save your favourites, speak to the host, and keep your rental requests together. Check each listing’s review status before you commit." },
 ];
@@ -86,7 +86,7 @@ export default function Home(): React.JSX.Element {
             <h2 id="host-title">Your space.<br />Their next chapter.</h2>
             <p>A home, a car, a boat. Turn what you have into someone’s next possibility. Create your profile, record a walkthrough, and submit your listing for review. A fee applies per published listing.</p>
             <Link href="/marketplace/listing/create" className="home-button-primary">Start your listing <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
-            <span className="home-host-note"><BadgeCheck className="h-4 w-4" aria-hidden="true" /> Identity verification required to list.</span>
+            <span className="home-host-note"><BadgeCheck className="h-4 w-4" aria-hidden="true" /> Sign in to create your first listing.</span>
           </div>
         </section>
 

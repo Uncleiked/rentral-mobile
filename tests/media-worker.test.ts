@@ -83,7 +83,7 @@ describe('worker service authorization', () => {
 })
 
 describe('scheduled dispatch and stalled submissions', () => {
-  it('uses bounded, ordered batches and a cooldown with current KYC eligibility', async () => {
+  it('uses bounded, ordered batches and a cooldown without identity onboarding', async () => {
     mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([
       { listing_id: 'listing-1', listing: { lister_id: 'owner' } },
     ])
@@ -92,7 +92,7 @@ describe('scheduled dispatch and stalled submissions', () => {
     expect(mocks.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       take: 2, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
       where: { status: 'queued', attempts: { lt: 5 }, updatedAt: { lte: cutoff },
-        listing: { lister: { kyc_verified: true }, listing_status: { in: ['pending_verification', 'active'] } } },
+        listing: { listing_status: { in: ['pending_verification', 'active'] } } },
     }))
     expect(mocks.dispatch).toHaveBeenCalledWith('listing-1', 'owner', cutoff)
     expect(result.dispatch.submitted).toBe(1)
@@ -101,10 +101,10 @@ describe('scheduled dispatch and stalled submissions', () => {
     mocks.findMany.mockResolvedValueOnce([{ id: 'media-1', updatedAt }])
     const result = await runMediaWorker()
     expect(mocks.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: {
-      status: 'submitting', mux_asset_id: null, updatedAt: { lte: new Date('2026-09-24T08:50:00Z') },
+      status: 'submitting', OR: [{ mux_asset_id: null }, { mux_asset_id: { isSet: false } }], updatedAt: { lte: new Date('2026-09-24T08:50:00Z') },
     } }))
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: 'media-1', status: 'submitting', mux_asset_id: null, updatedAt },
+      where: { id: 'media-1', status: 'submitting', OR: [{ mux_asset_id: null }, { mux_asset_id: { isSet: false } }], updatedAt },
       data: { status: 'uncertain', error_code: 'submission_unknown' },
     })
     expect(result.staleSubmissions).toBe(1)

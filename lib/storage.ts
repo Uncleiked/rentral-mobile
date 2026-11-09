@@ -27,6 +27,7 @@ export const VIDEO_MIME_CANDIDATES = [
 const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
   'video/webm': 'webm',
   'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
 }
 
 export function videoExtensionForMime(mimeType: string): string {

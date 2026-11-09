@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ verified: vi.fn(), transaction: vi.fn(), lock: vi.fn(), booking: vi.fn(), createReview: vi.fn(), notify: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.verified }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction } }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 import { reviewSubject } from '@/lib/trust/policy'
 import { submitReviewAction } from '@/app/actions/trustActions'
@@ -24,7 +25,7 @@ describe('booking-linked review eligibility', () => {
     expect(reviewSubject('outsider', { seeker_id: 'seeker', lister_id: 'host', status: 'completed' })).toBeNull()
     expect(reviewSubject('seeker', { seeker_id: 'seeker', lister_id: 'host', status: 'confirmed' })).toBeNull()
   })
-  it('does not reach the database before the staged-platform and current KYC gates', async () => {
+  it('does not reach the database before platform availability and account authentication', async () => {
     vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'false')
     expect(await submitReviewAction(input)).toMatchObject({ success: false }); expect(mocks.verified).not.toHaveBeenCalled()
     vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true'); mocks.verified.mockResolvedValue(null)

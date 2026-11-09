@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), user: vi.fn(), report: vi.fn(),
   findNotice: vi.fn(), createNotice: vi.fn(), updateNotice: vi.fn(), appealTarget: vi.fn(), findAppeal: vi.fn(), createAppeal: vi.fn(), updateAppeal: vi.fn(), audit: vi.fn(), notify: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction,
   safetyAppeal: { findUnique: mocks.appealTarget }, safetyNotice: { findFirst: mocks.findNotice } } }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -87,8 +88,8 @@ describe('reviewed safety notice authorization', () => {
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ user_id: 'host', href: '/marketplace/appeals' }) }))
   })
 
-  it('denies revoked staff, participant staff and invalid reporters', async () => {
-    mocks.user.mockResolvedValue({ kyc_verified: false, username: 'staff' })
+  it('denies missing staff accounts, participant staff and invalid reporters', async () => {
+    mocks.user.mockResolvedValue(null)
     expect(await issueSafetyNoticeAction(issue)).toMatchObject({ success: false })
     mocks.user.mockResolvedValue({ kyc_verified: true, username: 'staff' })
     mocks.report.mockResolvedValue({ ...report(), booking: { seeker_id: 'staff', lister_id: 'host' } })
@@ -105,12 +106,13 @@ describe('reviewed safety notice authorization', () => {
 })
 
 describe('affected-account redress and independent decisions', () => {
-  it('allows a signed-in account with revoked KYC to reach only the redress workspace', () => {
+  it('allows signed-in accounts without KYC while protecting signed-out access', () => {
     const revoked = { app_metadata: { kyc_verified: false } }
     expect(authRedirect('/marketplace/appeals', revoked)).toBeNull()
     expect(authRedirect('/marketplace/appeals', null)).toBe('/sign-in')
-    expect(authRedirect('/marketplace/appeals-other', revoked)).toBe('/onboarding')
-    expect(authRedirect('/marketplace/admin', revoked)).toBe('/onboarding')
+    expect(authRedirect('/marketplace/appeals-other', revoked)).toBeNull()
+    expect(authRedirect('/marketplace/admin', revoked)).toBeNull()
+    expect(authRedirect('/marketplace/admin', null)).toBe('/sign-in')
   })
 
   it('scopes the appeal to its subject with one notice lock; revocation does not block redress', async () => {

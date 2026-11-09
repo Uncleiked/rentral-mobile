@@ -5,6 +5,7 @@ vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.identity, 
 vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: mocks.find }, $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({
   $queryRaw: mocks.raw, listing: { findFirst: mocks.transactionFind, update: mocks.update }, booking: { count: mocks.count }, documentReview: { updateMany: mocks.review },
 }) } }))
+vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.raw, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ listing: { findFirst: mocks.transactionFind, update: mocks.update }, booking: { count: mocks.count }, documentReview: { updateMany: mocks.review } }) }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/server', () => ({ after: vi.fn() }))
@@ -15,6 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true')
   mocks.identity.mockResolvedValue('user-1'); mocks.find.mockResolvedValue({ id: data.listingId, category: 'house', listing_status: 'active', lister: { username: 'host' } })
   mocks.transactionFind.mockResolvedValue({ text_address: 'Original address, Lagos' }); mocks.count.mockResolvedValue(0)
+  mocks.raw.mockResolvedValue(true)
 })
 afterEach(() => vi.unstubAllEnvs())
 

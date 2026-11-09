@@ -14,6 +14,7 @@ vi.mock('@/lib/db', () => ({ default: {
 } }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: () => ({ info: mocks.info, createSignedUrl: mocks.signedUrl }) } }) }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.user }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async () => true }))
 vi.mock('@/lib/media/mux', () => ({ muxClient: () => ({
   video: { assets: { create: mocks.create, retrieve: mocks.retrieve } },
   webhooks: { unwrap: mocks.unwrap }, jwt: { signPlaybackId: mocks.sign },
@@ -41,7 +42,7 @@ beforeEach(() => {
   mocks.retrieve.mockResolvedValue(asset)
   mocks.query.mockResolvedValue([{ id: 'media-1', status: 'submitting', mux_asset_id: null }])
   mocks.receiptCreate.mockResolvedValue({ count: 1 })
-  mocks.transaction.mockImplementation(async work => work({ $queryRaw: mocks.query, mediaWebhookReceipt: { createMany: mocks.receiptCreate }, mediaAsset: { update: mocks.update } }))
+  mocks.transaction.mockImplementation(async work => work({ mediaWebhookReceipt: { findUnique: mocks.receipt, create: mocks.receiptCreate }, mediaAsset: { findUnique: async () => (await mocks.query())[0], update: mocks.update } }))
   const sdk = new Mux({ tokenId: 'test', tokenSecret: 'test', webhookSecret: secret })
   mocks.unwrap.mockImplementation((body, headers) => sdk.webhooks.unwrap(body, headers))
   mocks.user.mockResolvedValue('owner')
@@ -57,7 +58,9 @@ describe('source and output validation', () => {
   })
   it('accepts owner video paths and bounded supported files', () => {
     expect(ownsVideoPath('owner', 'owner/folder/123_video.mp4')).toBe(true)
+    expect(ownsVideoPath('owner', 'owner/folder/123_video.mov')).toBe(true)
     expect(validSource({ size: 100, contentType: 'video/webm;codecs=vp8' })).toBe(true)
+    expect(validSource({ size: 100, contentType: 'video/quicktime' })).toBe(true)
   })
   it.each([{ size: 0, contentType: 'video/mp4' }, { size: 209715201, contentType: 'video/mp4' }, { size: 100, contentType: 'image/jpeg' }, {}])('rejects invalid object metadata %j', info => {
     expect(validSource(info)).toBe(false)
@@ -78,9 +81,9 @@ describe('durable dispatch', () => {
     await processListingMedia(listingId, 'owner')
     expect(mocks.findFirst).not.toHaveBeenCalled()
   })
-  it('scopes jobs to the verified owner and submitted listings', async () => {
+  it('scopes jobs to the owner and submitted listings without KYC', async () => {
     await processListingMedia(listingId, 'owner')
-    expect(mocks.findFirst).toHaveBeenCalledWith({ where: expect.objectContaining({ listing: expect.objectContaining({ lister_id: 'owner', lister: { kyc_verified: true } }) }) })
+    expect(mocks.findFirst).toHaveBeenCalledWith({ where: expect.objectContaining({ listing: expect.objectContaining({ lister_id: 'owner' }) }) })
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ passthrough: 'media-1', playback_policies: ['signed'] }))
   })
   it('only dispatches the request that wins the atomic claim', async () => {
@@ -128,7 +131,7 @@ describe('atomic webhook application', () => {
     expect(mocks.update).toHaveBeenCalledWith({ where: { id: 'media-1' }, data: expect.objectContaining({ status: 'ready', mux_asset_id: 'mux-asset' }) })
   })
   it('ignores duplicated events', async () => {
-    mocks.receiptCreate.mockResolvedValue({ count: 0 })
+    mocks.receipt.mockResolvedValue({ event_id: 'event-1' })
     await applyMediaEvent('event-1', asset)
     expect(mocks.update).not.toHaveBeenCalled()
   })

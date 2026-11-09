@@ -9,8 +9,8 @@ import { updateAvatarUrl } from "@/app/actions/profile-edit";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import type { ProfileRecord } from "@/lib/profile-data";
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 interface AvatarUploadButtonProps {
   profile: ProfileRecord;
@@ -28,11 +28,11 @@ export function AvatarUploadButton({ profile }: AvatarUploadButtonProps) {
     if (!file) return;
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError("Use a JPEG, PNG, WEBP, or GIF image.");
+      setError("Use a JPEG, PNG, or WEBP image.");
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setError("Image must be under 5MB.");
+      setError("Image must be under 2MB.");
       return;
     }
 
@@ -41,12 +41,12 @@ export function AvatarUploadButton({ profile }: AvatarUploadButtonProps) {
 
     try {
       const supabase = createClient();
-      const extension = file.name.split(".").pop() ?? "jpg";
-      const path = `${profile.id}/${Date.now()}.${extension}`;
+      const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const path = `${profile.id}/${crypto.randomUUID()}.${extension}`;
 
       const { error: uploadError } = await supabase.storage
         .from("profile-avatars")
-        .upload(path, file, { upsert: true, cacheControl: "3600" });
+        .upload(path, file, { contentType: file.type, cacheControl: "3600" });
 
       if (uploadError) {
         setError("Upload failed. Please try again.");
@@ -62,6 +62,8 @@ export function AvatarUploadButton({ profile }: AvatarUploadButtonProps) {
       }
 
       router.refresh();
+    } catch {
+      setError("Your photo could not be uploaded. Please try again.");
     } finally {
       setIsUploading(false);
     }

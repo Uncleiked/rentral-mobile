@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authRedirect, onboardingComplete, safeAuthNext } from '@/lib/auth-policy'
+import { authRedirect, safeAuthNext } from '@/lib/auth-policy'
 import { PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 
 const verified = { app_metadata: { kyc_verified: true, username: 'renter', profile_completed: true } }
@@ -11,16 +11,17 @@ describe('auth route boundaries', () => {
   it.each(['/marketplace', '/marketplace/listing/create', '/sign-in-evil', '/api/webhooks-evil', '/onboarding-evil'])('protects %s', path => {
     expect(authRedirect(path, null)).toBe('/sign-in')
   })
-  it('allows recovery for incomplete accounts without an onboarding loop', () => {
+  it('allows signed-in accounts to enter directly and redirects legacy onboarding', () => {
     expect(authRedirect('/reset-password', { app_metadata: {} })).toBeNull()
-    expect(authRedirect('/marketplace', { app_metadata: {} })).toBe('/onboarding')
+    expect(authRedirect('/marketplace', { app_metadata: {} })).toBeNull()
     expect(authRedirect('/onboarding', verified)).toBe('/marketplace')
+    expect(authRedirect('/onboarding', { app_metadata: {} })).toBe('/marketplace')
   })
-  it('requires all trusted metadata and rejects revoked verification', () => {
-    expect(onboardingComplete(verified)).toBe(true)
-    expect(onboardingComplete({ app_metadata: { ...verified.app_metadata, kyc_verified: false } })).toBe(false)
-    expect(onboardingComplete({ app_metadata: { ...verified.app_metadata, username: ' ' } })).toBe(false)
-    expect(onboardingComplete({ app_metadata: { ...verified.app_metadata, profile_completed: false } })).toBe(false)
+  it('requires a real session without requiring identity or profile metadata', () => {
+    expect(authRedirect('/marketplace', { app_metadata: { kyc_verified: false, profile_completed: false } })).toBeNull()
+    expect(authRedirect('/marketplace', { is_anonymous: true })).toBe('/sign-in')
+    expect(authRedirect('/marketplace', null)).toBe('/sign-in')
+    expect(authRedirect('/api/verify', null)).toBeNull()
   })
 })
 

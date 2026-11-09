@@ -1,18 +1,14 @@
 import { config } from 'dotenv'
 import { defineConfig } from 'prisma/config'
-import { migrationConnection } from './lib/environment/postgres-config'
+import { mongoUrl } from './lib/database/config.ts'
 
-// Match Next.js locally while preserving values injected by the deployment host.
+// Match Next.js locally; explicit process variables keep precedence.
 const environmentFile = process.env.RENTRAL_ENV_FILE
 config({ path: environmentFile || '.env.local', quiet: true })
 if (!environmentFile) config({ quiet: true })
 
-// Client generation runs during builds without contacting a database. Only
-// database commands require DIRECT_URL; do not require migration credentials in CI.
-const directUrl = process.env.DIRECT_URL
-
 export default defineConfig({
-  datasource: directUrl ? {
-    url: migrationConnection(directUrl, process.env.SUPABASE_DB_CA_CERT_PATH),
-  } : undefined,
+  schema: 'prisma/schema.prisma',
+  engine: 'classic',
+  datasource: { url: mongoUrl(process.env.MONGODB_URL ?? process.env.DATABASE_URL) },
 })

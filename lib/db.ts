@@ -1,21 +1,30 @@
-import { PrismaClient } from '@prisma/client'
-import { PrismaPg } from '@prisma/adapter-pg'
-import { postgresConfig } from './environment/postgres-config'
+import { Prisma, PrismaClient } from '@prisma/client'
+import { assertAppendOnlyOperation, type RelationGraph } from './database/append-only'
+import { mongoUrl } from './database/config'
+import { assertMongoReady } from './database/readiness'
 
-const prismaClientSingleton = () => {
-  const adapter = new PrismaPg(postgresConfig(process.env.DATABASE_URL ?? '', process.env.SUPABASE_DB_CA_CERT_PATH))
-  return new PrismaClient({ adapter })
-}
+const modelNames = new Set<string>(Prisma.dmmf.datamodel.models.map(model => model.name))
+const relations: RelationGraph = Object.fromEntries(Prisma.dmmf.datamodel.models.map(model => [
+  model.name, Object.fromEntries(model.fields.filter(field => field.kind === 'object' && modelNames.has(field.type)).map(field => [field.name, field.type])),
+]))
 
-// Ensure the global instance is strongly typed
+const prismaClientSingleton = () => new PrismaClient({
+  datasources: { db: { url: mongoUrl(process.env.MONGODB_URL ?? process.env.DATABASE_URL) } },
+}).$extends({
+  query: {
+    async $allOperations({ model, operation, args, query }) {
+      if (model) assertAppendOnlyOperation(model, operation, args, relations)
+      await assertMongoReady()
+      return query(args)
+    },
+  },
+})
+
 declare const globalThis: {
-  prismaGlobal: ReturnType<typeof prismaClientSingleton>;
-} & typeof global;
+  prismaMongoGlobal: ReturnType<typeof prismaClientSingleton> | undefined
+} & typeof global
 
-// Check if we already have a Prisma instance, otherwise create a new one
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
+const prisma = globalThis.prismaMongoGlobal ?? prismaClientSingleton()
+if (process.env.NODE_ENV !== 'production') globalThis.prismaMongoGlobal = prisma
 
 export default prisma
-
-// In development, save the instance to the global object so it isn't recreated
-if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma

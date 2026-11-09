@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(), requireUser: vi.fn(), hold: vi.fn(),
 }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, paymentIntent: { findFirst: vi.fn() } } }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.query(model, id); return true } }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.requireUser }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/bookings/service', () => ({ expireListingReservations: vi.fn(), paidBookingExpiry: () => null, otherConfirmedHold: mocks.hold }))
@@ -85,8 +86,7 @@ describe('transactional collection settlement', () => {
     ] } }) }))
     expect(mocks.updateBooking).toHaveBeenCalledTimes(1)
     expect(mocks.updateBooking).toHaveBeenCalledWith({ where: { id: 'booking-1' }, data: { status: 'confirmed', expires_at: null } })
-    const firstLock = mocks.query.mock.calls[0][0].join('')
-    expect(firstLock).toContain('Listing')
+    expect(mocks.query.mock.calls[0]).toEqual(['listing', 'listing-1'])
   })
   it('records late money for reconciliation without reviving an expired reservation', async () => {
     prepareSettlement('expired', new Date(Date.now() - 10000))

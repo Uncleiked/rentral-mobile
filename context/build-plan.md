@@ -1,6 +1,34 @@
 ## Rentral Build Plan
 
-> Execute the dependency order and acceptance checks in [production-plan.md](production-plan.md). Track status using the 31 IDs in progress-tracker.md; the 18 IDs below are historical feature groupings, not equivalent numbering.
+## Current delivery plan — 2026-11-09
+
+User-authorized stack: Expo Android/iOS, npm 11.19.1 workspaces/Node 24, local
+Next.js 16.4.5 backend, MongoDB via Prisma 6.19.3, JWT email/password accounts and
+local filesystem uploads. KYC onboarding and mandatory profile completion are
+removed; Supabase/PostgreSQL/pnpm/OAuth are retired from the active implementation.
+
+Implemented: native marketplace/member/owner screens; shared authenticated API
+adapters; Mongo schema/index/validator/readiness setup; actual transaction locks,
+overlap/ledger/hold-credit invariants; local account/session/reset flows; scoped
+uploads, signed private Range/HEAD file serving and public raster avatars.
+
+Local sequence: npm install, npm run setup:local, start the supplied Mongo replica
+set, npm run db:setup, npm run dev, then npm run mobile in another terminal.
+Setup preserves nonempty environment values; no old data import or hosted writes.
+
+Final verification covers unit regressions, type/lint, native bundles, production
+compilation and uniquely owned Mongo/localhost HTTP fixtures. Complete real
+Android/iOS camera/GPS/permissions/playback and accessibility/network acceptance
+before claiming device readiness. Provider/custody/refund/payout and operational
+release work remains separate; no deployment/EAS/store submission was run.
+
+See [implementation record](expo-implementation.md), [setup](../README.md) and
+[progress](progress-tracker.md). The original phases below are historical target
+groupings and must not reinstate KYC, hosted migrations or obsolete stack rules.
+
+> Historical production plan: [production-plan.md](production-plan.md). Its
+> unresolved financial/provider constraints remain relevant, while current local
+> stack and acceptance instructions above take precedence.
 
 ## Core Principle
 

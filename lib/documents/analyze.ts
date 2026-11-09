@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import prisma from '@/lib/db'
 import { createAdminClient } from '@/lib/admin'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
 
 export const documentSignalsSchema = z.object({
   risk: z.enum(['low', 'medium', 'high', 'uncertain']),
@@ -36,8 +37,8 @@ export async function analyzeListingDocument(listingId: string): Promise<void> {
   const envelope = geminiResponse.parse(await response.json())
   const text = envelope.candidates[0].content.parts.map(part => part.text ?? '').join('')
   const signals = documentSignalsSchema.parse(JSON.parse(text))
-  await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT id FROM "Listing" WHERE id=${listingId} FOR UPDATE`
+  await withTransaction(async tx => {
+    await lockRecord(tx, 'listing', listingId)
     const current = await tx.listing.findUnique({ where: { id: listingId }, select: { document_path: true } })
     if (current?.document_path !== listing.document_path) throw new Error('DOCUMENT_CHANGED')
     // A delayed AI response must never downgrade or overwrite a human decision.

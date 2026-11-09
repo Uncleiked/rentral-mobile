@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { platformEnabled } from '@/lib/platform'
 import { muxEnabled } from '@/lib/media/config'
@@ -38,6 +38,7 @@ function metadataRecord(value: unknown): ListingMetadataJson {
 }
 
 function listingTitle(category: string, metadata: ListingMetadataJson): string {
+  if (typeof metadata.listingTitle === 'string' && metadata.listingTitle.trim()) return metadata.listingTitle.trim().slice(0, 100)
   if (category === 'house') return String(metadata.bedrooms) === '0' ? 'Studio home' : metadata.bedrooms ? `${metadata.bedrooms}-bedroom home` : 'Home in Lagos'
   if (category === 'car') return metadata.fuelType ? `${metadata.fuelType} car · ${metadata.transmission || 'Rental'}` : 'Car in Lagos'
   return typeof metadata.vesselType === 'string' && metadata.vesselType ? metadata.vesselType : 'Boat in Lagos'
@@ -89,36 +90,54 @@ async function serializeListings(rows: ListingRow[], userId: string | null): Pro
 }
 
 export async function getDiscoveryListings(filters: DiscoveryFilters, userId: string | null = null): Promise<DiscoveryPage> {
-  const conditions: Prisma.ListingWhereInput[] = [{ listing_status: 'active' }]
+  const conditions: Prisma.InputJsonObject[] = [{ listing_status: 'active' }]
   if (filters.category !== 'all') conditions.push({ category: filters.category })
-  if (filters.q) conditions.push({ text_address: { contains: filters.q, mode: 'insensitive' } })
-  if (filters.intent) conditions.push(filters.intent === 'rent' ? { OR: [
-    { asset_metadata: { path: ['rentalIntent'], equals: 'rent' } },
-    { asset_metadata: { path: ['rentalIntent'], equals: Prisma.AnyNull } },
-  ] } : { asset_metadata: { path: ['rentalIntent'], equals: filters.intent } })
-  if (filters.state) conditions.push({ asset_metadata: { path: ['state'], string_contains: filters.state, mode: 'insensitive' } })
+  // Regex syntax is data here: escape it so free-text search cannot introduce
+  // Mongo operators, regex wildcards or expensive user-authored expressions.
+  const literalRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (filters.q) conditions.push({ text_address: { $regex: literalRegex(filters.q), $options: 'i' } })
+  if (filters.intent) conditions.push(filters.intent === 'rent' ? { $or: [
+    { 'asset_metadata.rentalIntent': 'rent' },
+    // Mongo equality to null includes an absent optional metadata field.
+    { 'asset_metadata.rentalIntent': null },
+  ] } : { 'asset_metadata.rentalIntent': filters.intent })
+  if (filters.state) conditions.push({ 'asset_metadata.state': { $regex: literalRegex(filters.state), $options: 'i' } })
   const metadataKeys = ['bedrooms', 'bathrooms', 'kitchens', 'transmission', 'seats', 'capacityPersons'] satisfies (keyof DiscoveryFilters)[]
   for (const key of metadataKeys) {
     const value = filters[key]
-    if (typeof value === 'string' && value) conditions.push({ asset_metadata: { path: [key], equals: value } })
+    if (typeof value === 'string' && value) conditions.push({ [`asset_metadata.${key}`]: value })
   }
-  if (filters.captain) conditions.push({ asset_metadata: { path: ['hasCaptain'], equals: filters.captain === 'yes' } })
+  if (filters.captain) conditions.push({ 'asset_metadata.hasCaptain': filters.captain === 'yes' })
   if (filters.minPrice || filters.maxPrice) conditions.push({ base_rent_amount: {
-    ...(filters.minPrice ? { gte: filters.minPrice } : {}), ...(filters.maxPrice ? { lte: filters.maxPrice } : {}),
+    ...(filters.minPrice ? { $gte: Number(filters.minPrice) } : {}), ...(filters.maxPrice ? { $lte: Number(filters.maxPrice) } : {}),
   } })
-  if (filters.cursor) conditions.push({ OR: [
-    { createdAt: { lt: new Date(filters.cursor.createdAt) } },
-    { createdAt: new Date(filters.cursor.createdAt), id: { lt: filters.cursor.id } },
+  if (filters.cursor) conditions.push({ $or: [
+    { createdAt: { $lt: { $date: filters.cursor.createdAt } } },
+    { createdAt: { $date: filters.cursor.createdAt }, _id: { $lt: filters.cursor.id } },
   ] })
+  // Prisma's Mongo connector does not support PostgreSQL JSON-path filters.
+  // Raw MQL only returns ids; all public fields use the same typed allowlist.
+  const found: unknown = await prisma.listing.findRaw({
+    filter: { $and: conditions },
+    // Prisma 6 deserializes find options through Rust FindOptions: its timeout
+    // needs a Duration object, which the driver sends as 3000ms to MongoDB.
+    options: { projection: { _id: 1 }, sort: { createdAt: -1, _id: -1 }, limit: DISCOVERY_PAGE_SIZE + 1, maxTimeMS: { secs: 3, nanos: 0 } },
+  })
+  if (!Array.isArray(found)) throw new Error('INVALID_DISCOVERY_RESULT')
+  const ids = found.map((item: unknown): string => {
+    if (!item || typeof item !== 'object' || !('_id' in item) || typeof item._id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item._id)) throw new Error('INVALID_DISCOVERY_RESULT')
+    return item._id
+  })
+  if (!ids.length) return { listings: [], nextCursor: null }
   const rows = await prisma.listing.findMany({
-    where: { AND: conditions }, select: listingSelect,
+    where: { id: { in: ids }, listing_status: 'active' }, select: listingSelect,
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: DISCOVERY_PAGE_SIZE + 1,
   })
   const pageRows = rows.slice(0, DISCOVERY_PAGE_SIZE)
   const last = pageRows.at(-1)
   return {
     listings: await serializeListings(pageRows, userId),
-    nextCursor: rows.length > DISCOVERY_PAGE_SIZE && last ? { id: last.id, createdAt: last.createdAt.toISOString() } : null,
+    nextCursor: found.length > DISCOVERY_PAGE_SIZE && last ? { id: last.id, createdAt: last.createdAt.toISOString() } : null,
   }
 }
 

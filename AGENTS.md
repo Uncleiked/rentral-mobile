@@ -1,8 +1,10 @@
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
 
@@ -28,7 +30,7 @@ Read in this exact order before any implementation:
   then read `context/library-docs.md` for project-specific rules
 - If the same problem persists after one corrective prompt —
   stop immediately and run /recover
-- This project uses `pnpm`. ALWAYS use `pnpm` instead of `npm`, `yarn`, or `bun` for managing dependencies and running scripts.
+- User update 2026-11-09: this project uses **npm** workspaces. Use `npm` and `package-lock.json`; the earlier pnpm requirement is superseded. The database is moving to MongoDB with JWT authentication and local development.
 
 ## Available Skills
 

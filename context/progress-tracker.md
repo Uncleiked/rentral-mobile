@@ -1,5 +1,70 @@
 ## Progress Tracker
 
+## Current local Expo / MongoDB / JWT delivery — 2026-11-09
+
+- User authority: Android+iOS Expo app, no KYC onboarding, npm 11.19.1 workspaces,
+  Node 24.x, MongoDB/user accounts, local JWT authentication, local uploads and local
+  operation. This supersedes all older Supabase/PostgreSQL/pnpm/OAuth/staging notes.
+- Added Expo SDK 58 discovery/filtering, details/video, saves, booking/history,
+  inbox/threads, optional profile settings and owner camera/GPS/document submission.
+  Booking cards link to web for host actions/checkout/check-in; old drafts resume web.
+- Removed KYC forms/initiation/actions and KYC/profile eligibility gates. Legacy
+  onboarding redirects; verify initiation 410. Identity history remains truthful;
+  authentication/owner/participant/staff/publication/payment safeguards stay.
+- MongoDB via Prisma 6.19.3 replaces the active PostgreSQL layer. Added reviewed
+  index/validator/readiness setup, actual revision locks and bounded retries,
+  explicit reservation overlap checks, private ListingLocation geometry, balanced
+  immutable ledger inserts, one-use paid hold credit and monthly privacy aggregation.
+- Local scrypt-v1 email/password accounts, private AuthSession, 15-minute access
+  JWTs and one-use rotating refresh credentials stored as hashes, with a 30-day
+  session lifetime. Current database staff roles, password
+  recovery codes and revocation. Fixed stale-password login, cookie/native refresh
+  concurrency, delayed-signout responses and outage handling.
+- Local streamed uploads validate ownership/path/size/MIME/magic and preserve real
+  MOV/MP4/WebM. Private JWT file URLs support Range/HEAD; avatars are public raster
+  objects. Private outbox/metadata/tombstones cannot be served as uploads.
+- Added setup:local (preserves existing nonempty private values) and persistent
+  loopback-only Mongo replica-set compose source. No persistent dev container was
+  started automatically. No historical data import, hosted writes, provider activation,
+  deployment or EAS/store build/submission was performed. The user authorized
+  source commit/push delivery to https://github.com/Uncleiked/rentral-mobile.git;
+  verify Git history/remote and the coordinating agent's final delivery result.
+- Historical PostgreSQL migrations, including source-only QuickTime bucket SQL,
+  are retained but are not active setup. Supabase is removed from active code/deps.
+- Root/mobile READMEs, mobile-api.md, expo-implementation.md and memory.md describe
+  current setup, contracts, evidence and remaining work.
+
+### Final verification record
+
+- npm test: 583 tests/58 files PASS; 16 fixture integration tests skipped in the
+  normal run and executed separately against the owned local replica fixture.
+- Real MongoDB fixture 16/16 PASS, including transaction/auth/privacy invariants.
+- Actual Next.js+Mongo localhost HTTP 34/34 PASS: JWT/no-KYC profile, upload/GPS,
+  discovery/signed MOV206/HEAD, saves/chat/booking isolation, cookie/proxy refresh,
+  CSRF/bearer precedence, private outbox404, reset and logout. All fixture
+  processes/containers cleaned; generated Next files restored. Ignored report:
+  test-results/localhost-d6caf8d21aa8/report.json.
+- Root lint clean; mobile typecheck, Expo install compatibility and Expo Doctor
+  20/20 PASS. Android/iOS Hermes (about 3 MB each) and web export PASS. Actual private
+  JWT/Mongo/database values absent from all 85 scanned exported artifact files.
+- Production build PASS: Next.js 16.4.5 compilation, strict TypeScript and
+  48 generated static pages. Configured Inter font download required build-time
+  network access; the network-enabled retry passed without changing the source.
+- npm audit --omit=dev: 8 toolchain dependency findings remain (3 high Prisma
+  CLI/config/deepmerge, 5 moderate Expo CLI/fingerprint/glob/minimatch). Supported
+  updates need follow-up; no audit-clean or production certification is claimed.
+
+Physical Android/iOS camera/GPS/permissions/playback, network/accessibility and
+optional provider acceptance remain open. Earlier mocked Supabase transport smoke
+predates local JWT; the actual localhost HTTP fixture above tests the current
+backend. Historical counts below are not the final suite total.
+
+## Historical checkpoints below
+
+The following entries preserve provenance. Their stack, commands, deployment
+plans, mandatory verification and feature-gate status do not override the current
+implementation above. Unimplemented financial/provider capabilities remain limits.
+
 ## Vercel generated-client build fix — 2026-11-07
 
 - Fresh Vercel install compiled JavaScript but failed TypeScript because
@@ -7,7 +72,7 @@
   the client before Next.js; strict type checking stays enabled.
 - Prisma config omits its optional datasource without DIRECT_URL, so generation
   can run without migration credentials. Database commands are not added to builds.
-- Node24.x selected to match the installed supported Node major. pnpm remains pinned.
+- Node 24.x selected to match the installed supported Node major. pnpm remains pinned.
 - User explicitly declined hosted migrations. No database updates or repeated
   approval requests; keep schema-dependent gates disabled.
 - Verification passed: production build including generated client and strict

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/admin'
 import { LISTINGS_MEDIA_BUCKET } from '@/lib/storage'
 import { muxConfigured, muxEnabled } from './config'
 import { muxClient } from './mux'
-import { ownsVideoPath, validSource } from './policy'
+import { ownsVideoPath, validSource, unboundAssetWhere } from './policy'
 
 export type MediaDispatchResult = 'skipped' | 'submitted' | 'retryable' | 'uncertain'
 
@@ -13,7 +13,7 @@ export async function processListingMedia(listingId: string, userId: string, que
     where: {
       listing_id: listingId,
       ...(queuedBefore ? { updatedAt: { lte: queuedBefore } } : {}),
-      listing: { lister_id: userId, lister: { kyc_verified: true }, listing_status: { in: ['pending_verification', 'active'] } },
+      listing: { lister_id: userId, listing_status: { in: ['pending_verification', 'active'] } },
     },
   })
   if (!media || media.status !== 'queued' || media.attempts >= 5) return 'skipped'
@@ -41,13 +41,13 @@ export async function processListingMedia(listingId: string, userId: string, que
     })
     // An early webhook may already have advanced the row; never overwrite it.
     await prisma.mediaAsset.updateMany({
-      where: { id: media.id, status: { in: ['submitting', 'uncertain'] }, mux_asset_id: null },
+      where: { id: media.id, status: { in: ['submitting', 'uncertain'] }, ...unboundAssetWhere },
       data: { mux_asset_id: asset.id, status: 'processing' },
     })
     return 'submitted'
   } catch {
     await prisma.mediaAsset.updateMany({
-      where: { id: media.id, status: 'submitting', mux_asset_id: null },
+      where: { id: media.id, status: 'submitting', ...unboundAssetWhere },
       data: submitted
         ? { status: 'uncertain', error_code: 'submission_unknown' }
         : { status: 'queued', error_code: 'source_unavailable' },

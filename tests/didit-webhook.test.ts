@@ -7,6 +7,7 @@ vi.mock('@/lib/db', () => ({ default: {
   webhookLog: { update: mocks.finishLog }, user: { findUnique: mocks.findUser },
 } }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ auth: { admin: { updateUserById: mocks.syncMetadata } } }) }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 import { POST } from '@/app/api/webhooks/didit/route'
 
@@ -19,10 +20,9 @@ type UserState = {
 type Log = { event_id: string; webhook_type: string; session_id: string | null; status: string | null; raw_body: string; processed_at: Date | null; event_created_at: Date | null; metadata_synced_at: Date | null }
 let user: UserState
 let logs: Map<string, Log>
-let metadataVerified: boolean | undefined
 let base: number
 
-function delivery(options: { status?: string; eventId?: string; timestamp?: number; createdAt?: number; workflow?: string; session?: string; kind?: 'business'; missingCreatedAt?: boolean } = {}): Request {
+function delivery(options: { status?: string; eventId?: string; timestamp?: number; createdAt?: number; workflow?: string; session?: string; kind?: 'business'; missingCreatedAt?: boolean; decision?: unknown } = {}): Request {
   const timestamp = options.timestamp ?? Math.floor(Date.now() / 1000)
   const status = options.status ?? 'Approved'
   // Intentionally hand-ordered provider-style compact JSON, including Unicode.
@@ -30,7 +30,7 @@ function delivery(options: { status?: string; eventId?: string; timestamp?: numb
   const body = JSON.stringify({
     business_session_id: options.kind === 'business' ? (options.session ?? 'session-1') : undefined,
     created_at: options.missingCreatedAt ? undefined : (options.createdAt ?? base),
-    decision: { id_verifications: [{ first_name: 'José private fixture' }], session_id: options.session ?? 'session-1', status },
+    decision: 'decision' in options ? options.decision : { id_verifications: [{ first_name: 'José private fixture' }], session_id: options.session ?? 'session-1', status },
     event_id: options.eventId ?? 'event-1', session_id: options.session ?? 'session-1',
     session_kind: options.kind, status, timestamp, vendor_data: 'user-1',
     webhook_type: 'status.updated', workflow_id: options.workflow ?? 'workflow-1',
@@ -46,7 +46,6 @@ beforeEach(() => {
   vi.stubEnv('DIDIT_WEBHOOK_SECRET', 'test-only-secret')
   vi.stubEnv('DIDIT_ORDERING_ENABLED', 'true')
   base = Math.floor(Date.now() / 1000) - 20
-  metadataVerified = undefined
   logs = new Map()
   user = { id: 'user-1', kyc_verified: false, verification_status: 'in_progress', verification_kind: 'kyc',
     didit_session_id: 'session-1', didit_workflow_id: 'workflow-1', account_type: 'individual',
@@ -75,11 +74,8 @@ beforeEach(() => {
     user = { ...user, ...data }
     return { count: 1 }
   })
-  mocks.syncMetadata.mockImplementation(async (_id: string, input: { app_metadata: { kyc_verified: boolean } }) => {
-    metadataVerified = input.app_metadata.kyc_verified
-    return { error: null }
-  })
-  const tx = { $queryRaw: mocks.lock, user: { findUnique: mocks.findUser, updateMany: mocks.updateUsers }, webhookLog: { upsert: mocks.upsertLog, findFirst: mocks.latestLog, update: mocks.finishLog } }
+  const tx = { user: { findUnique: mocks.findUser, updateMany: mocks.updateUsers }, webhookLog: { upsert: mocks.upsertLog, findFirst: mocks.latestLog,
+    findUnique: async ({ where }: { where: { event_id: string } }) => logs.get(where.event_id) ?? null, update: mocks.finishLog } }
   let serial: Promise<void> = Promise.resolve()
   mocks.transaction.mockImplementation((work: (client: typeof tx) => Promise<unknown>) => {
     const result = serial.then(async () => {
@@ -130,7 +126,7 @@ it('accepts full raw-body signatures without falling back to the deprecated Simp
 
 it('locks the current identity and commits its decision and ordered receipt together', async () => {
   expect((await POST(delivery())).status).toBe(200)
-  expect(mocks.lock.mock.calls[0][0].join('')).toContain('FOR UPDATE')
+  expect(mocks.lock.mock.calls[0]).toEqual(['user', 'user-1'])
   expect(mocks.updateUsers).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'user-1', didit_session_id: 'session-1', didit_workflow_id: 'workflow-1' } }))
   expect(user.kyc_verified).toBe(true)
   expect(logs.get('event-1')).toMatchObject({ event_created_at: new Date(base * 1000) })
@@ -142,7 +138,12 @@ it('deduplicates a processed delivery without applying or sending metadata twice
   expect((await POST(delivery())).status).toBe(200)
   expect((await POST(delivery())).status).toBe(200)
   expect(mocks.updateUsers).toHaveBeenCalledTimes(1)
-  expect(mocks.syncMetadata).toHaveBeenCalledTimes(1)
+  expect(mocks.syncMetadata).not.toHaveBeenCalled()
+})
+
+it.each([null, undefined])('records an absent historical decision as a MongoDB null (%s)', async decision => {
+  expect((await POST(delivery({ decision }))).status).toBe(200)
+  expect(user.didit_decision).toBeNull()
 })
 
 it('rejects a conflicting payload that reuses an applied event identifier', async () => {
@@ -171,7 +172,7 @@ it('never lets an older approval overwrite a newer revocation in the same sessio
   await POST(delivery({ status: 'Declined', eventId: 'revoked', createdAt: base + 5 }))
   await POST(delivery({ status: 'Approved', eventId: 'older-approval', createdAt: base }))
   expect(user.kyc_verified).toBe(false)
-  expect(metadataVerified).toBe(false)
+  expect(mocks.syncMetadata).not.toHaveBeenCalled()
   expect(mocks.updateUsers).toHaveBeenCalledTimes(1)
   expect(logs.get('older-approval')?.event_created_at).toBeNull()
 })
@@ -185,36 +186,20 @@ it('resolves same-second ambiguity toward restriction and needs a strictly newer
   expect(user.kyc_verified).toBe(true)
 })
 
-it('keeps revoked database eligibility even when the navigation-cache update fails', async () => {
+it('finalizes historical identity decisions locally without an external auth metadata cache', async () => {
   await POST(delivery({ eventId: 'approved' }))
   mocks.syncMetadata.mockResolvedValue({ error: { message: 'Private provider diagnostic' } })
-  expect((await POST(delivery({ status: 'Declined', eventId: 'revoked', createdAt: base + 1 }))).status).toBe(503)
+  expect((await POST(delivery({ status: 'Declined', eventId: 'revoked', createdAt: base + 1 }))).status).toBe(200)
   expect(user.kyc_verified).toBe(false)
   expect(logs.get('revoked')?.processed_at).toBeInstanceOf(Date)
-  expect(logs.get('revoked')?.metadata_synced_at).toBeNull()
-  mocks.syncMetadata.mockImplementation(async (_id: string, input: { app_metadata: { kyc_verified: boolean } }) => { metadataVerified = input.app_metadata.kyc_verified; return { error: null } })
-  expect((await POST(delivery({ status: 'Declined', eventId: 'revoked', createdAt: base + 1 }))).status).toBe(200)
-  expect(metadataVerified).toBe(false)
+  expect(logs.get('revoked')?.metadata_synced_at).toBeInstanceOf(Date)
+  expect(mocks.syncMetadata).not.toHaveBeenCalled()
   expect(mocks.updateUsers).toHaveBeenCalledTimes(2)
 })
 
-it('corrects an older in-flight metadata approval after a newer revocation commits', async () => {
-  let releaseApproval: () => void = () => undefined
-  let announceApproval: () => void = () => undefined
-  const approvalStarted = new Promise<void>(resolve => { announceApproval = resolve })
-  const release = new Promise<void>(resolve => { releaseApproval = resolve })
-  let delayed = false
-  mocks.syncMetadata.mockImplementation(async (_id: string, input: { app_metadata: { kyc_verified: boolean } }) => {
-    if (input.app_metadata.kyc_verified && !delayed) { delayed = true; announceApproval(); await release }
-    metadataVerified = input.app_metadata.kyc_verified
-    return { error: null }
-  })
-  const approved = POST(delivery({ eventId: 'approval' }))
-  await approvalStarted
-  expect((await POST(delivery({ status: 'Declined', eventId: 'revocation', createdAt: base + 1 }))).status).toBe(200)
-  releaseApproval()
-  expect((await approved).status).toBe(200)
+it('serializes concurrent historical deliveries without allowing an older approval to win', async () => {
+  const results = await Promise.all([POST(delivery({ eventId: 'approval' })), POST(delivery({ status: 'Declined', eventId: 'revocation', createdAt: base + 1 }))])
+  expect(results.every(result => result.status === 200)).toBe(true)
   expect(user.kyc_verified).toBe(false)
-  expect(metadataVerified).toBe(false)
-  expect(mocks.syncMetadata).toHaveBeenCalledTimes(3)
+  expect(mocks.syncMetadata).not.toHaveBeenCalled()
 })

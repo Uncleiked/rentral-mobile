@@ -1,5 +1,34 @@
 ## PROJECT OVERVIEW: RENTRAL
 
+## Current implementation and authority — 2026-11-09
+
+Rentral now has an Expo SDK 58 Android/iOS application in `apps/mobile` and the
+existing Next.js web/API backend. The user selected npm 11.19.1 workspaces,
+Node 24.x, MongoDB through Prisma 6.19.3, local email/password JWT accounts and local
+filesystem uploads. Supabase Auth/Storage, PostgreSQL/PostGIS and pnpm are retired
+from the active implementation. Run locally; no deployment or cloud/store build
+was requested or performed. See [setup](../README.md) and [implementation record](expo-implementation.md).
+
+Members sign in directly to Explore; personal KYC and mandatory profile
+completion are removed. Historical verification flags remain factual and grant
+no permissions. Ownership, booking participants, current database staff roles,
+asset-document review and publication/payment constraints remain authoritative.
+Camera/GPS/document evidence does not guarantee ownership, prevent all fraud,
+establish escrow custody, or create a credit score.
+
+MongoDB must support transactions through a replica set and pass explicit index/
+validator readiness setup. Private GPS lives in a separate collection; shared
+services enforce overlap protection, exact kobo accounting and one-use hold
+credit. Private files use scoped signed URLs; development reset codes remain in
+the private backend email outbox. No old data was imported or hosted database
+written. Real devices and optional providers still need separate acceptance.
+
+## Historical product brief below
+
+The remaining original vision is preserved for context, including planned and
+unimplemented features. Its stack, onboarding, automatic-settlement, credit-score,
+fraud-prevention and realtime claims are not statements of current behavior.
+
 ## About the Project
 
 Rentral is a unified, multi-asset rental marketplace and spatial trust infrastructure designed specifically for the African digital economy, starting in Lagos, Nigeria. The platform connects asset seekers with verified houses/apartments, rental vehicles (SUVs, sedans), and marine vessels (boats, speedboats, yachts) under a single trusted identity and transactional framework.

@@ -2,6 +2,7 @@ import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
 import { listingMediaUrl } from '@/lib/storage'
 import { requireUserId } from '@/lib/action-helpers'
+import { ensureAccountHandle } from '@/lib/accounts/bootstrap'
 import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import type { User, IndividualProfile, OrganizationProfile } from '@prisma/client'
 import { muxEnabled } from '@/lib/media/config'
@@ -167,7 +168,8 @@ type UserWithProfiles = User & {
 }
 
 function toProfileRecord(dbUser: UserWithProfiles): ProfileRecord | null {
-  // A profile isn't publicly resolvable until onboarding assigns a username.
+  // Public profiles need a handle; own-profile reads fill missing handles
+  // without requiring a profile wizard or changing identity decisions.
   if (!dbUser.username) return null
 
   const isOrganization = dbUser.account_type === 'organization'
@@ -191,6 +193,7 @@ function toProfileRecord(dbUser: UserWithProfiles): ProfileRecord | null {
 export async function getOwnProfile(): Promise<ProfileRecord | null> {
   const userId = await requireUserId()
   if (!userId) return null
+  if (!await ensureAccountHandle(userId)) return null
 
   const dbUser = await prisma.user.findUnique({
     where: { id: userId },
@@ -207,9 +210,10 @@ export async function getOwnProfileDetails(): Promise<OwnProfileDetails | null> 
   // one keeps its own auth call rather than requireUserId() + a second round-trip.
   const supabase = await createClient()
   const {
-    data: { user },
+    data: { user }, error,
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (error || !user || user.is_anonymous) return null
+  if (!await ensureAccountHandle(user.id)) return null
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
@@ -224,7 +228,7 @@ export async function getOwnProfileDetails(): Promise<OwnProfileDetails | null> 
   return {
     ...base,
     email: dbUser.email,
-    pendingEmail: user.new_email ?? null,
+    pendingEmail: null,
     dateOfBirth: dbUser.individualProfile?.date_of_birth ?? null,
     phoneNumber: dbUser.individualProfile?.phone_number ?? dbUser.organizationProfile?.phone_number ?? null,
     country: dbUser.individualProfile?.country ?? dbUser.organizationProfile?.country ?? null,

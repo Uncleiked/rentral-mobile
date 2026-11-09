@@ -5,8 +5,9 @@ import { ApiError } from './http'
 import { apiBearer, cookieMutationOriginAllowed } from './policy'
 import { apiRateLimiter } from './rate-limit'
 
+// `verified` is the legacy option name: it now checks account existence only.
 type Options = { mutation?: boolean; verified?: boolean; platform?: boolean }
-export type ApiIdentity = { userId: string; mode: 'cookie' | 'bearer' }
+export type ApiIdentity = { userId: string; email?: string; mode: 'cookie' | 'bearer' }
 
 export async function requireApiIdentity(request: Request, options: Options = {}): Promise<ApiIdentity> {
   if (options.platform && !platformEnabled()) throw new ApiError(503, 'PLATFORM_UNAVAILABLE', PLATFORM_UNAVAILABLE)
@@ -16,11 +17,14 @@ export async function requireApiIdentity(request: Request, options: Options = {}
     throw new ApiError(403, 'ORIGIN_REJECTED', 'This request must come from Rentral.')
   }
   let userId: string
+  let email: string | undefined
   try {
     const client = await createClient()
     const { data, error } = authorization.mode === 'bearer' ? await client.auth.getUser(authorization.token) : await client.auth.getUser()
+    if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number' && error.status >= 500) throw new ApiError(503, 'AUTH_UNAVAILABLE', 'Sign-in verification is temporarily unavailable.')
     if (error || !data.user || data.user.is_anonymous) throw new ApiError(401, 'UNAUTHORIZED', 'A valid sign-in is required.')
     userId = data.user.id
+    email = data.user.email
   } catch (error) {
     if (error instanceof ApiError) throw error
     throw new ApiError(503, 'AUTH_UNAVAILABLE', 'Sign-in verification is temporarily unavailable.')
@@ -29,12 +33,8 @@ export async function requireApiIdentity(request: Request, options: Options = {}
     throw new ApiError(429, 'RATE_LIMITED', 'You are making requests quickly. Please wait a moment.')
   }
   if (options.verified) {
-    const profile = await prisma.user.findUnique({ where: { id: userId }, select: {
-      kyc_verified: true, username: true, account_type: true,
-      individualProfile: { select: { id: true } }, organizationProfile: { select: { id: true } },
-    } })
-    const details = profile?.account_type === 'individual' ? profile.individualProfile : profile?.account_type === 'organization' ? profile.organizationProfile : null
-    if (!profile?.kyc_verified || !profile.username?.trim() || !details) throw new ApiError(403, 'VERIFICATION_REQUIRED', 'Complete identity verification and your profile to continue.')
+    const account = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+    if (!account) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Your account is unavailable. Please sign in again.')
   }
-  return { userId, mode: authorization.mode }
+  return { userId, email, mode: authorization.mode }
 }

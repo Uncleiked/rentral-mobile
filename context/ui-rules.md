@@ -1,5 +1,10 @@
 ## UI Rules
 
+Native extension (2026-11-09): Expo components use semantic equivalents from
+`apps/mobile/src/theme.ts` through React Native StyleSheet. The CSS/Tailwind/font
+loading syntax below applies to web components. Native tab navigation and safe
+areas follow Expo Router; matching patterns are recorded in both UI registries.
+
 Concise rules for building the Rentral UI. Design assets and the @theme token definitions in globals.css act as the absolute source of truth for visual decisions. These rules cover the most important patterns and constraints to keep the UI consistent, mobile-first, and immersive across our zero-trust, multi-asset marketplace without over-specifying every detail.
 
 ## Font

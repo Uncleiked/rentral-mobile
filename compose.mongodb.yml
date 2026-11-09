@@ -1,0 +1,22 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - rentral-mongodb-data:/data/db
+      - type: bind
+        source: ./scripts/init-local-mongo.js
+        target: /bootstrap/init-local-mongo.js
+        read_only: true
+    labels:
+      rentral.role: local-development
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.hello().isWritablePrimary ? quit(0) : quit(1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  rentral-mongodb-data:

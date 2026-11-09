@@ -5,6 +5,9 @@ import { expireListingReservations, otherConfirmedHold, paidBookingExpiry } from
 import { bookingPayableKobo, holdCreditCanConfirm, reviewHoldCredit } from '@/lib/bookings/hold-credit'
 import { paymentsEnabled, paymentCallbackUrl } from './config'
 import { initializePaystack, verifyPaystack, type VerifiedPayment } from './paystack'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
+import { bookingWindowAvailable } from '@/lib/bookings/availability'
+import { insertBalancedLedger } from './ledger'
 
 const paymentMetadataSchema = z.object({ rentral_payment_id: z.string().uuid(), rentral_user_id: z.string().uuid() })
 
@@ -21,22 +24,22 @@ export function paymentBindingMatches(payment: { id: string; user_id: string; re
 
 export async function startBookingPayment(userId: string, bookingId: string): Promise<string> {
   if (!paymentsEnabled()) throw new Error('Online payments are not available yet. Your booking remains unpaid.')
-  const intent = await prisma.$transaction(async tx => {
+  const intent = await withTransaction(async tx => {
     const owned = await tx.booking.findFirst({ where: { id: bookingId, seeker_id: userId }, select: { listing_id: true } })
     if (!owned) throw new Error('Booking not found.')
-    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${owned.listing_id} FOR UPDATE`
+    await lockRecord(tx, 'listing', owned.listing_id)
     await expireListingReservations(tx, owned.listing_id, new Date())
     if (await otherConfirmedHold(tx, owned.listing_id, userId, new Date())) throw new Error('This asset is protected by another renter’s active hold.')
-    await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${bookingId} FOR UPDATE`
+    await lockRecord(tx, 'booking', bookingId)
     const booking = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } })
     if (booking.status !== 'awaiting_payment' || !booking.expires_at || booking.expires_at <= new Date()) throw new Error('Ask the host to accept an available booking before paying.')
+    if (!await bookingWindowAvailable(tx, booking)) throw new Error('This reservation needs reconciliation before paying.')
     if (!await holdCreditCanConfirm(tx, booking, new Date())) throw new Error('The holding credit needs reconciliation before paying.')
     const payable = bookingPayableKobo(booking)
     if (payable <= BigInt(0)) throw new Error('No additional payment is required. Refresh your booking.')
     const existing = await tx.paymentIntent.findUnique({ where: { idempotency_key: `booking:${bookingId}` } })
     if (existing) return existing
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, kyc_verified: true } })
-    if (!user.kyc_verified) throw new Error('Complete identity verification before paying.')
+    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } })
     return tx.paymentIntent.create({ data: { booking_id: bookingId, user_id: userId, kind: 'booking', reference: `rentral-${randomUUID()}`,
       idempotency_key: `booking:${bookingId}`, amount_kobo: payable, currency: booking.currency, customer_email: user.email } })
   })
@@ -58,13 +61,13 @@ export async function startBookingPayment(userId: string, bookingId: string): Pr
 
 export async function startListingFeePayment(userId: string, listingId: string): Promise<string> {
   if (!paymentsEnabled()) throw new Error('Online payments are not available yet.')
-  const intent = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${listingId} FOR UPDATE`
+  const intent = await withTransaction(async tx => {
+    await lockRecord(tx, 'listing', listingId)
     const listing = await tx.listing.findFirst({ where: { id: listingId, lister_id: userId, listing_status: 'pending_verification' }, select: { id: true } })
     if (!listing) throw new Error('Only your submitted listings can receive a publication fee.')
     const existing = await tx.paymentIntent.findUnique({ where: { idempotency_key: `listing:${listingId}` } })
     if (existing) return existing
-    const user = await tx.user.findFirstOrThrow({ where: { id: userId, kyc_verified: true }, select: { email: true } })
+    const user = await tx.user.findFirstOrThrow({ where: { id: userId }, select: { email: true } })
     return tx.paymentIntent.create({ data: { listing_id: listingId, user_id: userId, kind: 'listing_fee', reference: `rentral-${randomUUID()}`,
       idempotency_key: `listing:${listingId}`, amount_kobo: BigInt(100000), customer_email: user.email } })
   })
@@ -86,16 +89,16 @@ export async function startListingFeePayment(userId: string, listingId: string):
 
 /** Both signed callbacks and authenticated reconciliation converge here. */
 export async function recordVerifiedPayment(verified: VerifiedPayment, payloadHash: string): Promise<void> {
-  await prisma.$transaction(async tx => {
+  await withTransaction(async tx => {
     const intent = await tx.paymentIntent.findUnique({ where: { reference: verified.reference } })
     if (!intent) return
     if (!paymentBindingMatches(intent, verified)) throw new Error('Payment verification mismatch.')
     // Every path takes listing -> booking -> payment locks in that order.
     const booking = intent.booking_id ? await tx.booking.findUnique({ where: { id: intent.booking_id } }) : null
     const listingId = booking?.listing_id ?? intent.listing_id
-    if (listingId) await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${listingId} FOR UPDATE`
-    if (booking) await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${booking.id} FOR UPDATE`
-    await tx.$queryRaw`SELECT "id" FROM "PaymentIntent" WHERE "id" = ${intent.id} FOR UPDATE`
+    if (listingId) await lockRecord(tx, 'listing', listingId)
+    if (booking) await lockRecord(tx, 'booking', booking.id)
+    await lockRecord(tx, 'paymentIntent', intent.id)
     const current = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } })
     if (['succeeded', 'requires_review'].includes(current.status)) return
     const eventKey = `charge.success:${verified.id}`
@@ -103,18 +106,19 @@ export async function recordVerifiedPayment(verified: VerifiedPayment, payloadHa
     if (event?.processed_at) return
     await tx.paymentEvent.create({ data: { payment_id: intent.id, event_key: eventKey, event_type: 'charge.success', payload_hash: payloadHash, processed_at: new Date() } })
     const freshBooking = booking ? await tx.booking.findUniqueOrThrow({ where: { id: booking.id } }) : null
-    const eligibleListing = listingId ? await tx.listing.findFirst({ where: { id: listingId, listing_status: 'active', lister: { kyc_verified: true } }, select: { id: true } }) : null
-    const eligibleSeeker = await tx.user.findFirst({ where: { id: intent.user_id, kyc_verified: true }, select: { id: true } })
+    const eligibleListing = listingId ? await tx.listing.findFirst({ where: { id: listingId, listing_status: 'active' }, select: { id: true } }) : null
+    const eligibleSeeker = await tx.user.findFirst({ where: { id: intent.user_id }, select: { id: true } })
     const conflictingHold = listingId ? await otherConfirmedHold(tx, listingId, intent.user_id, new Date()) : null
     const creditEligible = freshBooking ? await holdCreditCanConfirm(tx, freshBooking, new Date()) : true
     const matchingBalance = !freshBooking || bookingPayableKobo(freshBooking) === intent.amount_kobo
-    const bookable = creditEligible && matchingBalance && !conflictingHold && Boolean(eligibleListing && eligibleSeeker) && freshBooking?.status === 'awaiting_payment' && freshBooking.expires_at !== null && freshBooking.expires_at > new Date()
+    const available = freshBooking ? await bookingWindowAvailable(tx, freshBooking) : true
+    const bookable = available && creditEligible && matchingBalance && !conflictingHold && Boolean(eligibleListing && eligibleSeeker) && freshBooking?.status === 'awaiting_payment' && freshBooking.expires_at !== null && freshBooking.expires_at > new Date()
     const status = freshBooking && !bookable ? 'requires_review' : 'succeeded'
     await tx.paymentIntent.update({ where: { id: intent.id }, data: { status, provider_transaction_id: verified.id, paid_at: new Date() } })
-    await tx.ledgerTransaction.create({ data: { payment_id: intent.id, currency: intent.currency, kind: 'provider_collection', entries: { create: [
+    await insertBalancedLedger(tx, { payment_id: intent.id, currency: intent.currency, kind: 'provider_collection', entries: [
       { account_key: 'provider:paystack:collections', direction: 'debit', amount_kobo: intent.amount_kobo, currency: intent.currency },
       { account_key: `customer:${intent.user_id}:unsettled`, direction: 'credit', amount_kobo: intent.amount_kobo, currency: intent.currency },
-    ] } } })
+    ] })
     if (bookable && freshBooking) {
       await tx.booking.update({ where: { id: freshBooking.id }, data: { status: 'confirmed', expires_at: paidBookingExpiry(freshBooking.kind, freshBooking.pricing_snapshot) } })
       await tx.notification.create({ data: { user_id: freshBooking.lister_id, kind: 'booking_confirmed', title: 'Booking payment confirmed', body: 'Payment has been verified. Settlement remains a separate provider process.', href: `/marketplace/bookings/${freshBooking.id}` } })

@@ -1,157 +1,116 @@
 # Rentral
 
-Lagos-first rental marketplace for properties, vehicles and boats. Built with
-Next.js 16, React 19, strict TypeScript, Tailwind CSS v4, Supabase Auth/Storage,
-Prisma/Postgres/PostGIS, Didit identity verification and PostHog.
+Expo Android and iOS app with a local Next.js backend, MongoDB, email/password JWT authentication, and private local file storage. KYC onboarding has been removed: members enter Explore after signing in, and profile edits are optional.
 
-## Current State
+Use Node 24.x and npm 11.19.1. The repository uses npm workspaces and `package-lock.json`. Supabase is no longer part of the application.
 
-The responsive web implementation now includes a GSAP homepage, advanced discovery,
-grid/walkthrough views, listing details and saves, a cross-device Media Vault,
-booking requests and GPS/code check-in, Paystack collection and payment history,
-private messaging, reviews/disputes, human document review, notifications/renewals,
-staff operations and consent-based aggregate insights. Hold-to-rental credit and
-staff-reviewed safety notices/appeals are implemented. Active dashboards use real
-records. Schema-dependent domains remain gated until migrations are accepted.
+The user-authorized source delivery repository is
+[Uncleiked/rentral-mobile](https://github.com/Uncleiked/rentral-mobile).
+Deployment and app-store publication are outside this local delivery.
 
-This is not a production-complete financial service. OPay integration, actual
-refund/payout execution and automatic default splits still
-need approved provider contracts and implementation/acceptance. Squat-Mates AI is
-explicitly deferred. See [release readiness](context/release-readiness.md).
+## Start locally
 
-The user has selected `.env.local` for current development. Start with the
-[local configuration checkpoint](context/local-development.md). The database it
-connects to is hosted. The user explicitly declined its twelve pending migrations:
-keep that database unchanged, keep feature gates off, and use the isolated local
-fixture for database tests. Do not ask again to apply the hosted updates.
+From the repository root:
 
-Read [the architecture and delivery plan](context/production-plan.md) and
-[the progress tracker](context/progress-tracker.md) before starting a task.
-Follow AGENTS.md's context-reading order.
+~~~powershell
+npm install
+npm run setup:local
+~~~
 
-## Local Development
+`setup:local` fills missing local settings in the ignored `.env.local`: a MongoDB URL, a random backend JWT secret, `NEXT_PUBLIC_APP_URL=http://localhost:3000`, `AUTH_DEV_EMAIL_OUTBOX=true`, and `RENTRAL_PLATFORM_ENABLED=true`. It preserves existing nonempty values. Never put database connections or JWT secrets in Expo public variables.
 
-Use Node 24.x and pnpm (the versions selected by package.json). Keep secrets in the ignored local environment
-file. Use the existing project's Supabase connection settings, not placeholder values.
+MongoDB must run as a replica set because reservations, payments, messages, and password resets use transactions. For a new local database:
 
-```sh
-pnpm install
-pnpm exec prisma generate
-pnpm dev
-```
+~~~powershell
+docker compose -f compose.mongodb.yml up -d
+docker compose -f compose.mongodb.yml exec mongodb mongosh --quiet --file /bootstrap/init-local-mongo.js
+~~~
 
-The default preview is http://localhost:3000. Use `pnpm dev --port 3100` when occupied.
-For camera/GPS testing from a phone, use `pnpm dev:https` and trust the local certificate
-on the device. A plain HTTP LAN address cannot grant camera/geolocation permissions.
+This binds MongoDB to `127.0.0.1:27017`, uses replica set `rs0`, and keeps data in a named Docker volume. The local connection format is:
+
+~~~text
+mongodb://127.0.0.1:27017/rentral?replicaSet=rs0&directConnection=true
+~~~
+
+If `.env.local` already contains a different `MONGODB_URL`, setup preserves it. Choose the local connection explicitly for an entirely local installation. No existing database is imported, reset, or replaced automatically.
+
+Then prepare indexes/validators and start the backend:
+
+~~~powershell
+npm run db:setup
+npm run dev
+~~~
+
+Open http://localhost:3000. `db:setup` requires a local database by default. A remote setup requires a separate explicit manual override and is outside this local workflow. Runtime database operations fail closed until the current setup marker exists; enabling the platform flag alone is insufficient. Do not use `prisma db push` or replay the historical SQL migrations.
+
+In a second terminal:
+
+~~~powershell
+npm run mobile
+~~~
+
+Scan the Expo QR code with an SDK-compatible Expo Go app, or use the Android emulator. The iOS simulator requires macOS/Xcode. See [mobile setup](apps/mobile/README.md).
 
 ## Configuration
 
-| Purpose | Environment variables |
+| Backend setting | Purpose |
 | --- | --- |
-| Supabase browser/auth | NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY |
-| Server administration | SUPABASE_SERVICE_ROLE_KEY |
-| Database runtime/migrations | DATABASE_URL, DIRECT_URL |
-| Verified database TLS | SUPABASE_DB_CA_CERT_PATH (optional project CA file) |
-| Callback origin | NEXT_PUBLIC_APP_URL |
-| Identity verification | DIDIT_API_KEY, DIDIT_WEBHOOK_SECRET, DIDIT_KYC_WORKFLOW_ID, DIDIT_KYB_WORKFLOW_ID, DIDIT_ORDERING_ENABLED |
-| Analytics | NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, NEXT_PUBLIC_POSTHOG_HOST |
-| Optional local analytics | NEXT_PUBLIC_POSTHOG_ENABLED=true (local default is disabled) |
-| Video processing | MUX_ENABLED, MUX_TOKEN_ID, MUX_TOKEN_SECRET, MUX_WEBHOOK_SECRET, MUX_SIGNING_KEY_ID, MUX_SIGNING_PRIVATE_KEY |
-| Background media worker | MEDIA_WORKER_ENABLED (default disabled), MEDIA_WORKER_SECRET (separate random secret) |
+| `MONGODB_URL` | Canonical MongoDB connection; `DATABASE_URL` is a compatibility fallback. |
+| `JWT_SECRET` | Backend-only random signing secret, at least 32 bytes. Setup generates one. |
+| `NEXT_PUBLIC_APP_URL` | Local web origin, normally `http://localhost:3000`. |
+| `RENTRAL_PLATFORM_ENABLED` | Enables prepared marketplace domains; database readiness is checked separately. |
+| `RENTRAL_STORAGE_DIR` | Optional private filesystem root; defaults to `storage` in the workspace. |
+| `AUTH_DEV_EMAIL_OUTBOX` | Opt-in development password-reset codes in private `storage/mail-outbox`. |
+| `OLUSO_ENABLED`, `OLUSO_API_KEY` | Optional monitoring; starts only with explicit `OLUSO_ENABLED=true` and a key. Neither is required for local startup. |
 
-Use the Supabase dashboard to configure OAuth providers, allowed callback URLs and SMTP.
-Didit needs a reachable HTTPS webhook at `/api/webhooks/didit`.
-Provider credentials being present does not prove the provider flow works.
-Missing Mux, Gemini and payment configuration is tracked in the delivery plan.
-Mux integration code is present but disabled until staging acceptance. Follow
-[the media staging runbook](context/media-staging.md); adding keys alone is not
-sufficient to enable it. Never turn it on before the schema and callbacks are tested.
-The worker endpoint is `POST /api/internal/media-worker`. It resumes queued jobs and
-reconciles known Mux assets; it never blindly retries ambiguous submissions. An
-external scheduler must be configured after staging acceptance. No schedule is
-installed automatically. Its authorization, activation and monitoring instructions
-are in the media staging runbook.
+The mobile app normally discovers the Expo development computer and uses its backend on port 3000. The only optional public mobile setting is `EXPO_PUBLIC_API_URL`, an origin without `/api/v1`. Android-emulator fallback is `http://10.0.2.2:3000`; iOS simulator/web fallback is localhost. A physical phone needs the computer's reachable LAN address and firewall access. See [API contracts](context/mobile-api.md).
+
+Oluso monitoring is optional and disabled without both an explicit enable flag
+and its backend key. An unconfigured monitoring service must not prevent the app
+from starting. Keep monitoring/provider keys out of mobile public settings.
+
+## Accounts and files
+
+Create an account with email and password; email delivery and OAuth are not required for local sign-in. Passwords are salted scrypt hashes. Access JWTs last 15 minutes and are checked against a private MongoDB session on every authenticated request. Refresh credentials last at most 30 days, are stored as hashes on the backend, and rotate once per use. Staff permissions come from the current database account.
+
+Development password recovery writes a one-use code to the private backend email outbox when enabled. Enter that code in Reset password on web or mobile. These files are never served through the upload API. Production recovery delivery is not configured and returns an explicit unavailable response.
+
+Uploads use authenticated HTTP endpoints and local `listings-media`, `compliance-docs`, and `profile-avatars` directories. Private playback/download URLs use short-lived purpose-bound JWTs; file reads support byte ranges. Supporting ownership documents belong to listing review and are not personal KYC onboarding. Actual iOS MOV, Android MP4, and web WebM formats retain their truthful MIME types.
+
+Existing historical verification fields remain factual; bypassing onboarding never marks an account verified. Legacy `/onboarding` redirects and `/api/verify` returns 410.
+
+## Implemented scope and limits
+
+Native Explore/search/filtering, listing details/video, saved listings, booking requests/history, inbox/chat, optional account edits, owner inventory, and camera/GPS/document listing submission share backend domain services with the web app.
+
+Booking cards open the local web app for existing host actions, inspection check-in, and optional provider checkout. Existing web drafts can be resumed on web. Native booking requests and listing submissions must be refreshed after ambiguous failures before retrying; message UUID retries are idempotent.
+
+Publication still requires the existing asset-document, location, media, staff, and payment checks. Provider integrations remain separately gated. Collection receipts do not prove custody, refunds, payouts, escrow, or default compensation. No provider was activated, historical data imported, hosted database modified, deployment performed, or store build/submission run.
 
 ## Verification
 
-`pnpm build` runs `prisma generate` before `next build`, so fresh and cached Vercel
-installs both compile against the current schema. Set Vercel's Build Command to
-`pnpm build`. Generation does not require `DIRECT_URL` and never applies migrations.
-Runtime Supabase/database configuration still belongs in Vercel's environment
-settings; ignored local environment files are not uploaded automatically. The user
-declined hosted migrations, so leave schema-dependent feature flags off.
+~~~powershell
+npm test
+npm run lint
+npm run typecheck
+npm run mobile:typecheck
+npm exec --workspace @rentral/mobile -- expo install --check
+npm exec --workspace @rentral/mobile -- expo export --platform all
+npm run test:mongo
+npm run build
+~~~
 
-```sh
-pnpm check:local --remote
-pnpm audit:local
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm test:database
-pnpm exec prisma validate
-pnpm build
-```
+`test:mongo` creates and destroys its own labeled, loopback-only MongoDB replica fixture; it never selects the application's database. Final verification results and device/provider limits are recorded in [the implementation record](context/expo-implementation.md) and [progress tracker](context/progress-tracker.md). Real Android/iOS camera, GPS, permissions, playback, and device acceptance remain required. Next.js 16.4.5 includes the reviewed security update; this local implementation is not a production release certification.
 
-Run type generation/build sequentially, separately from a running dev server, to avoid
-conflicting generated Next.js validator files. The production build fetches the
-configured Google Font and requires network access.
+Confirmed checks: 583 tests across 58 files, 16 real Mongo integration checks, 34
+localhost HTTP checks, clean lint, native typecheck/compatibility, Expo Doctor 20/20,
+and Android/iOS/web export. Production build passed with strict TypeScript and
+48 generated static pages. The configured Inter font requires network access
+during a fresh web build.
 
-Browser tests use installed Google Chrome and an already running app:
+`npm audit --omit=dev` still reports eight toolchain dependency advisories:
+three high in Prisma CLI/config/deepmerge paths and five moderate in Expo
+CLI/fingerprint/glob/minimatch paths. Supported updates remain a follow-up; do not
+force a breaking Prisma 7 or incompatible Expo change to hide these findings.
 
-```sh
-pnpm dev --port 3100
-# In a second terminal:
-pnpm test:e2e
-```
-
-Set `PLAYWRIGHT_BASE_URL` for a different preview URL. Checks cover desktop, tablet,
-390px and 320px mobile viewports; screenshots/traces go into ignored `test-results/`.
-Unit tests mock external services and do not prove live database/provider behavior.
-
-`pnpm test:database` replays migrations and exercises actual PostgreSQL availability,
-ledger, private-chat/Realtime and Storage constraints in a labelled, isolated Docker
-container. It never imports `.env` or contacts the configured Supabase database.
-See `scripts/test-platform-database.ts` for its ownership and reset guards.
-
-For a fresh local test environment, create the isolated container without exposing
-any database ports, then run the suite (the password is only a local disposable fixture):
-
-```sh
-docker run --detach --name rentral-platform-test --label rentral.task=platform-verification --env POSTGRES_PASSWORD=rentral_local_test_only postgis/postgis:17-3.5
-pnpm test:database
-```
-
-If that task-owned container already exists but is stopped, use
-`docker start rentral-platform-test` instead of creating another one.
-
-The mobile-ready versioned JSON boundary is documented in
-[the API contract](context/mobile-api.md). Web Server Actions and API routes share
-domain services; no mobile app or authentication-provider rewrite was introduced.
-
-`pnpm test:storage` runs the media-bucket migration and RLS assertions against an
-isolated temporary local PostgreSQL fixture. Requires `initdb`, `pg_ctl` and `psql`.
-It does not use your application database, Supabase credentials or hosted Storage.
-
-A read-only metadata audit is available:
-
-```sh
-node --experimental-strip-types scripts/audit-database.ts
-```
-
-It reads permissions and constraints, not user records. Database connectivity is
-restored. The audit still reports profile-table grants requiring staging review.
-
-## Database Changes
-
-Prisma migrations in `prisma/migrations/` are the source of truth.
-Use staging to verify clean replay and existing-data upgrades before deploying.
-Do not use `prisma db push` on shared environments.
-
-The new `20260924130000_harden_profile_access` migration is prepared but unapplied.
-It restricts private profile-table access and the signup trigger.
-Review and validate it against staging before `pnpm exec prisma migrate deploy`.
-The media migration `20260924150000_add_mux_media_pipeline` is also unapplied.
-The private-bucket migration `20260924170000_private_listing_media` is prepared
-but unapplied. Authorized preview routes must be deployed first; follow the
-[private media cutover plan](context/private-media-plan.md). Existing public files
-remain exposed until cutover, and previously cached/downloaded copies need review.
+Read [current architecture](context/architecture.md) and follow the context order in `AGENTS.md`. Earlier PostgreSQL/Supabase design and deployment notes are historical; the original README is archived in [legacy-web-readme.md](context/legacy-web-readme.md).

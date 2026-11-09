@@ -1,5 +1,42 @@
 # Rentral UI Registry
 
+### Local JWT account flow — 2026-11-09
+
+The native/web account forms now use local JWT email/password accounts backed by
+MongoDB. Existing Button/Field/Page tokens remain unchanged. There are no OAuth,
+email-confirmation or KYC steps. Sign-up opens Explore directly; password recovery
+uses a one-use reset code and the existing accessible inline error/status pattern.
+For local development only, recovery codes are written to the backend's private
+email outbox. Native sessions stay encrypted in SecureStore; private user data is
+cleared on sign-out. Browser booking/draft continuation opens the existing web
+screen with a clear sign-in notice. Media resolves against the device-reachable
+API host; local public avatars use verified relative paths.
+
+### Expo native foundations and components — 2026-11-09
+
+Files: `apps/mobile/src/theme.ts`, `src/components/*`, `app/(auth)`, `app/(tabs)`.
+Native equivalents of the web semantic tokens are centralized in `theme.ts`;
+React Native StyleSheet replaces web utility-class syntax. Inter is bundled.
+
+| Component | Consistent visual pattern |
+| --- | --- |
+| Page / RootNavigator / tab layouts | `colors.background`, safe areas,24px content padding, Inter semibold30px headings, muted14px supporting copy; active tabs accentBright. |
+| Button | accentBright/inverse, radius16,52px minimum height, semibold14px; secondary glass/border; visible disabled/busy states. |
+| Field | surface/border, radius12,52px minimum height,16px horizontal padding, regular15px text, medium13px label, accent focus border. |
+| StatusView | glass circular icon, semibold17px title, muted14px message, visible loading/retry. |
+| ListingCard | surface/border, radius24,16px content padding, title19px, emerald21px price,11px glass structural pills; private images use signed media. |
+| Walkthrough / NativeVideoPreview / WalkthroughCapture | background/surface, radius24, native aspect-ratio media, muted13px help, visible recording/GPS status without raw coordinates; pause on blur/background. |
+| BookingRequest / BookingCard | surface/border, radius24,24px padding;17–20px headings,13px body; actual total/hold credit/additional payment separate, amount20px accentBright. |
+| ConversationCard | surface/border, radius16,16px padding; accentMuted avatar; visible last message/time with no invented online state. |
+| MessageBubble | own accentMuted, other surface, radius16,16px padding,14px body/10px time; real read state only. |
+| ProfileEditor | surface/border, radius24,24px padding,17px section title; optional username/bio; save feedback and email display. |
+| ChoiceChips / NativeListingFields / owner screens |44px pill choices with accentMuted/accentBright selection; shared fields/buttons,16/24px spacing; real draft/review statuses and retained upload errors. |
+
+Sign-in uses the existing local hero photograph, a glass scrim and sentence-case
+actions. The app icon is rasterized from the existing Rentral vector. There are
+no identity-document/onboarding controls. Asset ownership documents remain private
+listing inputs. These patterns are mirrored in `context/ui-registry.md`.
+
 ### Responsive marketplace and profiles (2026-11-07)
 
 Canonical details are in `context/ui-registry.md`. `MarketplaceShell` uses one top navigation and a safe-area-aware mobile bottom navigation. Grid previews use `rounded-2xl border-border-subtle bg-surface-card`; actions use semantic emerald pills. Search is URL driven and filter panels stay within the viewport. Protected media remains unoptimized and walkthrough playback is explicit. Profiles use actual assets and completed-booking reviews; fabricated financial, followers and security counts are removed from rendered views.

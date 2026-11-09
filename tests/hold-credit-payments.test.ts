@@ -2,14 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), query: vi.fn(), initialize: vi.fn(), findIntent: vi.fn(), createIntent: vi.fn(), updateIntent: vi.fn(), claim: vi.fn(), findAllocation: vi.fn(), findBooking: vi.fn(), updateBooking: vi.fn(), updateBookings: vi.fn(), ledger: vi.fn(), event: vi.fn(), notify: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, paymentIntent: { updateMany: mocks.claim } } }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async () => true }))
 vi.mock('@/lib/bookings/service', () => ({ expireListingReservations: vi.fn(), otherConfirmedHold: vi.fn(async () => null), paidBookingExpiry: () => null }))
 vi.mock('@/lib/payments/paystack', () => ({ initializePaystack: mocks.initialize, verifyPaystack: vi.fn() }))
 import { startBookingPayment, recordVerifiedPayment } from '@/lib/payments/service'
 
 const userId = 'f889f677-c3d3-4182-bd60-64066ee1c237', paymentId = '828db1e4-46ec-4774-9d8d-e78058b399d2'
 const booking = { id: 'rental', listing_id: 'listing', seeker_id: userId, lister_id: 'host', kind: 'rental', status: 'awaiting_payment',
-  currency: 'NGN', amount_kobo: BigInt(10000000), hold_credit_kobo: BigInt(2000000), settlement_status: 'unsettled', expires_at: new Date(Date.now() + 600000) }
-const source = { ...booking, id: 'hold', kind: 'hold', status: 'converted', amount_kobo: BigInt(2000000), payments: [{ user_id: userId, amount_kobo: BigInt(2000000), currency: 'NGN', status: 'succeeded', paid_at: new Date() }] }
+  currency: 'NGN', amount_kobo: BigInt(10000000), hold_credit_kobo: BigInt(2000000), settlement_status: 'unsettled', expires_at: new Date(Date.now() + 600000),
+  starts_at: new Date(Date.now() + 86400000), ends_at: new Date(Date.now() + 2 * 86400000),
+  pricing_snapshot: { period: 'day', days: 1, baseKobo: '10000000', totalKobo: '10000000', fees: [], holdBookingId: 'a727d7b3-2148-43e4-86df-a0717569fec4', holdCreditKobo: '2000000', payableKobo: '8000000' } }
+const source = { ...booking, id: booking.pricing_snapshot.holdBookingId, kind: 'hold', status: 'converted', amount_kobo: BigInt(2000000), payments: [{ user_id: userId, kind: 'booking', amount_kobo: BigInt(2000000), currency: 'NGN', status: 'succeeded', paid_at: new Date(), ledger: { kind: 'provider_collection' } }] }
 const intent = { id: paymentId, booking_id: booking.id, listing_id: null, user_id: userId, kind: 'booking', provider: 'paystack', reference: 'synthetic-credit-balance',
   amount_kobo: BigInt(8000000), currency: 'NGN', customer_email: 'renter@example.test', status: 'pending' }
 const verified = { id: 'synthetic-1', reference: intent.reference, amount: 8000000, currency: 'NGN', status: 'success', customer: { email: intent.customer_email },
@@ -22,9 +25,9 @@ beforeEach(() => {
   mocks.findBooking.mockResolvedValue({ ...booking })
   mocks.findIntent.mockResolvedValue(null)
   mocks.createIntent.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...intent, ...data, id: paymentId, status: 'created' }))
-  mocks.findAllocation.mockResolvedValue({ hold_booking_id: 'hold', rental_booking_id: 'rental', amount_kobo: BigInt(2000000), hold_booking: { ...source } })
+  mocks.findAllocation.mockResolvedValue({ hold_booking_id: 'hold', rental_booking_id: 'rental', amount_kobo: BigInt(2000000), currency: 'NGN', hold_booking: { ...source } })
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
-    $queryRaw: mocks.query, booking: { findFirst: mocks.findBooking, findUnique: mocks.findBooking, findUniqueOrThrow: mocks.findBooking, update: mocks.updateBooking, updateMany: mocks.updateBookings },
+    booking: { findFirst: (query: { where: { id?: unknown } }) => typeof query.where.id === 'object' ? Promise.resolve(null) : mocks.findBooking(query), findUnique: mocks.findBooking, findUniqueOrThrow: mocks.findBooking, update: mocks.updateBooking, updateMany: mocks.updateBookings },
     paymentIntent: { findUnique: mocks.findIntent, findUniqueOrThrow: mocks.findIntent, create: mocks.createIntent, update: mocks.updateIntent },
     holdCreditAllocation: { findUnique: mocks.findAllocation }, user: { findUniqueOrThrow: vi.fn(async () => ({ email: intent.customer_email, kyc_verified: true })), findFirst: vi.fn(async () => ({ id: userId })) },
     listing: { findFirst: vi.fn(async () => ({ id: 'listing' })) }, paymentEvent: { findUnique: vi.fn(async () => null), create: mocks.event }, ledgerTransaction: { create: mocks.ledger }, notification: { create: mocks.notify },

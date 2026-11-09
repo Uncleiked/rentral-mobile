@@ -28,5 +28,5 @@ export async function sendPasswordReset(formData: FormData): Promise<ForgotPassw
     return { success: false, error: 'We could not send a reset link. Please try again shortly.' }
   }
 
-  return { success: true, message: 'If an account exists, a reset link has been sent to that email.' }
+  return { success: true, message: 'If an account exists, its reset code is saved in the local backend’s private email outbox. Use it on the Reset password page.' }
 }

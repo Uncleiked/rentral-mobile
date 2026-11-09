@@ -3,78 +3,63 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { ArrowUpRight, LoaderCircle, Send, Link2 } from 'lucide-react'
-import { createClient } from '@/lib/client'
-import { conversationTopic, type ChatThread } from '@/lib/messaging/policy'
+import type { ChatThread } from '@/lib/messaging/policy'
 import { markThreadReadAction, readThreadAction, sendMessageAction } from '@/app/actions/messageActions'
 
 type Props = { initialThread: ChatThread; realtimeEnabled: boolean }
 
-export function ChatPanel({ initialThread, realtimeEnabled }: Props) {
+export function ChatPanel({ initialThread }: Props) {
   const [thread, setThread] = useState(initialThread)
   const [body, setBody] = useState('')
   const [share, setShare] = useState(false)
   const [error, setError] = useState('')
-  const [typing, setTyping] = useState(false)
-  const [online, setOnline] = useState(false)
+  const [syncError, setSyncError] = useState('')
   const [pending, startTransition] = useTransition()
   const retryId = useRef<string | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const broadcastTyping = useRef<(() => void) | null>(null)
+  const refreshing = useRef(false)
+  const active = useRef(true)
 
   const refresh = useCallback(async () => {
+    if (refreshing.current || !active.current || document.visibilityState !== 'visible') return
+    refreshing.current = true
     try {
       const result = await readThreadAction(initialThread.id)
+      if (!active.current) return
       if (result.success) {
-        setThread(current => ({ ...result.data, messages: [
-          ...current.messages.filter(item => item.sentAt < (result.data.messages[0]?.sentAt ?? '')),
-          ...result.data.messages,
-        ] }))
+        setSyncError('')
+        setThread(current => {
+          const ids = new Set(current.messages.map(item => item.id))
+          const overlap = result.data.messages.some(item => ids.has(item.id))
+          if (!overlap && result.data.hasMore) return result.data
+          const messages = new Map(current.messages.map(item => [item.id, item]))
+          for (const item of result.data.messages) messages.set(item.id, item)
+          return { ...result.data, hasMore: current.hasMore, messages: [...messages.values()].sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id)) }
+        })
         if (document.visibilityState === 'visible') await markThreadReadAction(initialThread.id)
-      }
-    } catch { /* A later refresh retries; sending retains explicit feedback. */ }
+      } else setSyncError(result.error)
+    } catch { if (active.current) setSyncError('Messages could not refresh. Check your connection; your draft is kept here.') }
+    finally { refreshing.current = false }
   }, [initialThread.id])
 
   useEffect(() => {
-    void markThreadReadAction(initialThread.id)
+    active.current = true
+    const initialRefresh = window.setTimeout(() => { if (document.visibilityState === 'visible') void refresh() }, 0)
     const timer = setInterval(() => { if (document.visibilityState === 'visible') void refresh() }, 8000)
-    const onFocus = () => { void refresh() }
+    const onFocus = () => { if (document.visibilityState === 'visible') void refresh() }
     window.addEventListener('focus', onFocus)
-    return () => { clearInterval(timer); window.removeEventListener('focus', onFocus) }
+    document.addEventListener('visibilitychange', onFocus)
+    return () => { active.current = false; window.clearTimeout(initialRefresh); clearInterval(timer); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
   }, [refresh, initialThread.id])
-
-  useEffect(() => {
-    if (!realtimeEnabled) return
-    const supabase = createClient()
-    const channel = supabase.channel(conversationTopic(initialThread.id), {
-      config: { private: true, presence: { key: initialThread.userId } },
-    })
-    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message', filter: `conversation_id=eq.${initialThread.id}` }, () => { void refresh() })
-      .on('broadcast', { event: 'typing' }, () => {
-        setTyping(true)
-        if (typingTimer.current) clearTimeout(typingTimer.current)
-        typingTimer.current = setTimeout(() => setTyping(false), 2500)
-      })
-      .on('presence', { event: 'sync' }, () => {
-        setOnline(Object.keys(channel.presenceState()).some(key => key !== initialThread.userId))
-      }).subscribe(status => {
-        if (status === 'SUBSCRIBED') void channel.track({ active: true }).catch(() => setOnline(false))
-      })
-    broadcastTyping.current = () => { void channel.send({ type: 'broadcast', event: 'typing', payload: {} }).catch(() => undefined) }
-    return () => {
-      broadcastTyping.current = null
-      if (typingTimer.current) clearTimeout(typingTimer.current)
-      void supabase.removeChannel(channel)
-    }
-  }, [initialThread.id, initialThread.userId, realtimeEnabled, refresh])
 
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [thread.messages.length])
 
   return <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-border-subtle bg-surface-card">
     <header className="flex items-center justify-between gap-3 border-b border-border-subtle p-4 sm:p-5">
-      <div><h2 className="font-semibold">{thread.otherName}</h2><p className="text-xs text-text-muted">{typing ? 'Typing…' : online ? 'Online' : 'Your rental conversation'}</p></div>
+      <div><h2 className="font-semibold">{thread.otherName}</h2><p className="text-xs text-text-muted">Your rental conversation</p></div>
       <Link href={`/marketplace/listing/${thread.listingId}`} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-accent-hover">View listing <ArrowUpRight className="size-4" /></Link>
     </header>
+    {syncError && <p role="status" className="px-4 pt-3 text-xs text-trust-flagged">{syncError}</p>}
     <div role="log" aria-label="Conversation messages" aria-live="polite" className="flex max-h-[65dvh] min-h-80 flex-col gap-4 overflow-y-auto p-4 sm:p-6">
       {thread.hasMore && <button type="button" className="self-center rounded-full border border-border-subtle px-4 py-2 text-xs text-text-secondary" onClick={() => startTransition(async () => {
         try {
@@ -113,7 +98,7 @@ export function ChatPanel({ initialThread, realtimeEnabled }: Props) {
       </div>
       <div className="flex items-end gap-2">
         <label className="sr-only" htmlFor="chat-message">Message</label>
-        <textarea id="chat-message" rows={2} maxLength={4000} value={body} placeholder="Write a message…" className="min-w-0 flex-1 resize-none rounded-xl border border-border-subtle bg-background-app p-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-primary" onChange={event => { setBody(event.target.value); retryId.current = null; broadcastTyping.current?.() }} />
+        <textarea id="chat-message" rows={2} maxLength={4000} value={body} placeholder="Write a message…" className="min-w-0 flex-1 resize-none rounded-xl border border-border-subtle bg-background-app p-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-primary" onChange={event => { setBody(event.target.value); retryId.current = null }} />
         <button type="submit" disabled={pending || (!body.trim() && !share)} aria-label="Send message" className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent-primary text-text-inverse disabled:opacity-50">{pending ? <LoaderCircle className="size-5 animate-spin" /> : <Send className="size-5" />}</button>
       </div>
       {error && <p role="alert" className="mt-2 text-xs text-trust-flagged">{error}</p>}

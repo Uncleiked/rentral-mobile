@@ -61,7 +61,8 @@ export function CheckoutPrompt() {
       })
 
       if (!result.success) {
-        await removeUploads(supabase, media.newUploads)
+        if (result.uncertain) setUncertain(true)
+        else await removeUploads(supabase, media.newUploads)
         setError(result.error)
         return
       }

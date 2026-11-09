@@ -50,7 +50,8 @@ export function SaveDraftButton() {
       })
 
       if (!result.success) {
-        await removeUploads(supabase, media.newUploads)
+        if (result.uncertain) setUncertain(true)
+        else await removeUploads(supabase, media.newUploads)
         toast.error(result.error)
         return
       }

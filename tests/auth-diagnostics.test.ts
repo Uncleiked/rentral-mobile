@@ -20,18 +20,12 @@ describe('safe auth feedback', () => {
   })
 })
 
-describe('configured OAuth providers', () => {
-  it('only offers explicitly enabled providers', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ external: { google: true, apple: false } })))
-    expect(await getAuthProviders()).toEqual({ google: true, apple: false })
-  })
-  it.each([null, {}, { external: { google: 'true', apple: 1 } }])('rejects malformed settings %j', async (settings) => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(settings)))
+describe('local authentication providers', () => {
+  it('offers only email/password sign-in without contacting legacy provider settings', async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error('External auth is retired'))
+    vi.stubGlobal('fetch', fetch)
     expect(await getAuthProviders()).toEqual({ google: false, apple: false })
-  })
-  it('keeps email login available during settings outages', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
-    expect(await getAuthProviders()).toEqual({ google: false, apple: false })
+    expect(fetch).not.toHaveBeenCalled()
   })
 })
 

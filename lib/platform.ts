@@ -1,4 +1,4 @@
-/** Enable only after the configured database has passed migration acceptance. */
+/** Local setup opts in after MongoDB indexes/validators are initialized; runtime readiness fails closed. */
 export function platformEnabled(): boolean {
   return process.env.RENTRAL_PLATFORM_ENABLED === 'true'
 }

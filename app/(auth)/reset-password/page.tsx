@@ -51,6 +51,10 @@ export default function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="token">Reset code</label>
+            <input className="w-full bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary focus:ring-1 focus:ring-accent-primary focus:outline-none" id="token" name="token" autoComplete="off" required minLength={43} maxLength={43} disabled={isLoading} placeholder="Paste your complete reset code" />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="password">
               New Password
             </label>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ listing: vi.fn(), transaction: vi.fn(), lock: vi.fn(), current: vi.fn(), review: vi.fn(), upsert: vi.fn(), info: vi.fn(), download: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findUniqueOrThrow: mocks.listing }, $transaction: mocks.transaction } }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: () => ({ info: mocks.info, download: mocks.download }) } }) }))
 import { analyzeListingDocument } from '@/lib/documents/analyze'
 

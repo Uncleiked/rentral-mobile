@@ -1,4 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/client'
 import { COMPLIANCE_DOCS_BUCKET, LISTINGS_MEDIA_BUCKET, videoExtensionForMime } from '@/lib/storage'
 
@@ -26,14 +25,15 @@ export type UploadedListingMedia = {
   newUploads: { bucket: string; path: string }[]
 }
 
-export async function removeUploads(supabase: SupabaseClient, uploads: { bucket: string; path: string }[]) {
+type LocalClient = ReturnType<typeof createClient>
+export async function removeUploads(supabase: LocalClient, uploads: { bucket: string; path: string }[]) {
   await Promise.allSettled(
     uploads.map(({ bucket, path }) => supabase.storage.from(bucket).remove([path]))
   )
 }
 
 export async function uploadListingMedia(
-  supabase: SupabaseClient,
+  supabase: LocalClient,
   uid: string,
   folderId: string,
   media: ListingMediaSnapshot
@@ -90,7 +90,7 @@ export async function uploadListingMedia(
 }
 
 export type SessionUpload =
-  | { ok: true; supabase: SupabaseClient; uid: string; media: UploadedListingMedia }
+  | { ok: true; supabase: LocalClient; uid: string; media: UploadedListingMedia }
   | { ok: false; error: string }
 
 // Shared by SaveDraftButton and CheckoutPrompt — both need the signed-in uid

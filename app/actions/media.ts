@@ -12,7 +12,7 @@ export async function retryListingMedia(listingId: unknown): Promise<{ success: 
   if (!id.success) return { success: false, error: 'Listing not found.' }
   try {
     const userId = await requireVerifiedUserId()
-    if (!userId) return { success: false, error: 'Sign in with a verified account to retry.' }
+    if (!userId) return { success: false, error: 'Sign in to retry.' }
     await processListingMedia(id.data, userId)
     revalidatePath('/marketplace/listing')
     return { success: true }

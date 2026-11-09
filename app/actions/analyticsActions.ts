@@ -6,6 +6,7 @@ import { requireUserId } from '@/lib/action-helpers'
 import prisma from '@/lib/db'
 import { insightEventSchema } from '@/lib/analytics/policy'
 import { platformEnabled, type ActionResult } from '@/lib/platform'
+import { withTransaction, lockRecord } from '@/lib/database/transactions'
 
 export async function setAnalyticsConsentAction(allowed: boolean): Promise<void> {
   const jar = await cookies()
@@ -29,9 +30,13 @@ export async function recordInsightAction(input: unknown): Promise<ActionResult>
     const subjectHash = createHmac('sha256', secret).update(`${month}:${userId}`).digest('hex')
     const day = new Date().toISOString().slice(0, 10)
     const dedupeKey = createHmac('sha256', secret).update(JSON.stringify({ subjectHash, day, ...event })).digest('hex')
-    await prisma.marketEvent.createMany({ data: [{ subject_hash: subjectHash, event_type: event.event,
-      category: event.category, intent: event.intent, neighborhood: event.neighborhood, budget_band: event.budgetBand,
-      bedrooms: event.bedrooms, dedupe_key: dedupeKey }], skipDuplicates: true })
+    await withTransaction(async tx => {
+      if (!await lockRecord(tx, 'user', userId)) throw new Error('ACCOUNT_UNAVAILABLE')
+      await tx.marketEvent.upsert({ where: { dedupe_key: dedupeKey }, update: {}, create: {
+        subject_hash: subjectHash, event_type: event.event, category: event.category, intent: event.intent,
+        neighborhood: event.neighborhood, budget_band: event.budgetBand, bedrooms: event.bedrooms, dedupe_key: dedupeKey,
+      } })
+    })
     return { success: true, data: undefined }
   } catch { return { success: false, error: 'Analytics event was not recorded.' } }
 }
