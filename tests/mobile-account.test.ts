@@ -64,6 +64,6 @@ it('accepts optional profile edits and rejects privilege fields, reserved names 
 it('returns only account fields needed by the signed-in user', () => {
   vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'false')
   const result = publicAccount({ ...account, username: 'member' })
-  expect(result).toEqual({ id, email: account.email, username: 'member', bio: null, avatarUrl: null, accountType: 'individual', memberSince: account.createdAt.toISOString(), platformAvailable: false })
+  expect(result).toEqual({ id, email: account.email, username: 'member', bio: null, avatarUrl: null, accountType: 'individual', memberSince: account.createdAt.toISOString(), platformAvailable: false, capabilities: { adminAvailable: false, galleryUploadAllowed: false, galleryPermissionRevision: 0 } })
   vi.unstubAllEnvs()
 })

@@ -55,6 +55,15 @@ it('runs the address preflight against an owned capture and does not accept clie
   expect(response.status).toBe(200); expect(mocks.address).toHaveBeenCalledExactlyOnceWith(owner, id, input)
   expect(await response.json()).toMatchObject({ data: { status: 'matched', toleranceMeters: 100 } })
 })
+it('keeps the exact legacy response shape unless a newer client requests bounded lookup details', async () => {
+  const result = { captureId: id, status: 'unavailable', addressHash: 'a'.repeat(64), toleranceMeters: 100, reason: 'imprecise' }
+  mocks.address.mockResolvedValue(result)
+  expect(await (await address(body({ address: 'Fixture address' }), context)).json()).toEqual({ success: true, data: { captureId: id, status: 'unavailable', addressHash: 'a'.repeat(64), toleranceMeters: 100 } })
+  const request = new Request(`https://rentral.example/api/v1/captures/${id}/check-address?details=1`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: 'Fixture address' }) })
+  const response = await address(request, context)
+  expect(await response.json()).toEqual({ success: true, data: result })
+  expect(response.headers.get('cache-control')).toBe('private, no-store')
+})
 it('reads a legacy committed listing receipt without replaying its saved mutation body', async () => {
   mocks.receipt.mockResolvedValue({ resource_id: id }); mocks.listing.mockResolvedValue({ id, listing_status: 'pending_verification' })
   const response = await requestReceipt(new Request(`https://rentral.example/api/v1/my-listings/requests/${id}?mode=submit`), { params: Promise.resolve({ clientId: id }) })

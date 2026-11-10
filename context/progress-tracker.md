@@ -1,6 +1,86 @@
 ## Progress Tracker
 
-## Recording location, branding and recovery — 2026-11-10
+## Owner administration, gallery media and upload recovery — 2026-11-10
+
+The [approved owner/admin increment](owner-admin-media-blueprint.md) implements
+web `/admin` and native Admin, deliberate persisted ownership, manual document
+review, audited fee waivers, revocable gallery permissions and manual inspection
+review. Existing money-movement independence remains in force, including for the
+owner. Active AI document screening is removed; historical findings remain.
+See the [current review](owner-admin-review.md) and [operator guide](owner-admin-setup.md).
+
+Approved gallery users can supply up to ten photos and an optional video without
+fabricated recording/GPS proof. Photo-only inventory bypasses video processing;
+gallery video still requires Mux. Grant revision checks and user-row writes
+serialize revocation with uploads/attachment/publication. Public discovery,
+profiles, saves/shares, protected media and new booking eligibility fail closed
+for revoked or stale grants. Regrant does not republish: legitimate owner resave/
+edit refreshes the grant snapshot and requires new review. Extra image references
+are protected from deletion and checked during backup verification.
+
+Browser gallery creation now preserves its actor-scoped form and intended upload
+path before bytes are sent. Unknown acknowledgements recover through owned-file
+readback after reload; a deliberate same-content/path retry follows confirmation.
+Recovered bytes do not automatically save a listing, and reviewed abandonment
+never deletes server files. Thirty focused recovery checks and scoped lint pass;
+the final production browser suite passed **11 journeys in six files**, including
+the new raw-upload readback case after reload.
+
+The profile-photo fix preserves trusted database setup/connectivity errors instead
+of mislabelling them as local disk failure. Address preflight distinguishes no
+result, uncertain building, imprecise result and provider failure without exposing
+GPS/provider text. Four live calls used only supplied strings; both full Lagos
+addresses produced state-level confidence-0 results. Nigeria is not globally
+excluded, but those buildings did not resolve. No distance was inferred and the
+ordinary 100-metre/building-confidence requirement was preserved.
+
+Verified so far: profile regressions **62 unit / 2 owned real fixtures**; focused
+backend/address/gallery/public/storage/backup **214 checks in 17 files**;
+owned owner/admin integration **10/10 in 29.73s**, using real JWT, bootstrap,
+storage, claims, receipts, document/waiver, revocation, manual inspection and
+ownership transfer, with Next adapters mocked and limiter clock isolated.
+Current source TypeScript/scoped lint and offline environment inspection passed.
+The complete existing owned Mongo suite passed **95 in one serial run: core 55,
+financial 18, auth/closure/export 20, backup 2**; its actual backup wrapper verified
+14 synthetic records, 4 files, 1 balanced journal and 1 claim, preserving the source
+and quarantining restore. Owned fixtures were cleaned. Reviewed additive selected-
+Atlas preparation verified **52 application collections / 156 indexes**, preserving
+**53 existing collections and 14 non-marker documents** before owner bootstrap.
+The subsequent dedicated bootstrap granted the exact existing active
+`dannyiked@gmail.com` account ownership: **one owner**, all staff permissions,
+admin availability and an audit record were verified, preserving credentials,
+profile and other existing users/audits. It does not grant runtime access from
+an email comparison. This intended role/audit change is separate from the
+additive preparation's preservation check.
+The final ordinary unit aggregate passed **1,868 / 0 failures / 107 configured
+skips**; all **107** owned real cases passed separately (**95 existing Mongo +
+10 owner/admin + 2 avatar**). Final production build passed Prisma generation, compilation, TypeScript
+and generation progress **103/103**. Global lint and private-value delivery scan
+passed (**1,191 files / nine private values / zero matches**). Focused counts
+overlap the aggregate and are not additive. Verification and runtime results are recorded in the
+[increment review](owner-admin-review.md) as they are completed.
+
+Final native exports passed: Android **2,104 modules / about 5.9 MB / 38.2s**;
+iOS **2,125 modules / about 5.9 MB / 22.2s**. The native intercepted preview passed
+**4 journeys / 24 API calls / 0 errors / 0 outbound requests** at 320/390/768 widths.
+Exports and intercepted browser runs do not establish physical-device acceptance.
+
+Local runtime handback passed: backend **3000**, `/help` and both icon routes
+returned 200; signed-out `/admin` redirects to sign-in and the admin API returns
+401. Existing Metro **8090** reports running. Final offline environment and
+private-value/whitespace checks passed; private environment files remain untracked.
+
+No new environment secrets are required. The user supplied the remaining Mux
+webhook value privately; key presence is not live-provider acceptance. Physical
+Android/iOS camera/gallery/large-file/recovery/accessibility tests, real provider
+acceptance and deployment/store release remain separate. Full Vercel hosting
+still needs object storage and deliberate worker/webhook hosting. The delivery
+revision belongs to Git history and the verified final handback.
+
+## Previous recording location, branding and recovery — `cb42fd1`, 2026-11-10
+
+The following checkpoint predates the owner/admin increment. Its environment,
+runtime and acceptance counts are historical, not the current provider state.
 
 The [approved increment](capture-location-brand-blueprint.md) is implemented and
 locally verified: an online private backend location lock precedes recording;

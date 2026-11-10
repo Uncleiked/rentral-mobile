@@ -1172,8 +1172,10 @@ fixture('owned isolated MongoDB replica fixture', () => {
     const recording = await sealedRecording(actor.id)
     const draft = await saveDraftForUser(actor.id, { category: 'car', wizardStep: 'details', metadata: {}, captureId: recording.id, videoPath: recording.videoPath })
     if (!draft.success) throw new Error('Expected capture-bound publication fixture')
-    const listing = await prisma.listing.update({ where: { id: draft.draftId }, data: { listing_status: 'pending_verification', text_address: address, document_path: `${actor.id}/${randomUUID()}/owned-proof.pdf` } })
-    await prisma.documentReview.create({ data: { listing_id: listing.id, status: 'approved', reviewed_by: staff.id, findings: {} } })
+    const documentPath = `${actor.id}/${randomUUID()}/owned-proof.pdf`
+    await uploadStoredObject(actor.id, 'compliance-docs', documentPath, new Blob(['%PDF-1.7\nOwned publication-mode evidence\n%%EOF']).stream(), 'application/pdf')
+    const listing = await prisma.listing.update({ where: { id: draft.draftId }, data: { listing_status: 'pending_verification', text_address: address, document_path: documentPath } })
+    await moderateListing(staff.id, listing.id, 'approve_document', 'Human reviewed the exact owned publication-mode fixture document')
     await prisma.listingVerification.create({ data: { listing_id: listing.id, capture_id: recording.id, address_hash: addressFingerprint(address), spatial_status: 'matched', distance_meters: 5 } })
     await prisma.mediaAsset.create({ data: { listing_id: listing.id, source_path: recording.videoPath, status: 'ready' } })
     process.env.MUX_ENABLED = 'true'
@@ -1186,7 +1188,7 @@ fixture('owned isolated MongoDB replica fixture', () => {
     }
     const historical = await collection('test')
     process.env.PAYSTACK_SECRET_KEY = 'sk_live_owned_collection_fixture'; process.env.PAYSTACK_ENVIRONMENT = 'live'
-    await expect(moderateListing(staff.id, listing.id, 'publish', 'Reviewed synthetic current-mode asset and fee evidence')).rejects.toThrow('Publication requires')
+    await expect(moderateListing(staff.id, listing.id, 'publish', 'Reviewed synthetic current-mode asset and fee evidence')).rejects.toMatchObject({ code: 'PUBLICATION_FEE_REQUIRED' })
     expect((await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } })).listing_status).toBe('pending_verification')
     expect(await prisma.paymentIntent.findUniqueOrThrow({ where: { id: historical.id } })).toMatchObject({ status: 'succeeded', provider_environment: 'test' })
     await collection('live')

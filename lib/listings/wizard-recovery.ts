@@ -3,8 +3,8 @@ import { LISTING_METADATA_SCHEMAS, saveDraftInputSchema, saveListingInputSchema 
 
 const id = z.string().uuid()
 export const webListingCommandSchema = z.discriminatedUnion('mode', [
-  z.object({ mode: z.literal('draft'), listing: saveDraftInputSchema.extend({ clientId: id }).strict() }).strict(),
-  z.object({ mode: z.literal('submit'), listing: saveListingInputSchema.extend({ clientId: id }).strict() }).strict(),
+  z.object({ mode: z.literal('draft'), listing: saveDraftInputSchema.safeExtend({ clientId: id }).strict() }).strict(),
+  z.object({ mode: z.literal('submit'), listing: saveListingInputSchema.safeExtend({ clientId: id }).strict() }).strict(),
 ])
 const commandMarkerSchema = z.object({ version: z.literal(1), actorId: id, command: webListingCommandSchema }).strict()
 const captureMarkerSchema = z.object({ version: z.literal(1), actorId: id, id, phase: z.enum(['begin', 'finish']) }).strict()

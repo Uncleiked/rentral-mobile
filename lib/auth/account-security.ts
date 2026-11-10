@@ -24,7 +24,7 @@ function viewEmailChange(row: EmailChange) {
 }
 async function passwordProof(userId: string, password: string) {
   if (!apiRateLimiter.allow(`account-proof:${userId}`, 10)) throw new AuthError(429, 'RATE_LIMITED', 'Too many account verification attempts. Please wait a minute.')
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, password_hash: true, closed_at: true } })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, password_hash: true, closed_at: true, suspended_at: true } })
   const valid = await verifyPassword(password, accountIsActive(user) ? user?.password_hash ?? null : null)
   if (!user || !accountIsActive(user) || !valid || !user.password_hash) throw new AuthError(400, 'CURRENT_PASSWORD_INCORRECT', 'Your current password is incorrect.')
   return { ...user, password_hash: user.password_hash }
@@ -32,7 +32,7 @@ async function passwordProof(userId: string, password: string) {
 
 export async function getAccountSecurity(userId: string) {
   await assertAuthSecurityReady()
-  const [user, change] = await Promise.all([prisma.user.findUnique({ where: { id: userId }, select: { email: true, closed_at: true } }),
+  const [user, change] = await Promise.all([prisma.user.findUnique({ where: { id: userId }, select: { email: true, closed_at: true, suspended_at: true } }),
     prisma.emailChange.findFirst({ where: { user_id: userId, status: 'pending', expires_at: { gt: new Date() } }, orderBy: { createdAt: 'desc' } })])
   if (!user || !accountIsActive(user)) throw new AuthError(401, 'UNAUTHORIZED', 'Please sign in again.')
   return accountSecuritySchema.parse({ email: user.email, delivery: availableAuthDelivery(), emailChange: change ? viewEmailChange(change) : null })
@@ -45,7 +45,7 @@ export async function changeAccountPassword(userId: string, input: unknown): Pro
   await assertAuthSecurityReady()
   await withTransaction(async tx => {
     if (!await lockRecord(tx, 'user', userId)) throw new AuthError(401, 'UNAUTHORIZED', 'Please sign in again.')
-    const current = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { password_hash: true, email: true, closed_at: true } })
+    const current = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { password_hash: true, email: true, closed_at: true, suspended_at: true } })
     if (!accountIsActive(current) || current.password_hash !== proof.password_hash || current.email !== proof.email) throw new AuthError(400, 'CREDENTIALS_CHANGED', 'Your account credentials changed. Sign in again before continuing.')
     await tx.user.update({ where: { id: userId }, data: { password_hash: passwordHash } })
     await tx.authSession.updateMany({ where: { user_id: userId, revoked_at: null }, data: { revoked_at: new Date() } })
@@ -70,7 +70,7 @@ export async function requestAccountEmailChange(userId: string, input: unknown) 
   try {
     change = await withTransaction(async tx => {
       if (!await lockRecord(tx, 'user', userId)) throw new AuthError(401, 'UNAUTHORIZED', 'Please sign in again.')
-      const current = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, password_hash: true, closed_at: true } })
+      const current = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, password_hash: true, closed_at: true, suspended_at: true } })
       if (!accountIsActive(current) || current.email !== proof.email || current.password_hash !== proof.password_hash) throw new AuthError(400, 'CREDENTIALS_CHANGED', 'Your account credentials changed. Sign in again before continuing.')
       if (await tx.user.findUnique({ where: { email: data.newEmail }, select: { id: true } })) throw new AuthError(409, 'EMAIL_UNAVAILABLE', 'This email address cannot be used for this change.')
       await tx.emailChange.updateMany({ where: { user_id: userId, status: 'pending' }, data: { status: 'cancelled' } })
@@ -115,7 +115,7 @@ export async function confirmAccountEmailChange(input: unknown): Promise<{ statu
     return await withTransaction(async tx => {
       if (!await lockRecord(tx, 'user', initial.user_id)) throw new AuthError(400, 'INVALID_EMAIL_CONFIRMATION', 'This confirmation code is invalid, expired or already used.')
       const change = await tx.emailChange.findUniqueOrThrow({ where: { id: initial.id } })
-      const user = await tx.user.findUniqueOrThrow({ where: { id: initial.user_id }, select: { email: true, password_hash: true, closed_at: true } })
+      const user = await tx.user.findUniqueOrThrow({ where: { id: initial.user_id }, select: { email: true, password_hash: true, closed_at: true, suspended_at: true } })
       const old = change.old_token_hash === hashed
       if (change.status !== 'pending' || (!old && change.new_token_hash !== hashed) || change.expires_at <= new Date() || (old ? change.old_confirmed_at : change.new_confirmed_at)
         || !accountIsActive(user) || user.email !== change.old_email || !matchesFingerprint(user.password_hash, change.credential_fingerprint)) {

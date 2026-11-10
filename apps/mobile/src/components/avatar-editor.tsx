@@ -56,7 +56,7 @@ export function AvatarEditor({ profile, disabled, onBusyChange, onSaved }: Props
   }
   return <View style={styles.photo}>
     {selected ? <Image source={{ uri: selected.uri }} alt="Selected profile photo preview" accessibilityLabel="Selected profile photo preview" style={styles.preview} /> : <MemberAvatar url={profile.avatarUrl} name={profile.username ?? 'Rentral member'} />}
-    <Text style={styles.help}>Choose a photo. Rentral prepares a small JPEG before uploading; your profile changes only when the server confirms the save.</Text>
+    <Text style={styles.help}>Choose a photo and save it to update your profile.</Text>
     <Button title={selected ? 'Choose a different photo' : 'Choose profile photo'} secondary busy={busy} disabled={disabled} onPress={() => { void choose() }} />
     {selected ? <><Button title="Save photo" disabled={busy || disabled} onPress={() => { void save() }} /><Button title="Discard selected photo" secondary disabled={busy || disabled} onPress={() => { setSelected(null); uploaded.current = null; setMessage(null) }} /></> : profile.avatarUrl ? <Button title="Remove photo" secondary disabled={busy || disabled} onPress={() => { void remove() }} /> : null}
     {message ? <Text selectable accessibilityLiveRegion="polite" style={[styles.help, failed && styles.error]}>{message}</Text> : null}

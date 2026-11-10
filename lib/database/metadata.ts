@@ -10,5 +10,6 @@ export const COMMERCIAL_VERSION = 1
 export const MESSAGING_ACTIVITY_VERSION = 1
 export const PUSH_VERSION = 1
 export const CAPTURE_VERSION = 1
+export const OWNER_ADMIN_VERSION = 1
 export const MONGO_SETUP_COLLECTION = '_RentralSetup'
 export const MONGO_SETUP_ID = 'rentral-schema'

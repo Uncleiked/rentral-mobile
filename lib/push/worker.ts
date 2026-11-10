@@ -36,7 +36,7 @@ async function claimDelivery(id: string, cutoff: Date): Promise<Claim | null> {
     if (!initial || initial.status !== 'pending' || !await lockRecord(tx, 'user', initial.user_id)) return null
     await lockRecord(tx, 'pushDevice', initial.device_id); await lockRecord(tx, 'pushDelivery', id)
     const delivery = await tx.pushDelivery.findUnique({ where: { id } }), device = await tx.pushDevice.findUnique({ where: { id: initial.device_id } })
-    const account = await tx.user.findUnique({ where: { id: initial.user_id }, select: { closed_at: true } })
+    const account = await tx.user.findUnique({ where: { id: initial.user_id }, select: { closed_at: true, suspended_at: true } })
     const session = device?.auth_session_id ? await tx.authSession.findFirst({ where: { id: device.auth_session_id, user_id: initial.user_id, expires_at: { gt: new Date() }, OR: [{ revoked_at: null }, { revoked_at: { isSet: false } }] }, select: { id: true } }) : null
     const notification = await tx.notification.findFirst({ where: { id: initial.notification_id, user_id: initial.user_id, createdAt: { gte: cutoff }, ...unread }, select: { createdAt: true } })
     if (!delivery || delivery.status !== 'pending') return null

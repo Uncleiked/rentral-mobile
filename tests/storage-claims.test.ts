@@ -4,11 +4,12 @@ import { join, resolve, sep } from 'node:path'
 import type { Prisma, StorageObject } from '@prisma/client'
 import { createLocalStorage } from '@/lib/local-storage/core'
 
-const mocks = vi.hoisted(() => ({ ready: vi.fn(), create: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), find: vi.fn(), deleteMany: vi.fn() }))
-vi.mock('@/lib/database/readiness', () => ({ assertStorageClaimsReady: mocks.ready }))
+const mocks = vi.hoisted(() => ({ ready: vi.fn(), create: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), find: vi.fn(), deleteMany: vi.fn(), reference: vi.fn() }))
+vi.mock('@/lib/database/readiness', () => ({ assertStorageClaimsReady: mocks.ready, ownerAdminPrepared: async () => true, capturePrepared: async () => false, lifecyclePrepared: async () => false }))
 vi.mock('@/lib/db', () => ({ default: { storageObject: { create: mocks.create, upsert: mocks.upsert, updateMany: mocks.updateMany,
   findUniqueOrThrow: mocks.find, deleteMany: mocks.deleteMany } } }))
-import { prepareListingStorage, claimStorageObjects, uploadStoredObject, storageObjectId } from '@/lib/storage-claims/service'
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ storageObject: { updateMany: mocks.updateMany, findUniqueOrThrow: mocks.find }, listing: { findFirst: mocks.reference }, mediaAsset: { findFirst: mocks.reference } }) }))
+import { prepareGalleryPhotos, prepareListingStorage, claimStorageObjects, removeStoredObjects, uploadStoredObject, storageObjectId } from '@/lib/storage-claims/service'
 
 let root: string
 const path = 'owner/capture/video.mov'
@@ -45,6 +46,26 @@ it('fails closed before creating a record when storage indexes are not prepared'
 it('requires real file bytes before preparing a listing reference', async () => {
   await expect(prepareListingStorage('owner', { videoPath: path })).rejects.toMatchObject({ status: 404 })
   expect(mocks.upsert).not.toHaveBeenCalled()
+})
+
+it('validates actual JPEG/PNG gallery bytes and rejects a video used as a photo', async () => {
+  const storage = createLocalStorage(root), jpg = 'owner/gallery/one.jpeg', png = 'owner/gallery/two.png'
+  await storage.upload('listings-media', jpg, stream(new Uint8Array([255,216,255,224,0,0,0,0])), 'image/jpeg')
+  await storage.upload('listings-media', png, stream(new Uint8Array([137,80,78,71,13,10,26,10])), 'image/png')
+  expect((await prepareGalleryPhotos('owner', [jpg,png])).map(item => item.contentType)).toEqual(['image/jpeg','image/png'])
+  await storage.upload('listings-media', path, stream(movie), 'video/quicktime')
+  await expect(prepareGalleryPhotos('owner', [path])).rejects.toMatchObject({ code: 'INVALID_GALLERY_PHOTO' })
+})
+
+it('retains a secondary gallery photo referenced only through the normalized gallery path registry', async () => {
+  const storage = createLocalStorage(root), photo = 'owner/gallery/secondary.jpg'
+  await storage.upload('listings-media', photo, stream(new Uint8Array([255,216,255,224,0,0,0,0])), 'image/jpeg')
+  const info = await storage.info('listings-media', photo)
+  mocks.find.mockResolvedValue({ id: storageObjectId('listings-media', photo), owner_id: 'owner', bucket: 'listings-media', path: photo, state: 'available', digest: info.digest })
+  mocks.reference.mockImplementation(({ where }: { where: Record<string, unknown> }) => where.gallery_media_paths ? { id: 'gallery-listing' } : null)
+  await expect(removeStoredObjects('owner', 'listings-media', [photo])).rejects.toMatchObject({ code: 'FILE_IN_USE' })
+  expect(await storage.info('listings-media', photo)).toMatchObject({ digest: info.digest })
+  expect(mocks.reference).toHaveBeenCalledWith({ where: { gallery_media_paths: { has: photo } }, select: { id: true } })
 })
 
 it('records verified immutable metadata before making an upload available', async () => {

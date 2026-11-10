@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma, StorageObject } from '@prisma/client'
 import prisma from '@/lib/db'
-import { assertStorageClaimsReady, lifecyclePrepared, capturePrepared } from '@/lib/database/readiness'
+import { assertStorageClaimsReady, lifecyclePrepared, capturePrepared, ownerAdminPrepared } from '@/lib/database/readiness'
 import { withTransaction } from '@/lib/database/transactions'
 import { createLocalStorage, defaultStorageDirectory, type ObjectMetadata } from '@/lib/local-storage/core'
 import { verifiedAvatarReference } from '@/lib/local-storage/avatars'
@@ -73,6 +73,19 @@ export async function prepareListingStorage(ownerId: string, paths: ListingPaths
     objects.push(object)
   }
   if (paths.documentPath) objects.push(await prepareObject(ownerId, 'compliance-docs', paths.documentPath))
+  return objects
+}
+
+/** Gallery images use the same immutable byte/type/digest checks as other media. */
+export async function prepareGalleryPhotos(ownerId: string, paths: readonly string[]): Promise<PreparedStorageObject[]> {
+  await assertStorageClaimsReady()
+  if (paths.length > 10 || new Set(paths.map(path => path.toLowerCase())).size !== paths.length) throw new StorageError(400, 'INVALID_GALLERY', 'Choose up to ten different photos.')
+  const objects: PreparedStorageObject[] = []
+  for (const path of paths) {
+    const object = await prepareObject(ownerId, 'listings-media', path)
+    if (!['image/jpeg', 'image/png'].includes(object.contentType)) throw new StorageError(415, 'INVALID_GALLERY_PHOTO', 'Choose an uploaded JPEG or PNG photo.')
+    objects.push(object)
+  }
   return objects
 }
 
@@ -156,6 +169,7 @@ async function referenced(tx: Prisma.TransactionClient, bucket: StorageBucket, p
   const match = { equals: path, mode: 'insensitive' as const }
   if (bucket === 'listings-media') {
     if (await tx.listing.findFirst({ where: { OR: [{ video_path: match }, { poster_path: match }] }, select: { id: true } })) return true
+    if (await ownerAdminPrepared() && await tx.listing.findFirst({ where: { gallery_media_paths: { has: path.toLowerCase() } }, select: { id: true } })) return true
     if (await capturePrepared() && await tx.listingCapture.findFirst({ where: { state: 'sealed', video_path: match }, select: { id: true } })) return true
     return Boolean(await tx.mediaAsset.findFirst({ where: { source_path: match }, select: { id: true } }))
   }

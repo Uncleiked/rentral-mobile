@@ -2,13 +2,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({
-  userId: vi.fn(), transaction: vi.fn(), find: vi.fn(), lock: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), revalidate: vi.fn(), mediaCreate: vi.fn(), locationUpsert: vi.fn(), locationDelete: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(), captureRead: vi.fn(), captureBind: vi.fn(), geocode: vi.fn(), verification: vi.fn(),
+  userId: vi.fn(), transaction: vi.fn(), find: vi.fn(), lock: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), revalidate: vi.fn(), mediaCreate: vi.fn(), locationUpsert: vi.fn(), locationDelete: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(), captureRead: vi.fn(), captureBind: vi.fn(), geocode: vi.fn(), verification: vi.fn(), galleryPermission: vi.fn(), galleryPrepare: vi.fn(), documentReview: vi.fn(),
 }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.userId, revalidateProfilePaths: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, listing: { findFirst: mocks.find } } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: mocks.lock }))
 vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepareStorage, claimStorageObjects: mocks.claimStorage }))
 vi.mock('@/lib/listings/capture', () => ({ readCaptureForSubmission: mocks.captureRead, bindCaptureToListing: mocks.captureBind }))
+vi.mock('@/lib/listings/gallery', () => ({ assertGalleryPermission: mocks.galleryPermission, prepareGalleryMedia: mocks.galleryPrepare }))
 vi.mock('@/lib/listings/spatial', async original => ({ ...await original<typeof import('@/lib/listings/spatial')>(), geocodeListingAddress: mocks.geocode }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
@@ -33,7 +34,8 @@ beforeEach(() => {
   const capture = { id: input.captureId, start_geometry: { type: 'Point', coordinates: [3.4, 6.45] }, begin_hash: 'begin', video_digest: 'a'.repeat(64), start_accuracy: 8 }
   mocks.captureRead.mockResolvedValue(capture); mocks.captureBind.mockResolvedValue(capture); mocks.geocode.mockResolvedValue({ longitude: 3.4, latitude: 6.45 })
   mocks.claimStorage.mockResolvedValue(undefined)
-  const tx = { listing: { findFirst: mocks.find, update: mocks.update, updateMany: mocks.updateMany, create: mocks.create }, mediaAsset: { create: mocks.mediaCreate }, listingLocation: { upsert: mocks.locationUpsert, deleteMany: mocks.locationDelete }, listingVerification: { upsert: mocks.verification } }
+  mocks.galleryPermission.mockResolvedValue(3)
+  const tx = { listing: { findFirst: mocks.find, update: mocks.update, updateMany: mocks.updateMany, create: mocks.create }, mediaAsset: { create: mocks.mediaCreate }, listingLocation: { upsert: mocks.locationUpsert, deleteMany: mocks.locationDelete }, listingVerification: { upsert: mocks.verification }, documentReview: { updateMany: mocks.documentReview } }
   mocks.transaction.mockImplementation(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx))
   mocks.update.mockResolvedValue({ id: input.draftId, lister: { username: 'renter' } })
   mocks.create.mockResolvedValue({ id: input.draftId, lister: { username: 'renter' } })
@@ -43,6 +45,38 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.unstubAllEnvs())
+
+it('submits an authorized photo-only gallery for manual review without GPS, geocoding or a Mux job', async () => {
+  vi.stubEnv('MUX_ENABLED', 'true'); for (const name of ['MUX_TOKEN_ID','MUX_TOKEN_SECRET','MUX_WEBHOOK_SECRET','MUX_SIGNING_KEY_ID','MUX_SIGNING_PRIVATE_KEY']) vi.stubEnv(name, '')
+  const photo = 'user-1/gallery/photo.png', proof = [{ kind: 'image', path: photo, objectId: 'a'.repeat(64), digest: 'b'.repeat(64), sizeBytes: 100, contentType: 'image/png' }]
+  mocks.galleryPrepare.mockResolvedValue({ proof, paths: [photo], posterPath: photo, objects: [{ id: 'a'.repeat(64), bucket: 'listings-media', path: photo, digest: 'b'.repeat(64), sizeBytes: 100, contentType: 'image/png' }] })
+  const result = await saveListing({ ...input, captureId: undefined, videoPath: undefined, mediaSource: 'approved_gallery', galleryPhotos: [photo] })
+  expect(result).toEqual({ success: true, listingId: input.draftId })
+  expect(mocks.galleryPermission).toHaveBeenCalledTimes(2)
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ media_source: 'approved_gallery', capture_id: null, video_path: null, poster_path: photo, gallery_media: proof, gallery_permission_revision: 3 }) }))
+  expect(mocks.locationDelete).toHaveBeenCalledWith({ where: { listing_id: input.draftId } })
+  expect(mocks.captureRead).not.toHaveBeenCalled(); expect(mocks.captureBind).not.toHaveBeenCalled(); expect(mocks.geocode).not.toHaveBeenCalled(); expect(mocks.locationUpsert).not.toHaveBeenCalled(); expect(mocks.verification).not.toHaveBeenCalled(); expect(mocks.mediaCreate).not.toHaveBeenCalled()
+})
+
+it('rejects gallery use before reading files when approval is absent and rechecks revocation before attachment', async () => {
+  const data = { ...input, captureId: undefined, videoPath: undefined, mediaSource: 'approved_gallery', galleryPhotos: ['user-1/gallery/photo.jpg'] }
+  mocks.galleryPermission.mockRejectedValueOnce(new ApiError(403, 'GALLERY_PERMISSION_REQUIRED', 'Approval required.'))
+  expect(await saveListing(data)).toMatchObject({ success: false, code: 'GALLERY_PERMISSION_REQUIRED' })
+  expect(mocks.galleryPrepare).not.toHaveBeenCalled(); expect(mocks.claimStorage).not.toHaveBeenCalled()
+  mocks.galleryPermission.mockResolvedValueOnce(3).mockRejectedValueOnce(new ApiError(403, 'GALLERY_PERMISSION_REQUIRED', 'Approval changed.'))
+  mocks.galleryPrepare.mockResolvedValue({ objects: [], proof: [], paths: [], posterPath: null })
+  expect(await saveListing(data)).toMatchObject({ success: false, code: 'GALLERY_PERMISSION_REQUIRED' })
+  expect(mocks.claimStorage).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled()
+})
+
+it('requires fresh manual review when a gallery host edits after a new grant revision', async () => {
+  vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true')
+  mocks.find.mockResolvedValue({ id: input.draftId, revision: 7, category: 'house', listing_status: 'suspended', media_source: 'approved_gallery', gallery_permission_revision: 2, text_address: input.address, lister: { username: 'renter' } })
+  expect(await updateListing({ listingId: input.draftId, address: input.address, basePrice: input.basePrice, metadata: input.metadata })).toEqual({ success: true })
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ gallery_permission_revision: 3, listing_status: 'pending_verification' }) }))
+  expect(mocks.documentReview).toHaveBeenCalledWith({ where: { listing_id: input.draftId }, data: { status: 'needs_review', reviewed_by: null } })
+  expect(mocks.geocode).not.toHaveBeenCalled(); expect(mocks.captureRead).not.toHaveBeenCalled()
+})
 
 it.each([saveListing, saveDraft, updateListing])('blocks a direct mutation without authentication', async action => {
   mocks.userId.mockResolvedValue(null)

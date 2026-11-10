@@ -5,7 +5,8 @@ import { publicAvatarReference } from '@/lib/accounts/avatar-reference'
 import { platformEnabled } from '@/lib/platform'
 import { muxEnabled } from '@/lib/media/config'
 import { listingMediaStatuses } from '@/lib/media/status'
-import { listingMediaUrl } from '@/lib/storage'
+import { listingMediaUrl, listingPhotoUrl } from '@/lib/storage'
+import { galleryIsPublic, galleryPhotoPaths, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 import { formatListingPrice, listingPriceDenomination, type ListingMetadataJson } from '@/lib/profile-data'
 import { DISCOVERY_PAGE_SIZE, discoveryLocation, type DiscoveryCursor, type DiscoveryFilters } from '@/lib/discovery-policy'
 
@@ -13,7 +14,8 @@ const listingSelect = {
   id: true, category: true, text_address: true, base_rent_amount: true,
   asset_metadata: true, video_path: true, poster_path: true, listing_status: true,
   createdAt: true, lister_id: true,
-  lister: { select: { username: true, avatar_url: true, kyc_verified: true, account_type: true, bio: true, createdAt: true } },
+  ...galleryListingSelect,
+  lister: { select: { username: true, avatar_url: true, kyc_verified: true, account_type: true, bio: true, createdAt: true, ...galleryUserSelect } },
 } satisfies Prisma.ListingSelect
 
 type ListingRow = Prisma.ListingGetPayload<{ select: typeof listingSelect }>
@@ -24,6 +26,8 @@ export type DiscoveryListing = {
   badges: string[]; saved: boolean; savingAvailable: boolean
   intent: string
   holdUntil?: string | null
+  mediaSource?: 'recorded' | 'approved_gallery'
+  galleryPhotoUrls?: string[]
 }
 export type ListingDetails = DiscoveryListing & {
   listerId: string; isOwner: boolean; status: string; metadata: ListingMetadataJson
@@ -52,7 +56,7 @@ function listingBadges(category: string, metadata: ListingMetadataJson): string[
   return [metadata.capacityPersons ? `${metadata.capacityPersons} guests` : '', metadata.hasCaptain ? 'Captain included' : ''].filter(Boolean)
 }
 
-async function serializeListings(rows: ListingRow[], userId: string | null): Promise<DiscoveryListing[]> {
+async function serializeListings(rows: ListingRow[], userId: string | null, allowOwnUnavailable = false): Promise<DiscoveryListing[]> {
   const useMux = muxEnabled()
   const media = await listingMediaStatuses(rows.map(row => row.id))
   const savingAvailable = platformEnabled() && Boolean(userId)
@@ -72,19 +76,23 @@ async function serializeListings(rows: ListingRow[], userId: string | null): Pro
     holdDeadlines.set(hold.listing_id, new Date(Math.min(hold.expires_at.getTime(), paymentDeadline?.getTime() ?? Infinity)).toISOString())
   }
   return rows.flatMap(row => {
+    if (!galleryIsPublic(row) && !(allowOwnUnavailable && row.lister_id === userId)) return []
     if (!row.lister.username || (row.category !== 'house' && row.category !== 'car' && row.category !== 'boat')) return []
     // An active listing cannot advertise an unfinished video when Mux is enabled.
-    if (useMux && row.listing_status === 'active' && media.get(row.id)?.status !== 'ready') return []
+    const rowUseMux = useMux && Boolean(row.video_path)
+    if (rowUseMux && row.listing_status === 'active' && media.get(row.id)?.status !== 'ready') return []
     const metadata = metadataRecord(row.asset_metadata)
     return [{
       id: row.id, title: listingTitle(row.category, metadata), category: row.category,
       location: discoveryLocation(row.text_address), price: formatListingPrice(row.base_rent_amount),
       priceDenomination: typeof metadata.pricePeriod === 'string' && ['year', 'month', 'day', 'trip'].includes(metadata.pricePeriod) ? metadata.pricePeriod : listingPriceDenomination(row.category),
       posterUrl: row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
-      videoUrl: !useMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
-      useMux: useMux && row.listing_status !== 'draft', username: row.lister.username,
+      videoUrl: !rowUseMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
+      useMux: rowUseMux && row.listing_status !== 'draft', username: row.lister.username,
+      mediaSource: row.media_source === 'approved_gallery' ? 'approved_gallery' : 'recorded',
+      galleryPhotoUrls: galleryPhotoPaths(row).map((_path, index) => listingPhotoUrl(row.id, index)),
       avatarUrl: publicAvatarReference(row.lister.avatar_url, row.lister_id), isVerified: row.lister.kyc_verified,
-      badges: listingBadges(row.category, metadata), saved: savedIds.has(row.id), savingAvailable,
+      badges: [...listingBadges(row.category, metadata), ...(row.media_source === 'approved_gallery' ? ['Admin-approved gallery'] : [])], saved: savedIds.has(row.id), savingAvailable,
       holdUntil: holdDeadlines.get(row.id) ?? null,
       intent: typeof metadata.rentalIntent === 'string' && ['rent', 'buy', 'squat', 'shortlet'].includes(metadata.rentalIntent) ? metadata.rentalIntent : 'rent',
     }]
@@ -170,7 +178,7 @@ export async function getListingDetails(id: string, userId: string | null): Prom
     where: { id, lister: { is: activeAccountWhere }, OR: [{ listing_status: 'active' }, ...(userId ? [{ lister_id: userId }] : [])] }, select: listingSelect,
   })
   if (!row) return null
-  const [listing] = await serializeListings([row], userId)
+  const [listing] = await serializeListings([row], userId, true)
   if (!listing) return null
   return {
     ...listing, listerId: row.lister_id, isOwner: row.lister_id === userId,

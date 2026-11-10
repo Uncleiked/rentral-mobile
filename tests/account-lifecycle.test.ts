@@ -23,6 +23,11 @@ beforeEach(() => {
   mocks.lifecycle.mockResolvedValue(false)
 })
 describe('account closure boundary', () => {
+  it('protects the current owner from account closure until ownership is transferred', async () => {
+    mocks.user.mockResolvedValue({ id, email: 'owned@fixture.invalid', password_hash: 'private-hash', closed_at: null, staff_role: 'owner' })
+    await expect(closeAccount(id, { currentPassword: 'proof' })).rejects.toMatchObject({ code: 'OWNER_TRANSFER_REQUIRED' })
+    expect(mocks.archive).not.toHaveBeenCalled(); expect(mocks.updateUser).not.toHaveBeenCalled()
+  })
   it('checks current proof before transaction writes', async () => {
     mocks.verify.mockResolvedValue(false)
     await expect(closeAccount(id, { currentPassword: 'wrong' })).rejects.toMatchObject({ code: 'CURRENT_PASSWORD_INCORRECT' })

@@ -25,6 +25,7 @@ export default async function EditListingPage({
       base_rent_amount: true,
       asset_metadata: true,
       listing_status: true,
+      media_source: true,
     },
   })
   if (!listing || !LISTING_CATEGORIES.includes(listing.category as ListingCategory)) notFound()
@@ -39,6 +40,7 @@ export default async function EditListingPage({
           address: listing.text_address ?? '',
           basePrice: listing.base_rent_amount ? String(Number(listing.base_rent_amount)) : '',
           metadata: (listing.asset_metadata ?? {}) as Record<string, unknown>,
+          mediaSource: listing.media_source === 'approved_gallery' ? 'approved_gallery' : 'recorded',
         }}
       />
     </div>

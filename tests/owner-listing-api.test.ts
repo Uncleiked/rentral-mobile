@@ -70,7 +70,7 @@ it('keeps the media vault scoped to owner drafts with footage and a stable archi
   const response=await vault(request('/vault?limit=20'))
   expect(response.status).toBe(200)
   expect((await response.json()).data.items[0].area).toBe('Yaba')
-  expect(fixture.many).toHaveBeenCalledWith(expect.objectContaining({where:{lister_id:actor,listing_status:'draft',video_path:{not:null}},take:21}))
+  expect(fixture.many).toHaveBeenCalledWith(expect.objectContaining({where:{lister_id:actor,listing_status:'draft',AND:[{OR:[{video_path:{not:null}},{gallery_media_paths:{isEmpty:false}}]}]},take:21}))
 })
 it('forwards only editable posted fields and the expected revision to the shared owner service', async () => {
   const payload={address:'Updated fixture address',basePrice:'500001',metadata:{bedrooms:'3'},expectedRevision:8}

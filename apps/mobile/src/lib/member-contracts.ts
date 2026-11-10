@@ -5,7 +5,8 @@ export const memberIdSchema = z.string().uuid()
 const timestamp = z.string().datetime({ offset: true })
 const handle = z.string().regex(/^[a-z0-9_]{3,24}$/)
 export const memberProfileSchema = z.object({ id: memberIdSchema, email: z.string().email(), username: handle.nullable(), bio: z.string().max(280).nullable(),
-  avatarUrl: z.string().max(1500).nullable(), accountType: z.string().max(40).nullable(), memberSince: timestamp, platformAvailable: z.boolean().default(false) })
+  avatarUrl: z.string().max(1500).nullable(), accountType: z.string().max(40).nullable(), memberSince: timestamp, platformAvailable: z.boolean().default(false),
+  adminAvailable: z.boolean().optional(), galleryUploadAllowed: z.boolean().optional(), galleryPermissionRevision: z.number().int().nonnegative().optional() })
 export const publicMemberSchema = z.object({ username: handle, displayName: z.string().min(1).max(200), accountType: z.enum(['individual', 'organization']),
   identityVerified: z.boolean(), memberSince: timestamp, bio: z.string().max(280).nullable(), avatarUrl: z.string().max(1500).nullable(),
   reviewCount: z.number().int().nonnegative(), averageRating: z.number().min(1).max(5).nullable(), listingIds: z.array(memberIdSchema).max(50),
@@ -28,6 +29,7 @@ export const bookingFeedbackSchema = z.object({ reviewSubmitted: z.boolean(), op
 export const publicListingSchema = z.object({ id: memberIdSchema, title: z.string().max(200), category: z.enum(['house', 'car', 'boat']), location: z.string().max(200),
   price: z.string().max(100), pricePeriod: z.string().max(20), intent: z.string().max(40), posterUrl: z.string().nullable(), videoUrl: z.string().nullable(), useMux: z.boolean(),
   badges: z.array(z.string().max(200)).max(30), saved: z.boolean(), savingAvailable: z.boolean(), holdUntil: timestamp.nullable(),
+  mediaSource: z.enum(['recorded', 'approved_gallery']).optional(), galleryPhotoUrls: z.array(z.string().max(3000)).max(10).optional(),
   host: z.object({ username: handle, avatarUrl: z.string().nullable(), identityVerified: z.boolean() }) })
 export const profileListingsSchema = cursorPageSchema(publicListingSchema)
 const safetyAppealSchema = z.object({ statement: z.string().min(30).max(4000), status: z.enum(['pending', 'upheld', 'removed']),

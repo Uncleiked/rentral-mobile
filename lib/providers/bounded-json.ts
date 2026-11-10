@@ -2,7 +2,7 @@ export class ProviderJsonError extends Error {
   readonly code: 'UNAVAILABLE' | 'RESPONSE_TOO_LARGE' | 'INVALID_RESPONSE' | 'TIMEOUT'
   constructor(code: ProviderJsonError['code']) { super('The configured provider is temporarily unavailable.'); this.name = 'ProviderJsonError'; this.code = code }
 }
-const allowedHosts = new Set(['generativelanguage.googleapis.com', 'api.geoapify.com'])
+const allowedHosts = new Set(['api.geoapify.com'])
 
 /** Fixed provider destinations, no redirect forwarding, and one deadline for
  * both headers and the actual streamed body. Never retain provider error text. */

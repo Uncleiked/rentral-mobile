@@ -8,10 +8,10 @@ export function ownsVideoPath(userId: string, path: string): boolean {
   return ownsListingMediaPath(userId, path, 'video')
 }
 
-export function ownsListingMediaPath(userId: string, path: string, kind: 'video' | 'poster'): boolean {
+export function ownsListingMediaPath(userId: string, path: string, kind: 'video' | 'poster' | 'photo'): boolean {
   const parts = path.split('/')
   return parts.length === 3 && parts[0] === userId && parts.every(part => /^[\w.-]+$/.test(part) && !part.includes('..')) &&
-    (kind === 'video' ? /\.(webm|mp4|mov)$/ : /\.jpg$/).test(parts[2])
+    (kind === 'video' ? /\.(webm|mp4|mov)$/ : kind === 'photo' ? /\.(jpe?g|png)$/i : /\.jpg$/).test(parts[2])
 }
 
 export function validSource(info: { size?: number; contentType?: string }): boolean {

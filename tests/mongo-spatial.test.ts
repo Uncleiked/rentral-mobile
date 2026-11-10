@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ initial: vi.fn(), current: vi.fn(), location: vi.fn(), upsert: vi.fn(), lock: vi.fn(), transaction: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findUniqueOrThrow: mocks.initial } } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: mocks.lock }))
-import { distanceMetersWgs84, listingProximity, verifyListingAddress } from '@/lib/listings/spatial'
+import { distanceMetersWgs84, geocodeListingAddressWithReason, listingProximity, verifyListingAddress } from '@/lib/listings/spatial'
 
 const point = { longitude: 3.4, latitude: 6.45 }
 const listingId = '27d5a2ee-62c1-4c5d-93de-7a0ee6d5728d'
@@ -53,6 +53,30 @@ describe('WGS84 coordinate proximity on the documented mean-radius sphere', () =
 })
 
 describe('address matching and stale provider results', () => {
+  it('does not geocode approved gallery media or create a recording-location verification', async () => {
+    mocks.initial.mockResolvedValue({ text_address: 'Test gallery building, Lagos', media_source: 'approved_gallery' })
+    expect(await verifyListingAddress(listingId)).toBe('unavailable')
+    expect(fetch).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.location).not.toHaveBeenCalled(); expect(mocks.upsert).not.toHaveBeenCalled()
+  })
+  it('cannot apply a delayed recorded-address result after the media source changes to gallery', async () => {
+    mocks.current.mockResolvedValue({ text_address: 'Test building, Lekki, Lagos', media_source: 'approved_gallery' })
+    expect(await verifyListingAddress(listingId)).toBe('unavailable')
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(mocks.location).not.toHaveBeenCalled(); expect(mocks.upsert).not.toHaveBeenCalled()
+  })
+  it('distinguishes a successful empty lookup, an uncertain building and a coarse Lagos state result from an outage', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [] }))
+    expect(await geocodeListingAddressWithReason('Fixture address')).toEqual({ status: 'unavailable', reason: 'no_result' })
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [{ geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'building', country_code: 'ng', rank: { confidence: 0.14 } } }] }))
+    expect(await geocodeListingAddressWithReason('Fixture address')).toEqual({ status: 'unavailable', reason: 'low_confidence' })
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [{ geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'state', country_code: 'ng', rank: { confidence: 0 } } }] }))
+    expect(await geocodeListingAddressWithReason('Fixture address')).toEqual({ status: 'unavailable', reason: 'imprecise' })
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('private upstream diagnostics', { status: 503 }))
+    expect(await geocodeListingAddressWithReason('Fixture address')).toEqual({ status: 'unavailable', reason: 'provider_unavailable' })
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
   it('checks geocoded building points against the private 100m threshold', async () => {
     expect(await verifyListingAddress(listingId)).toBe('matched')
     expect(mocks.upsert.mock.calls[0][0].create).toMatchObject({ spatial_status: 'matched', distance_meters: 0 })

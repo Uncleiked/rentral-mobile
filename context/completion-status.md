@@ -1,6 +1,50 @@
 # Rentral current completion matrix
 
-## Current capture/location/brand increment — 2026-11-10
+## Current owner administration and approved gallery increment — 2026-11-10
+
+The [approved increment](owner-admin-media-blueprint.md) adds current-role web/native
+administration, persisted ownership, human document decisions, audited publication
+fee waivers, revocable gallery upload rights, photo-only media and manual
+inspection review. Personal KYC remains removed; MongoDB/JWT, npm and Paystack only
+remain authoritative. The optional AI screening path is retired.
+
+| Area | Current behavior |
+| --- | --- |
+| Administration | `/admin` on web and native Admin share current database permissions, reasoned decisions, durable receipts and audit history. Owner identity is bound to the account ID. |
+| Documents and publication | A person approves the exact current private file/digest. An explicit owner-self override is audited. Publication requires a verified fee or a separate waiver plus current media/document rules. |
+| Gallery media | An admin-approved member may upload ten photos and one optional video; at least one media item is needed for submission. Photo-only listings need no Mux or GPS. Gallery origin and unverified recording location remain explicit. |
+| Revocation and recovery | Upload/save/submit/edit/publish recheck current permission/revision. Revocation hides public gallery inventory; regrant requires legitimate resave/edit and new review. Existing bookings/files/history remain. |
+| Inspections | Gallery evidence receives independent manual review, without GPS claims or automatic payouts. Ordinary recorded inspections retain their existing handshake policy. |
+| Reported failures | Profile upload errors retain database diagnoses; unresolved address data and provider outages have separate bounded messages. Ordinary 100-metre admission remains unchanged. |
+
+Current evidence and remaining gates are in the [increment review](owner-admin-review.md):
+owned owner/admin integration **10/10**, profile **62 unit / 2 real fixtures**,
+focused backend **214 checks**, native exports, source TypeScript/scoped lint and
+environment inspection passed. The ordinary aggregate passed **1,868 / 0 failures /
+107 configured skips**; all **107 owned real cases** ran separately and passed.
+Production build, TypeScript, global lint and **11 browser journeys in six files**
+passed. Runtime handback is recorded in the review; counts are not combined
+across overlapping suites. Use the [owner guide](owner-admin-setup.md) for normal
+operations and database bootstrap. No new admin environment key is introduced.
+
+Selected Atlas preparation verified **52 application collections / 156 indexes**,
+preserving **53 existing collections / 14 non-marker documents** before the
+deliberate owner grant. The exact existing active `dannyiked@gmail.com` account
+then received audited ownership; one owner, all staff permissions and admin
+availability were verified while preserving credentials/profile and other
+existing users/audits. Email text is not runtime authorization.
+
+Local backend **3000** and existing Metro **8090** are running. Help/icons return
+200; unauthenticated Admin is guarded. Final offline environment and private-value
+checks passed; both private environment files remain untracked.
+
+Physical-device and live-provider acceptance, deployment and store release are
+separate. Git history and the final handback identify the delivered revision.
+
+## Previous capture/location/brand increment — delivered as `cb42fd1`
+
+This checkpoint predates the owner/admin/gallery changes. Its provider and runtime
+notes are historical and are superseded by the current review above.
 
 The [approved increment](capture-location-brand-blueprint.md) is implemented and
 locally verified: private server recording locks, exact uploaded-video binding,
@@ -47,7 +91,7 @@ Physical-device and actual-provider release acceptance is not claimed.
 The latest command results belong in [the progress tracker](progress-tracker.md);
 do not interpret the old checked boxes as current release approval.
 
-## Current scope
+## Baseline scope (historical)
 
 Expo Android/iOS, npm workspaces/Node 24.x, local Next.js, the saved MongoDB Atlas
 connection through Prisma 6.19.3, local JWT accounts and private filesystem
@@ -151,7 +195,7 @@ These are distinct observed runs, not numbers to add into a new aggregate:
 | 06 | Mobile capture | Native camera/location recording with permission, cancellation, duration and actual-format handling: [capture](../apps/mobile/src/components/WalkthroughCapture.tsx), [create screen](../apps/mobile/app/create-listing.tsx); web [capture canvas](../components/listing/CaptureCanvas.tsx). | Focused native regressions and earlier source/type/bundle checks. | Physical Android/iOS permissions, interruption, MOV/MP4 capture, GPS accuracy and large uploads still need device evidence. |
 | 07 | Spatial/category metadata | House/car/boat metadata, itemized fees, private capture geometry, native validation and shared service persistence: [listing service](../lib/listings/service.ts), [contracts](../lib/contracts/listings.ts), [native create](../apps/mobile/app/create-listing.tsx). | M; [native listing tests](../tests/native-listings.test.ts). | Capture location is private. Fee ceiling is a product limit; metadata/GPS never proves legal ownership. |
 | 08 | Media ingestion and transcoding | Authenticated bounded local uploads, durable object claims/tombstones, resumable local-to-Mux upload, leases, webhook binding, unknown-create recovery and signed playback: [storage claims](../lib/storage-claims/service.ts), [media processing](../lib/media/processing.ts), [resumable upload](../lib/media/resumable-upload.ts). | S, M including media lease/webhook races; [resumable tests](../tests/media-resumable-upload.test.ts). | Mux credentials/signing/webhooks/worker gates and real video acceptance required. Never create replacement assets blindly after unknown outcomes. |
-| 09 | AI document verification | Authorized actual private bytes/digest/magic checks, bounded Gemini response and advisory human-review signals: [document analyzer](../lib/documents/analyze.ts), [bounded transport](../lib/providers/bounded-json.ts). | F; [document boundary tests](../tests/documents-security.test.ts). | Optional current JSON/image/PDF-capable model and key. Human review remains required; no registry/authenticity/ownership guarantee or AI auto-publication. |
+| 09 | AI document verification (retired) | Historical optional screening was removed by the approved owner/admin increment. Current [document policy](document-providers.md) uses exact-file human decisions through [Admin](../components/admin/AdminWorkspace.tsx). | F described the baseline; current owner integration is in [review](owner-admin-review.md). | No Gemini key or active model screening remains. Human review is not a guarantee of legal title or authenticity. |
 | 10 | Pay-per-post gate | Native owner fee overview/checkout/reconcile with durable recovery, shared fixed amount and exact intent/URL/current-mode proof: [payments](../lib/payments/service.ts), [owner fee controls](../apps/mobile/src/components/listing-publication-fee.tsx), [fee contract](listing-publication-fee.md). Web/shared publication prerequisites remain authoritative. | M includes four new fee guard cases; W real HTTP 401/409/404 scopes with no intent writes; N native fee8/35; P exports/build. | Implemented and locally accepted. PAYMENTS_ENABLED, actual merchant keys/capabilities and human publication review remain separate; no provider activation or OPay simulation. |
 | 11 | Listing editor | Owned native/web draft resume, editable metadata, archive controls and protected immutable capture/media bindings: [owner service](../lib/listings/owner.ts), [native editor](../apps/mobile/app/owner-listing/[id].tsx), [web editor](../app/marketplace/listing/[id]/edit/page.tsx). | M, S; [draft privacy tests](../tests/mongo-draft-privacy.test.ts). | Active owner, attached-object existence and claim checks. Published listing review/payment/media invariants cannot be bypassed by editing. |
 | 12 | Discovery feed UI | Grid/discovery plus native vertical walkthrough feed with actual detail/media state: [Explore](../apps/mobile/app/(tabs)/explore.tsx), [walkthrough feed](../apps/mobile/app/walkthrough-feed.tsx), [web marketplace](../app/marketplace/page.tsx). | Earlier phone discovery and controlled browser evidence; [mobile discovery tests](../tests/mobile-discovery.test.ts). | Physical playback, lifecycle/focus and accessibility checks remain. Unavailable media has honest state. |

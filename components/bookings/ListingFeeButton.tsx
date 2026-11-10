@@ -3,11 +3,12 @@
 import { useState, useTransition } from 'react'
 import { startListingFeePaymentAction } from '@/app/actions/paymentActions'
 
-type Props = { listingId: string; enabled: boolean }
+type Props = { listingId: string; enabled: boolean; waived?: boolean }
 
-export function ListingFeeButton({ listingId, enabled }: Props) {
+export function ListingFeeButton({ listingId, enabled, waived = false }: Props) {
   const [error, setError] = useState('')
   const [pending, startTransition] = useTransition()
+  if (waived) return <p role="status" className="rounded-xl border border-glass-border-success bg-accent-muted p-4 text-sm leading-6 text-text-secondary">An administrator waived the publication fee. Your listing still requires human document approval and the remaining publication checks.</p>
   return <div className="space-y-3">
     <button disabled={!enabled || pending} className="min-h-12 w-full rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => startTransition(async () => {
       setError('')

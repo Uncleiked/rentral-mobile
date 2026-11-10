@@ -5,12 +5,15 @@ import * as Crypto from 'expo-crypto'
 import { ownerListingDetailSchema } from '../../../../lib/contracts/listings'
 import type { CaptureReading } from '../../../../lib/contracts/capture'
 import { useAuth } from '../providers/AuthProvider'
+import { useMemberResource } from './use-member-resource'
+import { memberProfileSchema } from '../lib/member-contracts'
+import type { NativeGalleryChoice } from '../lib/gallery-picker'
 import { ApiError, errorMessage } from '../lib/api'
 import { memberGet } from '../lib/member-api'
 import { listingFormError, type ListingCategory, type ListingForm, type NativeCapture } from '../lib/native-listing'
 import { confirmOwnedUpload, readOwnerListingRequest, saveOwnerListing } from '../lib/owner-listing-api'
 import { prepareNativeListingUpload, uploadPreparedNativeListingFile } from '../lib/native-upload'
-import { buildNativeDraftCommand, canClearDeclinedDraft, draftCaptureId, isLegacyDraftCommand, nativeAddressCheckMatches, recoveredCaptureSession, type NativeAddressCheck } from '../lib/native-draft-workflow'
+import { buildNativeDraftCommand, canClearDeclinedDraft, draftCaptureId, isLegacyDraftCommand, nativeAddressCheckMatches, nativeDraftUsesGallery, recoveredCaptureSession, type NativeAddressCheck } from '../lib/native-draft-workflow'
 import { beginNativeCapture, captureAddressKey, checkNativeCaptureAddress, finishNativeCapture, readNativeCapture, sealNativeCapture } from '../lib/capture-api'
 import { dismissNativeDeviceDraft, loadNativeDeviceDraft, newNativeDeviceDraft, resolveNativeDeviceDraft, saveNativeDeviceDraft, serverDraftState, stashNativeDraftFile, type NativeDeviceDraft } from '../lib/native-draft-store'
 import { formFromOwnerListing } from '../lib/native-listing'
@@ -18,6 +21,7 @@ import { formFromOwnerListing } from '../lib/native-listing'
 export function useNativeListingDraft(serverId: string | null) {
   const { session } = useAuth()
   const actorId = session?.user.id ?? ''
+  const capabilities = useMemberResource('/me', memberProfileSchema)
   const currentActor = useRef(actorId)
   useLayoutEffect(() => { currentActor.current = actorId; return () => { currentActor.current = '' } }, [actorId])
   const [draft, setDraft] = useState<NativeDeviceDraft | null>(null)
@@ -90,6 +94,37 @@ export function useNativeListingDraft(serverId: string | null) {
       void commit(next).catch(failure => { if (mounted.current) setError(`Device recovery could not be saved: ${errorMessage(failure)}. No server save is confirmed.`) })
     }, 500)
   }
+  async function setMediaSource(source: 'recorded' | 'approved_gallery'): Promise<void> {
+    if (lock.current || !latest.current || latest.current.pending) return
+    if ((nativeDraftUsesGallery(latest.current) ? 'approved_gallery' : 'recorded') === source) return
+    if (latest.current.captureSession && ['starting','recording','finishing','sealing'].includes(latest.current.captureSession.phase)) throw new Error('Confirm the saved recording session before changing media source.')
+    lock.current = true; setBusy(true); setError(null)
+    try {
+      if (source === 'approved_gallery') {
+        const current = await memberGet('/me', memberProfileSchema, undefined, actorId)
+        if (!current.galleryUploadAllowed || current.galleryPermissionRevision === undefined) throw new Error('An administrator must approve gallery uploads for this account first.')
+      }
+      latestAddressCheck.current = null; setAddressCheck(null)
+      await commit(snapshot({ mediaSource: source, capture: null, captureSession: null, videoUpload: null, galleryFiles: [], server: latest.current.server ? { ...latest.current.server, mediaSource: source, videoPath: null, posterPath: null, captureId: null, hasCoords: false, galleryPhotos: [] } : null }))
+    } catch (failure) { setError(errorMessage(failure)); throw failure }
+    finally { lock.current = false; setBusy(false) }
+  }
+  async function gallery(values: NativeGalleryChoice[]): Promise<void> {
+    if (lock.current || !latest.current || latest.current.pending || !nativeDraftUsesGallery(latest.current)) throw new Error('Open an approved gallery draft before choosing its files.')
+    const kind = values[0]?.kind
+    if (!kind || values.some(value => value.kind !== kind) || (kind === 'video' && values.length !== 1) || values.length > 10) throw new Error('Choose up to ten photos or one video at a time.')
+    if ((latest.current.galleryFiles ?? []).some(item => item.kind === kind && item.upload?.state === 'unknown')) throw new Error('Check the saved gallery upload status before replacing these files.')
+    lock.current = true; setBusy(true); setError(null); setPhase('Keeping your gallery selection on this device…')
+    try {
+      const current = await memberGet('/me', memberProfileSchema, undefined, actorId)
+      if (!current.galleryUploadAllowed) throw new Error('Gallery approval is no longer active. Keep this draft and contact an administrator.')
+      const files: NonNullable<NativeDeviceDraft['galleryFiles']> = []
+      for (const value of values) files.push({ id: Crypto.randomUUID(), uri: await stashNativeDraftFile(actorId, latest.current.localId, value.uri, value.kind, value.mimeType), kind: value.kind, mimeType: value.mimeType, upload: null })
+      await commit(snapshot({ galleryFiles: [...(latest.current.galleryFiles ?? []).filter(item => item.kind !== kind), ...files] }))
+      setMessage('Your gallery selection is kept on this device. It receives human review and has no recording location proof.')
+    } catch (failure) { setError(errorMessage(failure)); throw failure }
+    finally { lock.current = false; setBusy(false); setPhase('') }
+  }
   async function capture(value: NativeCapture | null): Promise<void> {
     if (lock.current || !latest.current || latest.current.pending) throw new Error('Wait for the saved draft operation before replacing this recording.')
     if (value) throw new Error('Record a fresh walkthrough with an online location session.')
@@ -105,6 +140,7 @@ export function useNativeListingDraft(serverId: string | null) {
   }
   async function beginCapture(reading: CaptureReading): Promise<string> {
     if (lock.current || !latest.current || latest.current.pending) throw new Error('Open the editable device draft before recording.')
+    if (nativeDraftUsesGallery(latest.current)) throw new Error('This draft uses approved gallery media. Choose recorded media before starting a location session.')
     if (latest.current.captureSession && ['starting','recording','finishing','sealing'].includes(latest.current.captureSession.phase)) throw new Error('Check the saved recording status before starting another take.')
     lock.current = true; setBusy(true); setError(null)
     try {
@@ -164,7 +200,7 @@ export function useNativeListingDraft(serverId: string | null) {
       if (!id || (current.capture && !['recorded','sealed'].includes(current.captureSession?.phase ?? ''))) throw new Error('Confirm a completed recording location before checking the address.')
       const result = await checkNativeCaptureAddress(id, current.form.address, actorId)
       if (currentActor.current !== actorId || !latest.current || draftCaptureId(latest.current) !== id || captureAddressKey(latest.current.form.address) !== addressKey || latest.current.category !== current.category) throw new Error('The recording or address changed. Check the current address again.')
-      const next = { captureId: id, addressKey, status: result.status }
+      const next = { captureId: id, addressKey, status: result.status, reason: result.reason }
       latestAddressCheck.current = next; setAddressCheck(next)
     } catch (failure) { setError(errorMessage(failure)) }
     finally { lock.current = false; setBusy(false); setPhase('') }
@@ -201,6 +237,23 @@ export function useNativeListingDraft(serverId: string | null) {
     }
     finally { if (uploadController.current === controller) uploadController.current = null; setUploading(false) }
   }
+  async function uploadGalleryFiles(permissionRevision: number): Promise<void> {
+    const fileIds = (latest.current?.galleryFiles ?? []).map(item => item.id)
+    for (const id of fileIds) {
+      const item = latest.current?.galleryFiles?.find(value => value.id === id)
+      if (!item) throw new Error('The saved gallery selection changed. Reopen its recovery before uploading.')
+      if (item.upload?.state === 'uploaded') continue
+      if (item.upload?.state === 'unknown') throw new Error('Check the saved gallery upload before sending it again.')
+      const prepared = { upload: prepareNativeListingUpload(item.uri, item.kind, actorId, item.mimeType, item.upload?.upload.path, permissionRevision), state: 'prepared' as const }
+      const update = async (state: 'prepared' | 'unknown' | 'uploaded') => commit(snapshot({ galleryFiles: latest.current!.galleryFiles!.map(value => value.id === id ? { ...value, upload: { ...prepared, state } } : value) }))
+      await update('prepared'); await update('unknown')
+      setPhase(item.kind === 'photo' ? 'Uploading a gallery photo…' : 'Uploading the gallery video…')
+      const controller = new AbortController(); uploadController.current = controller; setUploading(true)
+      try { await uploadPreparedNativeListingFile(prepared.upload, actorId, controller.signal); await update('uploaded') }
+      catch (failure) { if (failure instanceof ApiError && failure.status >= 400 && failure.status < 500 && failure.code !== 'INVALID_RESPONSE' && failure.status !== 409) await update('prepared'); throw failure }
+      finally { if (uploadController.current === controller) uploadController.current = null; setUploading(false) }
+    }
+  }
   async function ensureSealed(): Promise<void> {
     const current = latest.current
     if (!current?.capture) return
@@ -223,12 +276,18 @@ export function useNativeListingDraft(serverId: string | null) {
     let saveAccepted = false
     try {
       if (!latest.current.pending) {
-        if (latest.current.capture && (!latest.current.capture.captureId || !['recorded','sealed'].includes(latest.current.captureSession?.phase ?? ''))) throw new Error('Confirm the completed backend recording location, or record a fresh walkthrough before saving.')
+        const usesGallery = nativeDraftUsesGallery(latest.current)
+        if (!usesGallery && latest.current.capture && (!latest.current.capture.captureId || !['recorded','sealed'].includes(latest.current.captureSession?.phase ?? ''))) throw new Error('Confirm the completed backend recording location, or record a fresh walkthrough before saving.')
         if (mode === 'submit') {
           const invalid = listingFormError(latest.current.category, latest.current.form); if (invalid) throw new Error(invalid)
-          if (!nativeAddressCheckMatches(latest.current, latestAddressCheck.current)) throw new Error('Check that the address matches your recording location before submitting.')
+          if (!usesGallery && !nativeAddressCheckMatches(latest.current, latestAddressCheck.current)) throw new Error('Check that the address matches your recording location before submitting.')
         }
-        await uploadFile('video'); await ensureSealed(); await uploadFile('document')
+        if (usesGallery) {
+          const current = await memberGet('/me', memberProfileSchema, undefined, actorId)
+          if (!current.galleryUploadAllowed || current.galleryPermissionRevision === undefined) throw new Error('Gallery approval is no longer active. Keep this draft and contact an administrator.')
+          await uploadGalleryFiles(current.galleryPermissionRevision)
+        } else { await uploadFile('video'); await ensureSealed() }
+        await uploadFile('document')
         const command = buildNativeDraftCommand(latest.current, mode, Crypto.randomUUID())
         const saved = await commit(snapshot({ pending: command }))
         if (saved.pending?.listing.clientId !== command.listing.clientId) throw new Error('This device draft changed on another screen. Reopen recovery before saving.')
@@ -241,6 +300,7 @@ export function useNativeListingDraft(serverId: string | null) {
       const server = await memberGet(`/my-listings/${result.id}`, ownerListingDetailSchema, undefined, actorId)
       if (server.id !== result.id) throw new ApiError('The saved listing could not be confirmed. Keep the original request for recovery.', 'INVALID_RESPONSE', 200)
       const next = { ...current, form: formFromOwnerListing(server), category: server.category, server: serverDraftState(server),
+        mediaSource: server.mediaSource ?? 'recorded', galleryFiles: [],
         ...(server.videoPath !== current.videoUpload?.upload.path ? { capture: null, captureSession: null, videoUpload: null } : {}),
         ...(server.documentPath !== current.documentUpload?.upload.path ? { document: null, documentUpload: null } : {}) }
       const resolved = await resolveNativeDeviceDraft(actorId, current.localId, command.listing.clientId!, next)
@@ -260,13 +320,26 @@ export function useNativeListingDraft(serverId: string | null) {
     if (lock.current || !latest.current) return
     lock.current = true; setBusy(true); setError(null)
     try {
+      let missingUpload = false
       for (const field of ['videoUpload','documentUpload'] as const) {
         const item = latest.current[field]
         if (item?.state !== 'unknown') continue
-        await confirmOwnedUpload(item.upload.bucket, item.upload.path, { size: item.upload.size, contentType: item.upload.contentType }, actorId)
-        await commit(snapshot({ [field]: { ...item, state: 'uploaded' } }))
+        try {
+          await confirmOwnedUpload(item.upload.bucket, item.upload.path, { size: item.upload.size, contentType: item.upload.contentType }, actorId)
+          await commit(snapshot({ [field]: { ...item, state: 'uploaded' } }))
+        } catch (failure) {
+          if (!(failure instanceof ApiError) || failure.status !== 404 || failure.code !== 'NOT_FOUND') throw failure
+          await commit(snapshot({ [field]: { ...item, state: 'prepared' } })); missingUpload = true
+        }
       }
-      setMessage('The saved upload status is confirmed. No file was uploaded again.')
+      for (const entry of latest.current.galleryFiles ?? []) {
+        if (entry.upload?.state !== 'unknown') continue
+        let state: 'uploaded' | 'prepared' = 'uploaded'
+        try { await confirmOwnedUpload(entry.upload.upload.bucket, entry.upload.upload.path, { size: entry.upload.upload.size, contentType: entry.upload.upload.contentType }, actorId) }
+        catch (failure) { if (!(failure instanceof ApiError) || failure.status !== 404 || failure.code !== 'NOT_FOUND') throw failure; state = 'prepared'; missingUpload = true }
+        await commit(snapshot({ galleryFiles: latest.current.galleryFiles!.map(item => item.id === entry.id ? { ...item, upload: { ...entry.upload!, state } } : item) }))
+      }
+      setMessage(missingUpload ? 'No completed upload was found for at least one saved path. The original files and paths are kept; explicitly save again to retry them. No file was uploaded by this check.' : 'The saved upload status is confirmed. No file was uploaded again.')
     } catch (failure) { setError(errorMessage(failure)) }
     finally { lock.current = false; setBusy(false) }
   }
@@ -278,7 +351,7 @@ export function useNativeListingDraft(serverId: string | null) {
       try {
         const result = await readOwnerListingRequest(command.listing.clientId!, command.mode, actorId)
         const server = await memberGet(`/my-listings/${result.id}`, ownerListingDetailSchema, undefined, actorId)
-        const resolved = await resolveNativeDeviceDraft(actorId, current.localId, command.listing.clientId!, { ...current, category: server.category, form: formFromOwnerListing(server), server: serverDraftState(server), capture: null, captureSession: null, videoUpload: null, document: null, documentUpload: null })
+        const resolved = await resolveNativeDeviceDraft(actorId, current.localId, command.listing.clientId!, { ...current, category: server.category, mediaSource: server.mediaSource ?? 'recorded', galleryFiles: [], form: formFromOwnerListing(server), server: serverDraftState(server), capture: null, captureSession: null, videoUpload: null, document: null, documentUpload: null })
         if (currentActor.current === actorId) { latest.current = resolved; setDraft(resolved); latestAddressCheck.current = null; setAddressCheck(null) }
         setMessage('The original saved request is confirmed. Current server details are shown; no request was repeated.')
       } catch (failure) {
@@ -302,12 +375,13 @@ export function useNativeListingDraft(serverId: string | null) {
     try {
       const server = await memberGet(`/my-listings/${latest.current.server.id}`, ownerListingDetailSchema, undefined, actorId)
       latestAddressCheck.current = null; setAddressCheck(null)
-      await commit(snapshot({ category: server.category, form: formFromOwnerListing(server), server: serverDraftState(server), capture: null, captureSession: null, document: null, videoUpload: null, documentUpload: null }))
+      await commit(snapshot({ category: server.category, mediaSource: server.mediaSource ?? 'recorded', galleryFiles: [], form: formFromOwnerListing(server), server: serverDraftState(server), capture: null, captureSession: null, document: null, videoUpload: null, documentUpload: null }))
       setMessage('Current server details replace the device form. Exact capture coordinates remain private on the server.')
     } catch (failure) { setError(errorMessage(failure)) }
     finally { lock.current = false; setBusy(false) }
   }
   return { draft: draft?.actorId === actorId ? draft : null, loading, busy, uploading, phase, error, message, checked, deviceSavedAt, updateForm, capture, beginCapture, completeCapture, interruptCapture, isCaptureSessionActive, checkCapture, checkAddress, addressCheck,
-    addressMatched: Boolean(draft && nativeAddressCheckMatches(draft, addressCheck)), document, send, checkUploads, checkRequest, dismiss, cancelUpload: () => uploadController.current?.abort(),
+    addressMatched: Boolean(draft && nativeAddressCheckMatches(draft, addressCheck)), galleryAllowed: capabilities.data?.galleryUploadAllowed === true && !capabilities.error, capabilitiesLoading: capabilities.loading,
+    setMediaSource, gallery, document, send, checkUploads, checkRequest, dismiss, cancelUpload: () => uploadController.current?.abort(),
     differentServerDraft: Boolean(serverId && draft?.server?.id !== serverId), reloadServer, reload: () => { latest.current = null; setLoading(true); setGeneration(value => value + 1) } }
 }

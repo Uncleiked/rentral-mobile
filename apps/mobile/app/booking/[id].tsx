@@ -7,6 +7,7 @@ import { BookingActions } from '../../src/components/booking-actions'
 import { BookingSummary, BookingQuoteSummary } from '../../src/components/booking-summary'
 import { BookingRequest } from '../../src/components/BookingRequest'
 import { BookingFeedback } from '../../src/components/booking-feedback'
+import { ManualInspection } from '../../src/components/manual-inspection'
 import { useBookingDetail } from '../../src/hooks/use-booking-detail'
 import { canRequestOrdinaryPayout } from '../../src/lib/financial-input'
 import { colors, fonts, space } from '../../src/theme'
@@ -25,7 +26,8 @@ export default function BookingScreen() {
         {resource.error ? <View style={styles.feedback}><Text accessibilityRole="alert" selectable style={styles.error}>Could not refresh: {resource.error}</Text><Button title="Refresh booking" secondary onPress={() => { void refresh().catch(() => undefined) }} /></View> : null}
         <BookingSummary booking={booking} />
         {booking.quote ? <BookingQuoteSummary quote={booking.quote} /> : null}
-        <BookingActions key={booking.id} booking={booking} onUpdated={resource.replace} refresh={refresh} />
+        {booking.inspectionMode !== 'manual' || Object.values(booking.actions).some(Boolean) || booking.payments.length ? <BookingActions key={booking.id} booking={booking} onUpdated={resource.replace} refresh={refresh} /> : null}
+        {booking.inspectionMode === 'manual' && booking.kind === 'inspection' ? <ManualInspection bookingId={booking.id} /> : null}
         {booking.actions.convertHold ? <BookingRequest listingId={booking.listing.id} intent="rent" hold={booking} /> : null}
         {['confirmed', 'completed', 'disputed'].includes(booking.status) ? <BookingFeedback bookingId={booking.id} status={booking.status} onChanged={refresh} /> : null}
         {booking.rentalBookingId ? <Button title="View linked rental" secondary onPress={() => router.push({ pathname: '/booking/[id]', params: { id: booking.rentalBookingId! } })} /> : null}

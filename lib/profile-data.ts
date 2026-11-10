@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
-import { listingMediaUrl } from '@/lib/storage'
+import { listingMediaUrl, listingPhotoUrl } from '@/lib/storage'
+import { galleryIsPublic, galleryPhotoPaths, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 import { requireUserId } from '@/lib/action-helpers'
 import { ensureAccountHandle } from '@/lib/accounts/bootstrap'
 import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
@@ -43,6 +44,8 @@ export type ListingSummary = {
   videoUrl: string | null
   useMux: boolean
   media: MediaSummary | null
+  mediaSource?: 'recorded' | 'approved_gallery'
+  galleryPhotoUrls?: string[]
   badges: string[]
   status: string
 }
@@ -102,16 +105,18 @@ export async function getListingsForProfile(
       poster_path: true,
       video_path: true,
       listing_status: true,
+      ...galleryListingSelect,
+      lister: { select: galleryUserSelect },
     },
   })
 
   const mediaByListing = await listingMediaStatuses(rows.map(row => row.id))
-  return rows.map((row) => {
+  return rows.filter(row => options?.includeDrafts || galleryIsPublic(row)).map((row) => {
     const metadata = (row.asset_metadata ?? {}) as ListingMetadataJson
     const isDraft = row.listing_status === LISTING_STATUS.DRAFT
     const statusBadge = LISTING_STATUS_BADGES[row.listing_status] ?? row.listing_status
     const media = mediaByListing.get(row.id) ?? null
-    const useMux = muxEnabled() && !isDraft
+    const useMux = muxEnabled() && !isDraft && Boolean(row.video_path)
     return {
       id: row.id,
       title: isDraft
@@ -119,11 +124,13 @@ export async function getListingsForProfile(
         : deriveListingTitle(row.category, metadata),
       price: formatListingPrice(row.base_rent_amount),
       priceDenomination: listingPriceDenomination(row.category),
-      posterUrl: !useMux && row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
+      posterUrl: row.poster_path && (!useMux || row.media_source === 'approved_gallery') ? listingMediaUrl(row.id, 'poster') : null,
       videoUrl: !useMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
       useMux: useMux && media?.status === 'ready',
       media,
-      badges: [statusBadge, capitalizeCategory(row.category)],
+      mediaSource: row.media_source === 'approved_gallery' ? 'approved_gallery' : 'recorded',
+      galleryPhotoUrls: galleryPhotoPaths(row).map((_path, index) => listingPhotoUrl(row.id, index)),
+      badges: [statusBadge, capitalizeCategory(row.category), ...(row.media_source === 'approved_gallery' ? ['Admin-approved gallery'] : [])],
       status: row.listing_status,
     }
   })

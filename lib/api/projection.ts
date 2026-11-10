@@ -5,6 +5,7 @@ export function publicListing(listing: DiscoveryListing) {
     id: listing.id, title: listing.title, category: listing.category, location: listing.location,
     price: listing.price, pricePeriod: listing.priceDenomination, intent: listing.intent,
     posterUrl: listing.posterUrl, videoUrl: listing.videoUrl, useMux: listing.useMux,
+    mediaSource: listing.mediaSource ?? 'recorded', galleryPhotoUrls: listing.galleryPhotoUrls ?? [],
     mediaEndpoint: `/api/v1/listings/${encodeURIComponent(listing.id)}/media`,
     badges: listing.badges, saved: listing.saved, savingAvailable: listing.savingAvailable,
     holdUntil: listing.holdUntil ?? null,

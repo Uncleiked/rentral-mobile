@@ -66,3 +66,9 @@ it('never retries an uncertain upload or fabricates a public URL', async () => {
   await expect(uploadPreparedAvatar({ uri: 'file:///fixture/avatar.jpg', bytes: fixtures.bytes })).rejects.toMatchObject({ code: 'NETWORK_ERROR', status: 0 })
   expect(fixtures.fetch).toHaveBeenCalledTimes(1)
 })
+it('preserves the backend setup diagnosis without treating it as a photo or session failure', async () => {
+  fixtures.fetch.mockResolvedValueOnce(Response.json({ success: false, code: 'DATABASE_SETUP_REQUIRED', error: 'MongoDB is not prepared.' }, { status: 503 }))
+  await expect(uploadPreparedAvatar({ uri: 'file:///fixture/avatar.jpg', bytes: fixtures.bytes })).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED', status: 503, message: 'MongoDB is not prepared.' })
+  expect(fixtures.invalidate).not.toHaveBeenCalled()
+  expect(fixtures.fetch).toHaveBeenCalledTimes(1)
+})

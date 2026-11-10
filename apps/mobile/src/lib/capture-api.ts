@@ -40,7 +40,7 @@ export async function checkNativeCaptureAddress(id: string, address: string, act
   z.string().uuid().parse(id)
   const body = checkCaptureAddressInputSchema.parse({ address })
   const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, captureAddressKey(body.address))
-  const result = memberResponse(captureAddressResultSchema, await api<unknown>(`/captures/${id}/check-address`, { method: 'POST', body, expectedUserId: actorId }))
+  const result = memberResponse(captureAddressResultSchema, await api<unknown>(`/captures/${id}/check-address?details=1`, { method: 'POST', body, expectedUserId: actorId }))
   if (result.captureId !== id || result.addressHash !== hash) throw new ApiError('This address result does not match the current recording and address. Check it again.', 'INVALID_RESPONSE', 200)
   return result
 }

@@ -9,6 +9,7 @@ import { assertNoSymlinks, pathWithin } from './capture.ts'
 import { BackupError, safeBackupPath, withVerifiedBackup, type BackupSummary } from './archive.ts'
 import { createLocalStorage } from '../local-storage/core.ts'
 import { storageBucket, type StorageBucket } from '../local-storage/policy.ts'
+import { verifyGalleryReferences } from './gallery.ts'
 
 function integer(value: unknown): bigint {
   if (BSON.Long.isLong(value)) return value.toBigInt()
@@ -58,8 +59,11 @@ async function verifyStorageClaims(db: Db, storage: string): Promise<number> {
   } finally { await cursor.close() }
   // Legacy references may predate persistent claims. Verify those too, without
   // fetching external URLs or assuming missing bytes can be regenerated.
-  const listings = db.collection('Listing').find({}, { projection: { lister_id: 1, video_path: 1, poster_path: 1, document_path: 1 }, batchSize: 50 })
-  try { for await (const listing of listings) for (const field of ['video_path', 'poster_path', 'document_path']) if (typeof listing[field] === 'string') await verifyFile(field === 'document_path' ? 'compliance-docs' : 'listings-media', listing[field], listing.lister_id) }
+  const listings = db.collection('Listing').find({}, { projection: { lister_id: 1, listing_status: 1, video_path: 1, poster_path: 1, document_path: 1, capture_id: 1, media_source: 1, gallery_media: 1, gallery_media_paths: 1, gallery_permission_revision: 1 }, batchSize: 50 })
+  try { for await (const listing of listings) {
+    for (const field of ['video_path', 'poster_path', 'document_path']) if (typeof listing[field] === 'string') await verifyFile(field === 'document_path' ? 'compliance-docs' : 'listings-media', listing[field], listing.lister_id)
+    await verifyGalleryReferences(listing, (path, owner) => verifyFile('listings-media', path, owner), id => db.collection<{ _id: string; [key: string]: unknown }>('StorageObject').findOne({ _id: id }))
+  } }
   finally { await listings.close() }
   const avatars = db.collection('User').find({ avatar_url: { $type: 'string' } }, { projection: { avatar_url: 1 }, batchSize: 50 })
   try { for await (const user of avatars) if (user.avatar_url.startsWith('/api/v1/files/profile-avatars/')) await verifyFile('profile-avatars', user.avatar_url.slice('/api/v1/files/profile-avatars/'.length), user._id) }

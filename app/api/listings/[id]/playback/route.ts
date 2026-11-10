@@ -4,6 +4,7 @@ import { requireUserId } from '@/lib/action-helpers'
 import { muxClient } from '@/lib/media/mux'
 import { muxConfigured, muxEnabled } from '@/lib/media/config'
 import { canViewMedia } from '@/lib/media/policy'
+import { galleryIsPublic, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 
 export const runtime = 'nodejs'
 const headers = { 'Cache-Control': 'private, no-store' }
@@ -17,9 +18,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!id.success) return Response.json({ error: 'Not found.' }, { status: 404, headers })
     const media = await prisma.mediaAsset.findUnique({
       where: { listing_id: id.data },
-      select: { status: true, playback_id: true, listing: { select: { lister_id: true, listing_status: true } } },
+      select: { status: true, playback_id: true, listing: { select: { lister_id: true, listing_status: true, ...galleryListingSelect, lister: { select: galleryUserSelect } } } },
     })
-    if (!media || !canViewMedia(userId, media.listing)) return Response.json({ error: 'Not found.' }, { status: 404, headers })
+    if (!media || !canViewMedia(userId, media.listing) || media.listing.lister_id !== userId && !galleryIsPublic(media.listing)) return Response.json({ error: 'Not found.' }, { status: 404, headers })
     if (media.status !== 'ready' || !media.playback_id) return Response.json({ error: 'Video is not ready yet.' }, { status: 409, headers })
     const tokens = await muxClient().jwt.signPlaybackId(media.playback_id, {
       keyId: process.env.MUX_SIGNING_KEY_ID!,

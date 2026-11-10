@@ -16,7 +16,7 @@ vi.mock('@/lib/database/config', () => ({
   mongoDatabaseName: () => 'owned_readiness_fixture',
 }))
 
-import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared } from '@/lib/database/readiness'
+import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared, assertOwnerAdminReady, ownerAdminPrepared } from '@/lib/database/readiness'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -59,6 +59,21 @@ describe('Mongo readiness recovery', () => {
     state.nextRead = () => Promise.resolve({ schemaVersion: 1, storageClaimsVersion: 2 })
     await assertMongoReady()
     await expect(assertStorageClaimsReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+  })
+  it('keeps existing account reads available while owner/gallery preparation fails closed', async () => {
+    await assertMongoReady()
+    await expect(assertOwnerAdminReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, ownerAdminVersion: 2 })
+    expect(await ownerAdminPrepared()).toBe(false)
+    await assertMongoReady()
+  })
+  it('refreshes a negative gallery marker before deciding whether stored media is referenced', async () => {
+    vi.useFakeTimers()
+    expect(await ownerAdminPrepared()).toBe(false)
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, ownerAdminVersion: 1 })
+    expect(await ownerAdminPrepared()).toBe(true)
+    await assertOwnerAdminReady()
+    expect(state.clients).toHaveLength(1)
   })
   it('prepares media transport, commercial billing and conversation activity independently of core auth', async () => {
     vi.useFakeTimers()

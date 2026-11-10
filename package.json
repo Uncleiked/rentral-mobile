@@ -25,6 +25,7 @@
     "setup:local": "node scripts/setup-local-auth.mjs",
     "env:check": "node scripts/check-environment.mjs",
     "staff:role": "node --experimental-strip-types scripts/staff-role.ts",
+    "owner:bootstrap": "node --experimental-strip-types scripts/bootstrap-owner.ts",
     "worker": "node scripts/run-local-workers.mjs",
     "backup:capture": "node --experimental-strip-types scripts/backup.ts capture",
     "backup:verify": "node scripts/verify-backup.mjs"

@@ -101,6 +101,12 @@ it('hides foreign notifications and rejects actor/content fields before marking'
 })
 
 it('returns a strictly public host projection without email, private identity evidence or draft listings', async () => {
+  const privateDigest = 'd'.repeat(64), privateObjectId = 'c'.repeat(64)
+  mocks.listings.mockResolvedValueOnce([{ id, media_source: 'recorded', gallery_permission_revision: 9,
+    gallery_media: { photos: [{ path: 'PRIVATE_GALLERY_PATH', objectId: privateObjectId, digest: privateDigest }], video: null },
+    lister: { gallery_upload_allowed: true, gallery_permission_revision: 9 },
+    privateLocation: { geometry: { type: 'Point', coordinates: [3.456789, 6.987654] } },
+  }])
   const response = await profile(request('/profiles/host'), profileContext)
   expect(response.status).toBe(200)
   const body = await response.json()
@@ -109,8 +115,14 @@ it('returns a strictly public host projection without email, private identity ev
   const select = mocks.user.mock.calls[0][0].select
   for (const field of ['email', 'password_hash', 'verifiedDocument', 'didit_decision', 'analytics_subjects']) expect(select).not.toHaveProperty(field)
   expect(select.individualProfile).toEqual({ select: { full_name: true } })
-  expect(mocks.listings).toHaveBeenCalledWith(expect.objectContaining({ where: { lister_id: otherId, listing_status: 'active' }, take: 50, select: { id: true } }))
+  expect(mocks.listings).toHaveBeenCalledWith(expect.objectContaining({ where: { lister_id: otherId, listing_status: 'active' }, take: 50,
+    select: { id: true, media_source: true, gallery_media: true, gallery_permission_revision: true,
+      lister: { select: { gallery_upload_allowed: true, gallery_permission_revision: true } } },
+  }))
   expect(body.data).not.toHaveProperty('id')
+  expect(JSON.stringify(body)).not.toMatch(/gallery_media|gallery_permission_revision|gallery_upload_allowed|privateLocation|geometry|coordinates|PRIVATE_GALLERY_PATH|objectId|digest|3\.456789|6\.987654/)
+  expect(JSON.stringify(body)).not.toContain(privateDigest)
+  expect(JSON.stringify(body)).not.toContain(privateObjectId)
 })
 
 it('preserves historical identity truth without requiring it and suppresses private or external avatar URLs', async () => {

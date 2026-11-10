@@ -14,6 +14,10 @@ model User {
   email            String   @unique
   password_hash    String?
   staff_role       String?
+  suspended_at DateTime?
+  suspension_reason String?
+  gallery_upload_allowed Boolean? @default(false)
+  gallery_permission_revision Int? @default(0)
   closed_at DateTime?
   push_consent_version Int? @default(0)
   analytics_consent Boolean? @default(false)
@@ -86,6 +90,13 @@ model Listing {
   verification     ListingVerification?
   privateLocation  ListingLocation?
   capture_id String?
+  media_source String? @default("recorded")
+  gallery_media Json?
+  gallery_media_paths String[] @default([])
+  gallery_permission_revision Int?
+  fee_waived_at DateTime?
+  fee_waived_by String?
+  fee_waiver_reason String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -202,6 +213,13 @@ model Booking {
   handshake_code_hash String?
   seeker_checked_in_at DateTime?
   lister_checked_in_at DateTime?
+  manual_inspection_status String?
+  manual_inspection_evidence String?
+  manual_inspection_requested_by String?
+  manual_inspection_requested_at DateTime?
+  manual_inspection_reviewed_by String?
+  manual_inspection_reviewed_at DateTime?
+  manual_inspection_review_reason String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   payments PaymentIntent[]
@@ -499,6 +517,8 @@ model DocumentReview {
   status String @default("pending")
   findings Json
   reviewed_by String?
+  approved_path String?
+  approved_digest String?
   listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reviewer User? @relation(fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdAt DateTime @default(now())

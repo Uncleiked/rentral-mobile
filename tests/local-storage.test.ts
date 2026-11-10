@@ -17,6 +17,7 @@ vi.mock('@/lib/storage-claims/service', () => ({ uploadStoredObject: claims.uplo
 import { POST as upload, GET as list, DELETE as remove } from '@/app/api/v1/uploads/[bucket]/route'
 import { GET as file, HEAD } from '@/app/api/v1/files/[bucket]/[...path]/route'
 import { ApiError } from '@/lib/api/http'
+import { MONGO_READINESS_MESSAGES } from '@/lib/database/readiness-errors'
 
 const png = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z6XIAAAAASUVORK5CYII=', 'base64'))
 const movie = new Uint8Array(64)
@@ -52,13 +53,25 @@ afterEach(async () => {
 })
 
 describe('scoped local storage and verified binary uploads', () => {
+  it.each(['DATABASE_UNAVAILABLE', 'DATABASE_SETUP_REQUIRED'] as const)('reports the actual database prerequisite during avatar upload: %s', async code => {
+    // Next module reloads can give custom errors a different class identity.
+    const failure = Object.assign(new Error('PRIVATE provider text must not be returned'), { name: 'MongoReadinessError', status: 503, code })
+    claims.upload.mockRejectedValueOnce(failure)
+    const response = await upload(uploadRequest('owner/avatar.png', png), uploadContext())
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ success: false, error: MONGO_READINESS_MESSAGES[code], code })
+    await expect(storage.info('profile-avatars', 'owner/avatar.png')).rejects.toBeDefined()
+  })
   it('denies a closed owner’s avatar while keeping active owners’ upload previews available', async () => {
     await storage.upload('profile-avatars', 'owner/avatar.png', bytesStream(png), 'image/png')
     avatarOwner.mockResolvedValueOnce(null)
     expect((await file(new Request('http://localhost:3000/api/v1/files/profile-avatars/owner/avatar.png'), fileContext('profile-avatars', 'owner/avatar.png'))).status).toBe(404)
     const visible = await file(new Request('http://localhost:3000/api/v1/files/profile-avatars/owner/avatar.png'), fileContext('profile-avatars', 'owner/avatar.png'))
     expect(visible.status).toBe(200); await visible.arrayBuffer()
-    expect(avatarOwner).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'owner', OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }) }))
+    expect(avatarOwner).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'owner', AND: [
+      { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+      { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+    ] }) }))
   })
   it('preserves bytes when the shared deletion boundary reports a committed reference', async () => {
     await storage.upload('profile-avatars', 'owner/avatar.png', bytesStream(png), 'image/png')

@@ -1,118 +1,135 @@
-# Memory — Recording location, branding and recovery
+# Memory — Owner administration and approved gallery media
 
-Last updated: 2026-11-10 Africa/Lagos. Source and local verification are complete.
-The delivery revision is recorded in Git history; remote verification belongs to
-the final handback. Confirm actual Git/process state before further action.
+Last updated: 2026-11-10 Africa/Lagos. The user approved the owner/admin blueprint.
+Source, current-source local verification and runtime handback are complete.
+Selected Atlas preparation and named-account ownership are verified. Git history
+and the final handback identify the delivery revision.
+Check actual Git/process state
+and context/owner-admin-review.md before assuming any operation ran.
 
 ## What was built
 
-The [approved capture/location/brand blueprint](context/capture-location-brand-blueprint.md)
-adds private backend recording locks, fresh start/end readings, exact completed-
-upload/video/digest binding and server address admission. Geoapify must resolve a
-confident Nigerian building/amenity within 100 metres for owner submission;
-staff publication independently checks current proof. Edits cannot replace
-recording GPS. Old drafts remain; unverified recordings need a new take.
+Web /admin and native Admin share current-role APIs and audited command receipts.
+The deliberate bootstrap binds ownership to the existing active account requested
+by the user, dannyiked@gmail.com; ordinary email sign-in never grants a role.
+Ordinary staff, suspension and account-closure flows protect the owner. Transfer
+uses its own audited operation. Source includes member/staff controls, gallery
+permission decisions, document review, fee waivers and manual inspections.
 
-Native/web capture and address screens use owner-scoped status/receipt recovery.
-Original web commands/nonces persist per actor before mutation; navigation and
-late responses cannot affect another wizard. Shared emerald doorway/r branding,
-native icon/splash and bounded reduced-motion opening reveal are implemented.
-The RGBA ICO fix resolves Next's favicon-processing error. See the
-[increment review](context/capture-location-brand-review.md) and [progress](context/progress-tracker.md).
+Active Gemini document screening is removed. Human approval binds to the exact
+private file/digest. Fee waiver means waived, not paid; it creates no payment or
+journal fiction. Owner-self listing review requires an explicit detailed override.
+Financial and inspection participant independence still applies to the owner.
+
+Gallery permission is separate from KYC. Current grant/revision is rechecked for
+upload/save/submit/edit/publish, with actual User-row writes to serialize
+revocation. Server-built proofs bind owned byte-validated objects/digests; every
+photo is protected from deletion and verified by backup restoration. Photo-only
+listings need no Mux/GPS. Optional video keeps Mux's 120s/200MiB ceiling. Public
+origin/trust labels are explicit, with no fabricated capture or GPS match.
+Revocation hides inventory; regrant requires legitimate resave/edit and new review.
+Existing booking, evidence, file and financial history remains.
+
+Profile upload errors retain trusted Mongo setup/connectivity diagnoses rather
+than claiming local disk failed. Capture preflight adds opt-in bounded lookup
+reasons with legacy strict-response compatibility. Four live Geoapify calls used
+only supplied strings; both full Lagos addresses returned state-level confidence 0.
+No private recording GPS was read/sent and no distance was inferred. Ordinary
+recorded listing admission keeps its precision/confidence and 100-metre boundary.
 
 ## Decisions made
 
-- Preserve Expo Android/iOS, Node 24/npm 11.19.1 workspaces, local Next.js,
-  Prisma 6.19.3 MongoDB, JWT accounts, private filesystem storage, Paystack only
-  and no personal KYC. PostGIS is retired; the user approved this MongoDB plan.
-- User authorized whole-app completion and this blueprint, necessary additive
-  preparation, cleanup/testing/environment guidance and commit/push to
-  Uncleiked/rentral-mobile. Prior baseline **6f2af2f** is delivered. Do not
-  reopen approvals or add deployment/store release scope.
-- Preserve private env/keys/URI, operational files, original PG/history and
-  installed skills. User is actively configuring keys; this increment did not
-  edit private env. Never print values or add backend keys to native public env.
-- GPS is device-reported evidence, not rooted-device attestation, unit-level
-  address proof or ownership verification. Recording needs internet. Start,
-  finish and seal use one session; sealed owner drafts may resume in another.
+- Preserve Expo Android/iOS, npm/Node 24, Next.js, Prisma 6.19.3 MongoDB, JWT,
+  private local filesystem storage, Paystack only and removal of personal KYC.
+- User explicitly approved context/owner-admin-media-blueprint.md, named-account
+  bootstrap, necessary additive preparation, cleanup/testing/guidance and existing
+  repository delivery. Do not reopen routine authorization or add store/deploy scope.
+- No new admin/owner environment secret is required. Owner identity is persisted
+  by account ID. Existing backend Geoapify/Mux/Paystack configuration stays private.
+- Preserve .env.local, mobile private settings, uploads, installed skills, original
+  PostgreSQL/history and financial records. Never print keys/URI/private IDs or
+  put backend values in public mobile configuration.
+- Real provider payment/payout, public deployment and EAS/store release remain
+  separate. Full Vercel use needs object storage and reviewed workers/webhooks.
 
 ## Problems solved
 
-Capture sealing requires actual completed-upload provenance, preventing legacy
-file adoption from manufacturing a fresh video. Locked revision/address/capture
-rechecks reject stale Geoapify results after concurrent edits. Mongo sessions
-handle missing/null revoked_at correctly. Web uncertain commands retain original
-receipt identities; full refresh without the retained video requires retake.
+State-only or uncertain address results are not evidence of provider outage.
+The API opts newer clients into ?details=1; older strict clients keep their exact
+response shape. New owner media fields are optional for older recorded payloads.
+Gallery source bypasses recording only under a current explicit server grant.
+Published/suspended gallery edits after regrant refresh the grant snapshot and
+force manual review, preventing automatic republication.
 
-Production browser found a 320px stepper overflow: flex-child minimum widths
-made the page 379px wide. Shrinkable five-column grid/wrapped labels measured
-320px with zero overflow; the unchanged browser assertion now passes.
-
-Next's ICO decoder requires embedded RGBA PNG data; native iOS icon stays RGB.
-Intro/splash safety releases prevent font/image/error callbacks trapping entry.
-
-Installed @mux/cli 4.0.0 lacks a win32/x64 prebuilt executable; npm installation
-succeeds but login cannot run. The user installed cloudflared 2026.10.7. If the
-old terminal PATH cannot resolve it, use the verified executable directly:
-`C:\Program Files (x86)\cloudflared\cloudflared.exe`, or fully restart VS Code.
-No administrator shell is needed to run it. See [Windows Mux](context/mux-local-setup.md).
-No public tunnel was started by us.
+Root accepted and implemented one additional review finding: web gallery uploads
+previously chose a new random path after an unknown byte-upload acknowledgement.
+The source now persists the intended path/form before bytes, performs owned-file
+readback after interruption/reload, and requires deliberate same-content/path
+retry using a full chunked WebCrypto fingerprint. Reviewed abandonment retains
+other work and does not delete server files. Thirty focused checks and scoped
+lint pass; the final production browser suite passed all 11 journeys in six files,
+including the third new unknown-upload/readback journey.
 
 ## Current state
 
-- **1,792 unit checks passed**, with 95 owned-fixture cases normally skipped.
-  Global ESLint passed. Final owned Mongo core **55/55** and separate financial/
-  auth/backup **40** passed; these are not one serial 95-case run. Actual backup
-  wrapper: 14 synthetic records, 4 files, 1 balanced journal, 1 claim; source
-  preserved, restore quarantined. Owned fixtures cleaned.
-- Final production rebuild passed **99 static pages**, compile 8.9s/TS 5.5s.
-  All **8 production browser journeys passed in 30.7s**, plus **8 HTTP checks**,
-  including listing lost-response/retry and unchanged 320px overflow assertions.
-  Fixture localhost-a9a64c420dd2 used only owned loopback Mongo, providers off,
-  and cleaned its server/database. No selected user DB was used for fixtures.
-- Final Android export: 2,094 modules/~5.8 MB; iOS: 2,115 modules/~5.8 MB. Native
-  intercepted preview: 8 checks/21 API calls/0 errors or outbound requests at
-  320/390/768 widths. Native TS/scoped lint, brand generator/9 asset-launch tests
-  and dependency audit 0 vulnerabilities passed. These do not prove hardware.
-- Actual local /help, /favicon.ico, /icon.svg returned 200. Warm nonexistent login
-  returned 401 without account/session writes. An aborted cold request is not
-  successful first-request evidence for this increment.
-- Additive Atlas setup verified **52 application collections / 156 indexes** and
-  captureVersion 1, preserving all 52 pre-existing collections and 4 non-marker
-  documents with unchanged hashes. No reset/import/role grant or data deletion.
-- Source/public secret scan: 1,140 files against 8 actual private values,
-  zero matches. Latest offline
-  env inspection found only MUX_WEBHOOK_SECRET still a template; other Mux/worker
-  fields and Geoapify are populated. Presence is not live-provider acceptance.
-- Runtime handback passed: user-owned Next process 20724 responds on 3000 and
-  serves /help, /favicon.ico and /icon.svg with 200. Metro 8090 reports its packager
-  running; read-only Atlas ping/capture marker confirm reachability/readiness.
-  No restart or public tunnel was performed. Verify
-  current ownership before action and preserve the user's working server. Leave
-  other projects on 8081–8083/unrelated Docker resources untouched. Windows Prisma
-  generation needs the owned backend stopped to avoid DLL locks. Never generate/
-  build during an owned fixture. No active test fixture remains.
+- Prior delivery cb42fd1 contains the recording-location/brand/favicon increment;
+  baseline6f2af2f contains whole-app completion. Preserve them as historical evidence.
+- Profile focused 62 unit + 2 owned real fixtures passed. Backend/address/gallery/public/
+  storage/backup focused 214 checks / 17 files passed; counts overlap the aggregate.
+- New owned owner/admin integration 10/10 passed in 29.73s with real JWT/bootstrap/
+  storage/claims/receipts/documents/waivers/revocation/manual/transfer; Next adapters
+  mocked and limiter clock isolated. Existing owned Mongo passed all 95 in one
+  serial run: core 55, financial 18, auth/closure/export 20 and backup 2. Actual
+  backup wrapper verified 14 records / 4 files / 1 balanced journal / 1 claim;
+  source preserved, restore quarantined and owned fixtures cleaned.
+- Native 114 focused checks, TypeScript/scoped lint passed; intercepted native preview
+  4 journeys / 24 calls / 0 errors / 0 outbound at 320/390/768. This is not device acceptance.
+- Global ESLint and the final ordinary unit aggregate passed: 1,868 / 0 failures /
+  107 configured skips. Owned real suites have separate evidence; do not add
+  overlapping focused counts. Earlier query expectation failures were corrected
+  with exact selectors and privacy sentinels. Upload-recovery source is frozen;
+  production TypeScript/build passed, including Prisma generation and Next
+  generation progress 103/103. Final production browser acceptance passed all
+  11 journeys in six files. All 107 configured real-fixture skips ran separately:
+  existing Mongo 95, owner/admin 10 and final current-source avatar 2, all passed.
+- Environment format check passes. The user supplied Mux webhook configuration
+  privately. No provider acceptance is inferred from populated values.
+- Selected Atlas additive setup verified 52 application collections / 156 indexes,
+  preserving all 53 pre-existing collections and 14 non-marker documents. Its
+  preservation report is test-results/selected-mongo-preparation-1794329083111.json.
+  The subsequent dedicated audited bootstrap granted the exact existing active
+  dannyiked@gmail.com account ownership: one owner, all staff permissions and
+  adminAvailable verified; credentials/profile and other existing users/audits
+  preserved. Result: test-results/selected-owner-application.json. Email text never
+  grants a role during ordinary sign-in. Preparation preservation preceded this
+  deliberate role/audit change.
+- Final native exports passed: Android 2,104 modules / about 5.9 MB / 38.2s;
+  iOS 2,125 modules / about 5.9 MB / 22.2s. Dependency audit reported zero findings.
+- Final private-value delivery scan checked 1,191 source/public/native-export
+  files against nine actual private values: zero matches. Environment files remain
+  private/untracked. Final offline environment and whitespace checks passed.
+  Git history and the verified final handback identify the delivered revision.
+  The selected-database owner grant is complete; do not repeat it blindly.
+- Backend 3000 was restarted and verified: /help, /favicon.ico and /icon.svg
+  returned 200; signed-out /admin redirects to sign-in and /api/v1/admin returns
+  401. Existing Metro 8090 returns packager-status:running. Preserve unrelated
+  projects 8081–8083 and Docker resources.
 
 ## Next session starts with
 
-Inspect actual Git/status/log/tracking and runtime. If interrupted before push,
-complete only remaining staged review and the already-authorized delivery;
-record the verified revision. Do not assume a new unpushed change from historical
-pre-commit wording in baseline documents.
-Do not repeat accepted native exports or broad suites without a new change/failure.
-
-For user setup, use [recording/location setup](context/recording-location-setup.md),
-[environment guide](context/environment-setup.md) and [Windows Mux guide](context/mux-local-setup.md).
-Finish the dashboard webhook and its secret privately. Keep existing configured
-keys; deliberate tunnel/provider tests are separate from source completion.
+Read the current increment review, Git status/log/remote and runtime state. Finish
+only any work that truly remains from the current handback. Do not repeat owner
+bootstrap blindly; use its read-only dry run and existing persisted account role.
+Then perform deliberate physical Android/iOS camera/gallery/large-file/offline/
+startup/accessibility acceptance and selected live-provider workflows as needed.
+Use context/owner-admin-setup.md, environment-setup.md, document-providers.md and
+mux-local-setup.md for operational instructions. The exact delivery revision is
+recorded in Git history/final handback, not a self-referential committed hash.
 
 ## Open questions
 
-Physical Android/iOS camera/GPS/permissions/interruption/background/video/launch
-acceptance remains. Check whether copying a large video into persistent native
-draft storage consumes the 15-second fresh-end-reading budget on slow storage.
-Live Geoapify/Mux/Paystack/email/push acceptance and merchant/custody/fee policy
-remain separate. Full Vercel launch needs object-storage adaptation and worker/
-webhook hosting; root deployment does not publish native binaries. No real
-provider send/charge, deployment, EAS/store release, selected-Atlas backup or
-recovery cutover was performed by this increment.
+No further product clarification is needed for the approved increment. Real
+building-level coverage for the supplied streets remains unavailable from the
+observed Geoapify responses; another key is not assumed to solve data coverage.
+The admin-approved gallery/manual-review path is an explicit exception, not a
+false GPS match. Provider/device/store/deployment acceptance remains separate.

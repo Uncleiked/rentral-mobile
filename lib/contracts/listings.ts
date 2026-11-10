@@ -77,6 +77,9 @@ export const listingDetailsSchema = z.object({
 })
 
 const listingCategoryField = z.enum(LISTING_CATEGORIES)
+export const listingMediaSourceSchema = z.enum(['recorded', 'approved_gallery'])
+export type ListingMediaSource = z.infer<typeof listingMediaSourceSchema>
+const galleryPhotosField = z.array(z.string().min(1).max(500)).max(10).refine(paths => new Set(paths.map(path => path.toLowerCase())).size === paths.length, 'Choose each photo only once.')
 
 // Full payload for the saveListing server action (Item 06). Extends
 // listingDetailsSchema (address + basePrice) so the field rules can't drift
@@ -88,12 +91,23 @@ export const saveListingInputSchema = listingDetailsSchema.extend({
   expectedRevision: z.number().int().nonnegative().optional(),
   category: listingCategoryField,
   draftId: z.string().uuid().optional(),
-  captureId: z.string().uuid(),
-  videoPath: z.string().min(1),
+  mediaSource: listingMediaSourceSchema.optional(),
+  galleryPhotos: galleryPhotosField.optional(),
+  captureId: z.string().uuid().optional(),
+  videoPath: z.string().min(1).max(500).optional(),
   posterPath: z.string().min(1).optional(),
   documentPath: z.string().min(1),
   metadata: z.unknown(),
-}).strict()
+}).strict().superRefine((value, context) => {
+  if (value.mediaSource === 'approved_gallery') {
+    if (value.captureId) context.addIssue({ code: 'custom', path: ['captureId'], message: 'Gallery media has no recording-location capture.' })
+    if (!value.galleryPhotos?.length && !value.videoPath) context.addIssue({ code: 'custom', path: ['galleryPhotos'], message: 'Choose at least one photo or a video.' })
+  } else {
+    if (!value.captureId) context.addIssue({ code: 'custom', path: ['captureId'], message: 'Record a walkthrough with its location.' })
+    if (!value.videoPath) context.addIssue({ code: 'custom', path: ['videoPath'], message: 'Upload the recorded walkthrough.' })
+    if (value.galleryPhotos !== undefined) context.addIssue({ code: 'custom', path: ['galleryPhotos'], message: 'Gallery photos require explicit gallery permission.' })
+  }
+})
 
 // Draft saves accept partial everything except the category — required fields
 // are only enforced when the draft is finally posted.
@@ -106,11 +120,16 @@ export const saveDraftInputSchema = z.object({
   address: z.string().max(300).optional(),
   basePrice: z.string().max(20).optional(),
   metadata: z.unknown(),
+  mediaSource: listingMediaSourceSchema.optional(),
+  galleryPhotos: galleryPhotosField.optional(),
   captureId: z.string().uuid().optional(),
   videoPath: z.string().min(1).optional(),
   posterPath: z.string().min(1).optional(),
   documentPath: z.string().min(1).optional(),
-}).strict()
+}).strict().superRefine((value, context) => {
+  if (value.mediaSource === 'approved_gallery' && value.captureId) context.addIssue({ code: 'custom', path: ['captureId'], message: 'Gallery media has no recording-location capture.' })
+  if (value.mediaSource !== 'approved_gallery' && value.galleryPhotos !== undefined) context.addIssue({ code: 'custom', path: ['galleryPhotos'], message: 'Gallery photos require explicit gallery permission.' })
+})
 
 // Editing a posted listing: metadata/address/price only — category, video,
 // GPS, and documents are the trust anchors and stay padlocked (Item 11).
@@ -131,7 +150,9 @@ export const LISTING_FORM_SCHEMAS = {
 export const LISTING_METADATA_SCHEMAS = { house: houseMetadataSchema, car: carMetadataSchema, boat: boatMetadataSchema } as const
 const listingTimestamp = z.string().datetime({ offset: true })
 export const ownerListingSummarySchema = z.object({ id: z.string().uuid(), category: z.enum(LISTING_CATEGORIES), title: z.string().max(200), status: z.string().min(1).max(80),
-  price: z.string().max(100), pricePeriod: z.string().max(20), createdAt: listingTimestamp, hasVideo: z.boolean(), hasDocument: z.boolean(), archivedAt: listingTimestamp.nullable().optional().default(null) }).strict()
+  price: z.string().max(100), pricePeriod: z.string().max(20), createdAt: listingTimestamp, hasVideo: z.boolean(), hasDocument: z.boolean(), archivedAt: listingTimestamp.nullable().optional().default(null),
+  mediaSource: listingMediaSourceSchema.optional(), galleryPhotos: galleryPhotosField.optional(),
+}).strict()
 export const ownerListingPageSchema = z.object({ items: z.array(ownerListingSummarySchema).max(50), nextCursor: z.string().max(100).nullable(), limit: z.number().int().min(1).max(50) }).strict()
 export const ownerVaultItemSchema = ownerListingSummarySchema.extend({ area: z.string().min(1).max(80) })
 export const ownerVaultPageSchema = z.object({ items: z.array(ownerVaultItemSchema).max(50), nextCursor: z.string().max(100).nullable(), limit: z.number().int().min(1).max(50) }).strict()
@@ -139,6 +160,7 @@ export const ownerListingDetailSchema = z.object({ id: z.string().uuid(), revisi
   address: z.string().max(300), basePrice: z.string().max(20), metadata: z.record(z.string().max(80), z.union([z.string().max(1500), z.boolean(), z.number().finite(), z.null()])),
   wizardStep: z.enum(DRAFT_WIZARD_STEPS).nullable(), videoPath: z.string().max(500).nullable(), posterPath: z.string().max(500).nullable(), documentPath: z.string().max(500).nullable(), documentName: z.string().max(300).nullable(),
   hasCoords: z.boolean(), captureId: z.string().uuid().nullable().optional().default(null), createdAt: listingTimestamp, updatedAt: listingTimestamp, archivedAt: listingTimestamp.nullable().optional().default(null),
+  mediaSource: listingMediaSourceSchema.optional(), galleryPhotos: galleryPhotosField.optional(),
   actions: z.object({ edit: z.boolean(), resume: z.boolean(), archive: z.boolean(), restore: z.boolean() }).strict(),
 }).strict()
 export const listingMutationResultSchema = z.object({ id: z.string().uuid(), status: z.string().min(1).max(80) }).strict()

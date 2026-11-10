@@ -4,6 +4,11 @@ Expo SDK 58 / Expo Router app for Android and iOS. It uses the local Rentral API
 
 ## Start
 
+The Account screen exposes Admin when the current server role permits it. Approved
+gallery uploaders may choose photos and an optional video without GPS recording;
+their listings use human review and truthful gallery labels. Photo-only galleries
+are supported. See [owner/admin setup](../../context/owner-admin-setup.md).
+
 The recording-time GPS lock requires online backend acknowledgment, a completed
 take and exact uploaded-video binding. Address preflight and final submission
 compare a precise geocoded address with the private capture within100metres. Old

@@ -17,7 +17,7 @@ import { accountIsActive } from '@/lib/accounts/availability'
 
 export const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(8).max(128) }).strict()
 export const loginSchema = credentialsSchema.extend({ password: z.string().min(1).max(128) })
-const authUserSelect = { id: true, email: true, password_hash: true, staff_role: true, closed_at: true } satisfies Prisma.UserSelect
+const authUserSelect = { id: true, email: true, password_hash: true, staff_role: true, closed_at: true, suspended_at: true } satisfies Prisma.UserSelect
 type Account = Prisma.UserGetPayload<{ select: typeof authUserSelect }>
 
 function publicUser(user: Account): AuthUser {
@@ -117,7 +117,7 @@ export async function changePassword(userId: string, password: string): Promise<
   const prepared = await authSecurityPrepared()
   await withTransaction(async tx => {
     await lockRecord(tx, 'user', userId)
-    if (!accountIsActive(await tx.user.findUnique({ where: { id: userId }, select: { closed_at: true } }))) throw new AuthError(401, 'UNAUTHORIZED', 'Please sign in again.')
+    if (!accountIsActive(await tx.user.findUnique({ where: { id: userId }, select: { closed_at: true, suspended_at: true } }))) throw new AuthError(401, 'UNAUTHORIZED', 'Please sign in again.')
     await tx.user.update({ where: { id: userId }, data: { password_hash: passwordHash } })
     await tx.authSession.updateMany({ where: { user_id: userId, revoked_at: null }, data: { revoked_at: new Date() } })
     await invalidateAccountChallenges(tx, userId, prepared)
@@ -129,7 +129,7 @@ export async function requestPasswordReset(emailInput: unknown): Promise<{ deliv
   const configuration = authEmailConfiguration()
   if (configuration.delivery === 'email') await assertAuthSecurityReady()
   if (!apiRateLimiter.allow(`reset:${tokenHash(email)}`, 5)) throw new AuthError(429, 'RATE_LIMITED', 'Too many recovery requests. Please wait a minute.')
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, closed_at: true } })
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, closed_at: true, suspended_at: true } })
   if (user && accountIsActive(user)) {
     const token = opaqueToken()
     const id = randomUUID(), expiresAt = new Date(Date.now() + 15 * 60 * 1000)
@@ -139,7 +139,7 @@ export async function requestPasswordReset(emailInput: unknown): Promise<{ deliv
       if (configuration.delivery === 'email') {
         await withTransaction(async tx => {
           if (!await lockRecord(tx, 'user', user.id)) return
-          const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true, closed_at: true } })
+          const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true, closed_at: true, suspended_at: true } })
           if (current?.email !== email || !accountIsActive(current)) return
           await tx.passwordReset.updateMany({ where: { user_id: user.id, used_at: null }, data: { used_at: new Date() } })
           await cancelAuthEmails(tx, user.id, ['password_reset'])
@@ -166,7 +166,7 @@ export async function resetPassword(input: unknown): Promise<void> {
   const prepared = await authSecurityPrepared()
   await withTransaction(async tx => {
     await lockRecord(tx, 'user', existing.user_id)
-    if (!accountIsActive(await tx.user.findUnique({ where: { id: existing.user_id }, select: { closed_at: true } }))) throw new AuthError(400, 'INVALID_RESET', 'This reset code has expired or has already been used.')
+    if (!accountIsActive(await tx.user.findUnique({ where: { id: existing.user_id }, select: { closed_at: true, suspended_at: true } }))) throw new AuthError(400, 'INVALID_RESET', 'This reset code has expired or has already been used.')
     const consumed = await tx.passwordReset.updateMany({ where: { id: existing.id, used_at: null, expires_at: { gt: new Date() } }, data: { used_at: new Date() } })
     if (consumed.count !== 1) throw new AuthError(400, 'INVALID_RESET', 'This reset code has expired or has already been used.')
     await tx.user.update({ where: { id: existing.user_id }, data: { password_hash: passwordHash } })

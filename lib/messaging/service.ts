@@ -4,6 +4,7 @@ import { conversationMember, messageInput, type ChatThread } from './policy'
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { activeAccountWhere, assertActiveAccounts } from '@/lib/accounts/availability'
 import type { ArchiveQuery } from '@/lib/api/archive'
+import { assertGalleryListingCurrent, galleryIsPublic, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 
 export async function getInbox(userId: string, query?: ArchiveQuery) {
   if (!platformEnabled()) return []
@@ -39,7 +40,7 @@ export async function getThread(userId: string, id: string, beforeId?: string): 
     ] } : {}) },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 61,
     select: { id: true, sender_id: true, body: true, createdAt: true,
-      sharedListing: { select: { id: true, category: true, listing_status: true } } },
+      sharedListing: { select: { id: true, category: true, listing_status: true, ...galleryListingSelect, lister: { select: galleryUserSelect } } } },
   })
   const seeker = thread.seeker_id === userId
   return {
@@ -49,7 +50,7 @@ export async function getThread(userId: string, id: string, beforeId?: string): 
     hasMore: rows.length > 60,
     messages: rows.slice(0, 60).reverse().map(row => ({
       id: row.id, senderId: row.sender_id, body: row.body, sentAt: row.createdAt.toISOString(),
-      sharedListing: row.sharedListing?.listing_status === 'active'
+      sharedListing: row.sharedListing?.listing_status === 'active' && galleryIsPublic(row.sharedListing)
         ? { id: row.sharedListing.id, category: row.sharedListing.category } : null,
     })),
   }
@@ -60,10 +61,11 @@ export async function beginConversation(userId: string, listingId: string): Prom
     await lockRecord(tx, 'listing', listingId)
     const listing = await tx.listing.findFirst({
       where: { id: listingId, listing_status: 'active', lister_id: { not: userId } },
-      select: { id: true, lister_id: true },
+      select: { id: true, lister_id: true, media_source: true, gallery_permission_revision: true },
     })
     if (!listing) throw new Error('LISTING_UNAVAILABLE')
     await assertActiveAccounts(tx, [userId, listing.lister_id])
+    await assertGalleryListingCurrent(tx, listing)
     const conversation = await tx.conversation.upsert({
       where: { listing_id_seeker_id: { listing_id: listing.id, seeker_id: userId } },
       create: { listing_id: listing.id, seeker_id: userId, lister_id: listing.lister_id },
@@ -94,9 +96,10 @@ export async function persistMessage(userId: string, input: unknown): Promise<st
       return duplicate.id
     }
     if (data.sharedListingId) {
-      const shared = await tx.listing.findFirst({ where: { id: data.sharedListingId, listing_status: 'active', lister: activeAccountWhere }, select: { id: true, lister_id: true } })
+      const shared = await tx.listing.findFirst({ where: { id: data.sharedListingId, listing_status: 'active', lister: activeAccountWhere }, select: { id: true, lister_id: true, media_source: true, gallery_permission_revision: true } })
       if (!shared) throw new Error('LISTING_UNAVAILABLE')
       await assertActiveAccounts(tx, [shared.lister_id])
+      await assertGalleryListingCurrent(tx, shared)
     }
     const recent = await tx.message.count({ where: { sender_id: userId,
       createdAt: { gt: new Date(Date.now() - 60_000) } } })

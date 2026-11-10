@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), activeOwner: vi.fn(), user: vi.fn(), findListing: vi.fn(), updateListing: vi.fn(), review: vi.fn(), audit: vi.fn(), notify: vi.fn(), report: vi.fn(), booking: vi.fn(), updateReport: vi.fn(), automatedListing: vi.fn(), geocode: vi.fn(), analyze: vi.fn(), capture: vi.fn(), storedVideo: vi.fn() }))
+const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), activeOwner: vi.fn(), user: vi.fn(), findListing: vi.fn(), updateListing: vi.fn(), review: vi.fn(), audit: vi.fn(), notify: vi.fn(), report: vi.fn(), booking: vi.fn(), updateReport: vi.fn(), automatedListing: vi.fn(), geocode: vi.fn(), capture: vi.fn(), storedVideo: vi.fn(), prepare: vi.fn(), claim: vi.fn(), gallery: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, user: { findUnique: mocks.user }, listing: { findUnique: mocks.automatedListing }, adminAudit: { create: mocks.audit } } }))
-vi.mock('@/lib/documents/analyze', () => ({ analyzeListingDocument: mocks.analyze }))
+vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepare, claimStorageObjects: mocks.claim }))
+vi.mock('@/lib/listings/gallery', () => ({ assertGalleryPublication: mocks.gallery, assertGalleryListingCurrent: async () => undefined }))
 vi.mock('@/lib/listings/spatial', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/listings/spatial')>(), verifyListingAddress: mocks.geocode }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
-vi.mock('@/lib/database/readiness', () => ({ assertLifecycleReady: async () => undefined }))
+vi.mock('@/lib/database/readiness', () => ({ assertLifecycleReady: async () => undefined, assertOwnerAdminReady: async () => undefined }))
 
 import { isAdminId, requireAdminId, requireInsightsId } from '@/lib/operations/access'
 import { moderateListing, resolveDispute } from '@/lib/operations/service'
@@ -19,10 +20,10 @@ const listingId = '11111111-1111-4111-8111-111111111111'
 const captureId = '22222222-2222-4222-8222-222222222222'
 function eligibleListing() {
   return { id: listingId, lister_id: 'host', listing_status: 'pending_verification', text_address: 'Synthetic Yaba address', document_path: 'host/folder/title.pdf',
-    lister: { id: 'host', kyc_verified: true, username: 'host' }, documentReview: { status: 'approved', reviewed_by: 'other-staff', findings: {} },
+    lister: { id: 'host', kyc_verified: true, username: 'host' }, documentReview: { status: 'approved', reviewed_by: 'other-staff', approved_path: 'host/folder/title.pdf', approved_digest: 'd'.repeat(64), findings: {} },
     capture_id: captureId, video_path: 'host/folder/video.mp4', privateLocation: { capture_id: captureId, geometry: { type: 'Point', coordinates: [3.4, 6.45] } },
     verification: { capture_id: captureId, spatial_status: 'matched', address_hash: addressFingerprint('Synthetic Yaba address'), distance_meters: 25 },
-    media: { status: 'ready' }, payments: [{ amount_kobo: BigInt(100000), currency: 'NGN', user_id: 'host', provider_environment: 'test' as string | null }] }
+    media: { status: 'ready', source_path: 'host/folder/video.mp4' }, payments: [{ amount_kobo: BigInt(100000), currency: 'NGN', user_id: 'host', provider_environment: 'test' as string | null }] }
 }
 
 beforeEach(() => {
@@ -31,25 +32,36 @@ beforeEach(() => {
   vi.stubEnv('MUX_ENABLED', 'true'); for (const name of ['MUX_TOKEN_ID', 'MUX_TOKEN_SECRET', 'MUX_WEBHOOK_SECRET', 'MUX_SIGNING_KEY_ID', 'MUX_SIGNING_PRIVATE_KEY']) vi.stubEnv(name, 'configured-test-value')
   mocks.findListing.mockResolvedValue(eligibleListing())
   mocks.capture.mockResolvedValue({ id: captureId, video_object_id: 'object', video_digest: 'a'.repeat(64), start_geometry: { type: 'Point', coordinates: [3.4, 6.45] } })
-  mocks.storedVideo.mockResolvedValue({ id: 'object' })
+  mocks.storedVideo.mockImplementation(async ({ where }: { where: { bucket?: string } }) => where.bucket === 'compliance-docs' ? { id: 'document-object', digest: 'd'.repeat(64) } : { id: 'object' })
+  mocks.automatedListing.mockResolvedValue({ lister_id: 'host', document_path: 'host/folder/title.pdf', listing_status: 'pending_verification' })
+  mocks.prepare.mockResolvedValue([{ id: 'document-object', bucket: 'compliance-docs', path: 'host/folder/title.pdf', digest: 'd'.repeat(64), sizeBytes: 100, contentType: 'application/pdf' }])
+  mocks.claim.mockResolvedValue(undefined); mocks.gallery.mockResolvedValue({ hasVideo: false }); mocks.audit.mockResolvedValue({ id: listingId })
   mocks.activeOwner.mockResolvedValue({ count: 1 })
   mocks.booking.mockResolvedValue({ listing_id: listingId })
   mocks.report.mockResolvedValue({ id: 'report', booking_id: listingId, status: 'open', booking: { seeker_id: 'renter', lister_id: 'host', status: 'disputed' } })
   mocks.user.mockImplementation(async ({ where }: { where: { id: string } }) => ({ staff_role: ['staff', 'second-staff'].includes(where.id) ? 'admin' : where.id === 'analyst' ? 'analyst' : null }))
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({ $queryRaw: mocks.lock,
-    user: { findUnique: mocks.user, updateMany: mocks.activeOwner }, listing: { findUnique: mocks.automatedListing, findUniqueOrThrow: mocks.findListing, update: mocks.updateListing }, documentReview: { upsert: mocks.review }, listingCapture: { findFirst: mocks.capture }, storageObject: { findFirst: mocks.storedVideo },
+    user: { findUnique: mocks.user, findUniqueOrThrow: mocks.user, updateMany: mocks.activeOwner }, listing: { findUnique: mocks.automatedListing, findUniqueOrThrow: mocks.findListing, update: mocks.updateListing }, documentReview: { upsert: mocks.review }, listingCapture: { findFirst: mocks.capture }, storageObject: { findFirst: mocks.storedVideo },
     adminAudit: { create: mocks.audit }, notification: { create: mocks.notify, createMany: mocks.notify }, booking: { findUnique: mocks.booking },
     dispute: { findUnique: mocks.report, findUniqueOrThrow: mocks.report, updateMany: mocks.updateReport } }))
 })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('server-owned staff access and publication', () => {
+  it('denies an unprivileged direct domain caller before document lookup, storage preparation or transaction writes', async () => {
+    mocks.user.mockResolvedValue({ staff_role: null })
+    await expect(moderateListing('ordinary-user', listingId, 'approve_document', 'Unprivileged attempted document review')).rejects.toThrow('Staff access required')
+    expect(mocks.automatedListing).not.toHaveBeenCalled()
+    expect(mocks.prepare).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.review).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
+  })
   it('denies publishing a closed owner but preserves suspension and document remediation', async () => {
     mocks.activeOwner.mockResolvedValue({ count: 0 })
     await expect(moderateListing('staff', listingId, 'publish', 'Reviewed owner closure')).rejects.toMatchObject({ code: 'ACCOUNT_UNAVAILABLE' })
     expect(mocks.updateListing).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
     await moderateListing('staff', listingId, 'suspend', 'Keep the historical listing unavailable')
-    expect(mocks.updateListing).toHaveBeenCalledWith(expect.objectContaining({ data: { listing_status: 'pending_verification' } }))
+    expect(mocks.updateListing).toHaveBeenCalledWith(expect.objectContaining({ data: { listing_status: 'suspended' } }))
   })
   it('uses current persisted roles and ignores obsolete environment allowlists', async () => {
     expect(await isAdminId('staff')).toBe(true); expect(await isAdminId('sta')).toBe(false); expect(await isAdminId('Staff')).toBe(false)
@@ -116,6 +128,35 @@ describe('server-owned staff access and publication', () => {
     mocks.findListing.mockResolvedValue({ ...eligibleListing(), capture_id: null })
     await expect(moderateListing('staff', listingId, 'publish', 'Reviewed legacy recording evidence')).rejects.toThrow('Publication requires')
     expect(mocks.updateListing).not.toHaveBeenCalled()
+  })
+  it('binds human approval to the exact current durable document digest and path', async () => {
+    await moderateListing('staff', listingId, 'approve_document', 'Human inspected this exact uploaded document')
+    expect(mocks.review).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ approved_path: 'host/folder/title.pdf', approved_digest: 'd'.repeat(64), status: 'approved', reviewed_by: 'staff' }) }))
+    expect(mocks.claim).toHaveBeenCalled()
+    const changed = eligibleListing(); changed.documentReview.approved_digest = 'e'.repeat(64); mocks.findListing.mockResolvedValue(changed)
+    await expect(moderateListing('staff', listingId, 'publish', 'Recheck changed document bytes')).rejects.toMatchObject({ code: 'PUBLICATION_REQUIREMENTS' })
+  })
+  it('publishes approved photo-only gallery inventory with an explicit fee waiver while payments and Mux are off', async () => {
+    vi.stubEnv('PAYMENTS_ENABLED', 'false'); vi.stubEnv('MUX_ENABLED', 'false')
+    mocks.findListing.mockResolvedValue({ ...eligibleListing(), media_source: 'approved_gallery', video_path: null, capture_id: null, privateLocation: null, verification: null, media: null, payments: [],
+      fee_waived_at: new Date(), fee_waived_by: listingId, fee_waiver_reason: 'Approved publication without collecting a listing fee.' })
+    await moderateListing('staff', listingId, 'publish', 'Human reviewed approved gallery and waiver')
+    expect(mocks.gallery).toHaveBeenCalled(); expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
+  })
+  it('still requires video processing for an approved gallery video and fails closed on permission revocation', async () => {
+    mocks.findListing.mockResolvedValue({ ...eligibleListing(), media_source: 'approved_gallery', capture_id: null })
+    mocks.gallery.mockRejectedValueOnce(new Error('GALLERY_PERMISSION_REQUIRED'))
+    await expect(moderateListing('staff', listingId, 'publish', 'Reviewed current gallery permission')).rejects.toThrow('GALLERY_PERMISSION_REQUIRED')
+    mocks.gallery.mockResolvedValue({ hasVideo: true }); vi.stubEnv('MUX_ENABLED', 'false')
+    await expect(moderateListing('staff', listingId, 'publish', 'Reviewed unprocessed gallery video')).rejects.toMatchObject({ code: 'PUBLICATION_VIDEO_REQUIRED' })
+    expect(mocks.updateListing).not.toHaveBeenCalled()
+  })
+  it('owner self-publication needs an explicit detailed override and records it without relaxing other prerequisites', async () => {
+    mocks.user.mockResolvedValue({ staff_role: 'owner' })
+    await expect(moderateListing('host', listingId, 'publish', 'Detailed human review of my own listing without explicit override')).rejects.toMatchObject({ code: 'INDEPENDENT_REVIEW_REQUIRED' })
+    await moderateListing('host', listingId, 'publish', 'Detailed human review and explicit owner override for my own listing.', { ownerOverride: true })
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ metadata: { ownerOverride: true, moneyMoved: false } }) }))
   })
   it('requires verification and private location to bind the same sealed capture', async () => {
     const listing = eligibleListing(); listing.verification.capture_id = listingId

@@ -48,7 +48,10 @@ export async function uploadPreparedAvatar(avatar: PreparedAvatar): Promise<stri
     let payload: unknown
     try { payload = await response.json() }
     catch { throw new ApiError('The photo upload could not be confirmed. Your selected photo is kept for retry.', 'INVALID_RESPONSE', response.status) }
-    if (!response.ok) throw new ApiError(payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string' ? payload.error : 'Your photo could not be uploaded. Please retry.', 'UPLOAD_FAILED', response.status)
+    if (!response.ok) {
+      const code = payload && typeof payload === 'object' && 'code' in payload && typeof payload.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(payload.code) ? payload.code : 'UPLOAD_FAILED'
+      throw new ApiError(payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string' ? payload.error : 'Your photo could not be uploaded. Please retry.', code, response.status)
+    }
     if (!payload || typeof payload !== 'object' || !('success' in payload) || payload.success !== true || !('data' in payload) || !payload.data || typeof payload.data !== 'object'
       || !('path' in payload.data) || payload.data.path !== path) throw new ApiError('The photo upload could not be confirmed. Your selected photo is kept for retry.', 'INVALID_RESPONSE', response.status)
     return `/api/v1/files/profile-avatars/${path}`

@@ -1,21 +1,76 @@
-# Advisory document and address providers
+# Human document review and recorded-address lookups
 
-Gemini screening and Geoapify address matching remain optional server-side aids to an authorized human listing reviewer. Neither can approve identity, legal ownership, a sealed document or a listing. Publication still requires the current active owner, a human document approval, matched current address/private capture point, ready video and verified publication fee under the existing transaction guard. No actual Gemini or Geoapify request was made during implementation or automated verification.
+Current policy, 2026-11-10: documents receive authorized human review through
+the web/native admin console. Active Gemini screening and its configuration have
+been removed. This path is retained so earlier documentation links still resolve;
+older descriptions of AI screening are historical. Existing findings and audit
+history remain factual records.
 
-## Gemini
+## Human review and publication
 
-Configuration remains server-only `GEMINI_API_KEY` and `GEMINI_DOCUMENT_MODEL`. The model name is bounded and restricted to an identifier, and the endpoint is fixed HTTPS Google `generateContent`. A staff action explicitly initiates screening; key presence does not start background analysis. Select a model that supports structured JSON responses and test it separately before enabling a real merchant workflow.
+An authorized reviewer opens the listing's current private authority document
+and records approval or rejection with a reason. Approval binds to the exact
+owned document path, validated bytes and digest. File replacement or a relevant
+listing change requires fresh review. Documents and embedded instructions are
+untrusted evidence; approval does not establish legal title or guarantee condition.
 
-The source is the listing’s owned `compliance-docs` reference, not a user-supplied URL. Current local storage verifies MIME, magic bytes, size and sealed metadata. Screening independently compares downloaded bytes to the sealed SHA256 digest and size before sending at most10MiB of PDF/JPEG/PNG. Embedded instructions are untrusted input. The request asks for bounded JSON signals and sets `maxOutputTokens:2048`; no provider error body or file body is logged. The API documents structured response MIME/schema and output-token configuration. [Gemini generateContent reference](https://ai.google.dev/api/generate-content), [structured outputs](https://ai.google.dev/gemini-api/docs/structured-output).
+Publication independently checks document approval, current account/media rules,
+and either the verified publication fee or an audited listing-specific waiver.
+A waiver is displayed as waived and creates no payment or journal fiction.
+The owner may review their own listing only through the explicit reasoned owner
+override. Financial approvals and manual inspection decisions retain participant
+independence. See [owner setup and workflows](owner-admin-setup.md).
 
-The response has a128KiB actual-byte ceiling and45-second header/body deadline; redirects are forbidden. Exactly one candidate,1–8 bounded parts, and explicit successful `STOP` finish are required; blocked, truncated or extra candidate responses do not update review state. Thought parts are excluded. Signals allow only risk, up to12 findings of500 characters, and a100-character document type. Findings remain `needs_review`, including low-risk results. The listing is locked and its document path rechecked; a human decision is never overwritten by a delayed answer. Google documents finish reasons and candidate safety reporting separately from generated output. [Gemini response semantics](https://ai.google.dev/api/generate-content).
+Approved gallery uploads are a separate, revocable permission. Their media origin
+is explicit, and they carry no invented capture or location-verified badge.
+Photo-only publication does not require Mux; a gallery video still needs ready
+processing. Ordinary recorded listings retain their recording/address rules.
 
-## Geoapify
+## Geoapify and Nigerian addresses
 
-Configuration remains server-only `GEOAPIFY_API_KEY`. The fixed HTTPS forward-geocoding endpoint receives the current address, `countrycode:ng` filter and limit1. It uses a10-second header/body deadline,64KiB actual-byte ceiling and no redirect forwarding. At most one point is accepted. City/district centroids, confidence below0.8, a returned non-Nigerian country, invalid coordinates and malformed responses cannot produce a match. Geoapify documents country filters and rank confidence as match signals. [Geoapify geocoding API](https://apidocs.geoapify.com/docs/geocoding/).
+The existing backend-only `GEOAPIFY_API_KEY` configures forward geocoding. Only
+the entered address is sent to Geoapify; private recording GPS is not sent.
+Requests use the fixed HTTPS endpoint, Nigeria filter and one-result limit,
+with a 10-second deadline, 64 KiB actual-byte ceiling and no redirects. Admission
+requires an explicit Nigerian building/amenity result with confidence at least
+0.8, within **100 metres** of the immutable recording point. A city, state or
+street centroid cannot satisfy this requirement. Current bindings and address
+fingerprints are rechecked under the listing lock after provider I/O.
 
-The transaction locks the listing and verifies the unchanged address fingerprint before comparing the provider point to the private captured point with the existing100m threshold. The result is matched/mismatch/unavailable, not proof of ownership or survey accuracy. Raw GPS stays in the private location collection and is excluded from public DTOs and account export.
+Geoapify uses international datasets, including OpenStreetMap and OpenAddresses.
+Availability of country data does not imply that every numbered building is
+mapped. Its API supports structured house/street/city/state input and confidence
+signals. [Data sources](https://www.geoapify.com/geocoding-api/),
+[geocoding contract](https://apidocs.geoapify.com/docs/geocoding/forward-geocoding/).
 
-## Transport and tests
+Four deliberate diagnostics used only the user's supplied address strings.
+The two partial strings produced no result or an unrelated low-confidence
+building. Adding the supplied Ifako/Bariga, Lagos details produced only Lagos
+state-level results with confidence 0 for both addresses. The configured key and
+network worked; neither specific building resolved reliably. No distance was
+calculated, no stored GPS was read/sent, and no application record was changed.
+These results do not disprove the addresses' existence or establish their distance.
 
-`lib/providers/bounded-json.ts` enforces the two fixed HTTPS hosts, rejects redirects/non-JSON responses, counts chunked/decompressed bytes rather than trusting Content-Length, cancels overflow and stalled bodies, decodes UTF8 strictly and returns fixed errors without provider text or API keys. It never retries a POST. Mocked checks cover false small lengths, announced overflow, stalled bodies, redirects, malformed JSON/UTF8, incomplete Gemini output, changed sealed bytes, delayed human decisions, stale addresses and excessive geocoder results. Mocks do not constitute live provider activation or acceptance.
+## Honest lookup states and transport
+
+New clients request `/captures/:id/check-address?details=1`. Unavailable results
+may include one bounded reason:
+
+| Reason | Meaning |
+| --- | --- |
+| `no_result` | The lookup completed without a result. |
+| `low_confidence` | A building candidate did not meet the confidence threshold. |
+| `imprecise` | The result did not confirm a precise Nigerian building/amenity. |
+| `provider_unavailable` | Configuration, network or provider response prevented a usable lookup. |
+
+Older clients keep the exact response shape without this opt-in. Newer clients
+also accept older responses and use neutral fallback wording. An unresolved
+building is no longer described as an outage. All unsuccessful states preserve
+the draft and remain unable to authorize recorded submission.
+
+`lib/providers/bounded-json.ts` permits only the Geoapify host, bounds streamed
+bytes and timing, rejects redirects/non-JSON/malformed responses and never returns
+provider text or keys. Tests cover bounded transport, lookup reasons, stale
+addresses, private projections and the unchanged proximity boundary. Four live
+diagnostics do not constitute complete Nigerian coverage or device acceptance.
+Proximity within 100 metres is not exact house/unit identification or GPS attestation.

@@ -39,6 +39,8 @@ export default function ProfileScreen() {
       {loading ? <StatusView loading message="Loading your account…" /> : !data ? <StatusView title="Account unavailable" message={error ?? 'Your account could not be loaded.'} onRetry={() => { void refresh(true).catch(() => undefined) }} /> : <>
         {error ? <Text accessibilityRole="alert" selectable style={styles.error}>Could not refresh: {error}</Text> : null}
         <ProfileEditor key={data.id} profile={data} onSaved={replace} />
+        {data.adminAvailable ? <Button title="Rentral administration" secondary onPress={() => router.push('/admin')} /> : null}
+        {data.galleryUploadAllowed ? <Text style={styles.help}>Gallery uploads are approved for your account. Choose approved gallery media in Create listing; those listings receive human review and have no recorded GPS proof.</Text> : null}
         {data.username ? <Button title="View public profile" secondary onPress={() => router.push({ pathname: '/profile/[username]', params: { username: data.username! } })} /> : null}
       </>}
       <Button title="My listings" secondary onPress={() => router.push('/my-listings')} />

@@ -12,7 +12,7 @@ const userId = args.includes('--user-id') ? option('--user-id') : undefined
 const role = args.includes('--role') ? option('--role') : undefined
 const reason = args.includes('--reason') ? option('--reason')?.trim() : undefined
 if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId) ||
-  !(role === 'member' || staffRole(role)) || !reason || reason.length < 15 || reason.length > 2000) {
+  !(role === 'member' || role !== 'owner' && staffRole(role)) || !reason || reason.length < 15 || reason.length > 2000) {
   console.error('Usage: npm run staff:role -- --user-id UUID --role admin|moderator|finance|analyst|member --reason "Meaningful operator reason" [--allow-remote]')
   process.exit(1)
 }
@@ -29,6 +29,7 @@ try {
       const users = database.collection<{ _id: string; staff_role?: string | null; revision: number }>('User')
       const target = await users.findOneAndUpdate({ _id: userId }, { $inc: { revision: 1 } }, { session, returnDocument: 'before' })
       if (!target) throw new Error('Member not found')
+      if (target.staff_role === 'owner') throw new Error('Owner authority is protected; use an explicit authenticated ownership transfer')
       const nextRole = staffRole(role)
       if (target.staff_role === nextRole) return
       await users.updateOne({ _id: userId }, { $set: { staff_role: nextRole, updatedAt: new Date() } }, { session })
@@ -40,6 +41,10 @@ try {
   } finally { await session.endSession() }
   console.log('Staff role saved and audited. Current database access applies to the next request.')
 } catch (error) {
+  if (error instanceof Error && error.message === 'Owner authority is protected; use an explicit authenticated ownership transfer') {
+    console.error('[staff/role] Owner authority is protected. Sign in as the current owner and use explicit ownership transfer; the general staff-role command cannot change ownership.')
+  } else {
   console.error('[staff/role] Could not change role:', error instanceof Error ? error.name : 'UnknownError')
+  }
   process.exitCode = 1
 } finally { await client.close() }

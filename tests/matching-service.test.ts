@@ -121,7 +121,12 @@ it('locks a normalized user pair and creates a request without opening unrestric
   connection = null
   expect(await requestMatchingConnection(first, { profileId: secondProfileId })).toBe(connectionId)
   expect(mocks.active.mock.calls.slice(0, 2).map(call => call[0].where.id)).toEqual([first, second])
-  expect(mocks.active).toHaveBeenCalledWith({ where: { id: second, OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }, data: { revision: { increment: 1 } } })
+  const available = { AND: [
+    { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+    { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+  ] }
+  expect(mocks.active).toHaveBeenNthCalledWith(1, { where: { id: first, ...available }, data: { revision: { increment: 1 } } })
+  expect(mocks.active).toHaveBeenNthCalledWith(2, { where: { id: second, ...available }, data: { revision: { increment: 1 } } })
   expect(mocks.createConnection).toHaveBeenCalledWith({ data: expect.objectContaining({ lower_user_id: first, upper_user_id: second, requested_by: first, status: 'requested', last_message_id: null }) })
   expect(mocks.notify).toHaveBeenCalledTimes(1)
 })

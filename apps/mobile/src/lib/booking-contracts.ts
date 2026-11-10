@@ -26,6 +26,7 @@ export const bookingDetailSchema = z.object({
   startsAt: date, endsAt: date, expiresAt: date.nullable(), createdAt: date,
   amountKobo: money, holdCreditKobo: money, payableKobo: money, currency: z.literal('NGN'),
   role: z.enum(['renter', 'host']), settlementStatus: status,
+  inspectionMode: z.enum(['recorded', 'manual']).optional(),
   listing: z.object({ id, category: z.enum(['house', 'car', 'boat']), location: z.string().max(200) }),
   renter: z.object({ username: z.string().nullable() }), host: z.object({ username: z.string().nullable() }),
   holdBookingId: id.nullable(), rentalBookingId: id.nullable(),

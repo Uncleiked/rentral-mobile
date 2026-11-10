@@ -18,13 +18,14 @@ import { useActorGuard } from '../../src/hooks/use-actor-guard'
 import { z } from 'zod'
 import type { ListingDetails } from '../../src/lib/types'
 import { colors, fonts, radius, space } from '../../src/theme'
+import { GalleryPhotos } from '../../src/components/gallery-photos'
 
 export default function ListingScreen() {
   const { actorId, isCurrent } = useActorGuard()
   const params = useLocalSearchParams<{ id: string }>()
   const id = typeof params.id === 'string' ? params.id : ''
   const listing = useApiResource<ListingDetails>(`/listings/${encodeURIComponent(id)}`)
-  const media = useApiResource<{ videoUrl: string | null; posterUrl: string | null; expiresAt: string }>(`/listings/${encodeURIComponent(id)}/media`)
+  const media = useApiResource<{ videoUrl: string | null; posterUrl: string | null; expiresAt: string; mediaSource?: 'recorded' | 'approved_gallery'; galleryPhotoUrls?: string[] }>(`/listings/${encodeURIComponent(id)}/media`)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ownHold, setOwnHold] = useState<{ listingId: string; bookingId: string } | null>(null)
@@ -61,7 +62,9 @@ export default function ListingScreen() {
   const description = typeof value?.metadata.description === 'string' ? value.metadata.description.trim() : ''
   return <Page title={value?.title ?? 'Your next move'} subtitle={value?.location} refreshing={listing.loading} onRefresh={() => { listing.refresh(); media.refresh() }}>
     {listing.loading || listing.error ? <StatusView loading={listing.loading} title={listing.error ? 'Listing unavailable' : undefined} message={listing.error ?? undefined} onRetry={listing.error ? listing.refresh : undefined} /> : value ? <>
-      {videoUrl ? <Walkthrough uri={videoUrl} /> : posterUrl ? <Image source={{ uri: posterUrl }} alt={value.title} style={styles.poster} /> : <StatusView loading={media.loading} message={media.error ?? 'No walkthrough available yet.'} onRetry={media.error ? media.refresh : undefined} />}
+      {videoUrl ? <Walkthrough uri={videoUrl} /> : media.data?.galleryPhotoUrls?.length ? null : posterUrl ? <Image source={{ uri: posterUrl }} alt={value.title} style={styles.poster} /> : <StatusView loading={media.loading} message={media.error ?? 'No listing media available yet.'} onRetry={media.error ? media.refresh : undefined} />}
+      {media.data?.galleryPhotoUrls?.length ? <GalleryPhotos urls={media.data.galleryPhotoUrls} /> : null}
+      {value.mediaSource === 'approved_gallery' ? <Text style={styles.muted}>Gallery listing approved for human review. No recording location check is claimed; inspections use manual review.</Text> : null}
       <View style={styles.priceRow}><Text style={styles.price}>{listingPriceLabel(value.price)}<Text style={styles.period}> / {value.pricePeriod}</Text></Text><Text style={styles.intent}>{value.intent}</Text></View>
       <View style={styles.badges}>{value.badges.map(badge => <Text key={badge} style={styles.badge}>{badge}</Text>)}</View>
       {value.holdUntil ? <Text style={styles.notice}>This listing is on hold until {new Date(value.holdUntil).toLocaleString()}. You can still contact the host.</Text> : null}

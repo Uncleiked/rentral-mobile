@@ -4,6 +4,7 @@ import MuxPlayer from '@mux/mux-player-react'
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { z } from 'zod'
+import Image from 'next/image'
 
 const playbackSchema = z.object({
   playbackId: z.string().min(1),
@@ -66,6 +67,7 @@ function StorageListingVideo(props: Props) {
 }
 
 export function ListingVideo(props: Props) {
+  if (!props.useMux && !props.src && props.poster) return <Image src={props.poster} alt="Listing photo" width={1080} height={1080} unoptimized className={props.className} />
   if (props.useMux) return <MuxListingVideo key={props.listingId} {...props} />
   return <StorageListingVideo key={`${props.listingId}:${props.src}`} {...props} />
 }

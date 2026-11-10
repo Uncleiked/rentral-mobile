@@ -1,12 +1,79 @@
 # Rentral versioned API
 
-Current source contracts, 2026-11-09: local Next.js, MongoDB/Prisma 6.19.3, JWT
+Current source contracts, 2026-11-10: local Next.js, MongoDB/Prisma 6.19.3, JWT
 email/password accounts and private filesystem storage. Expo Android/iOS and web
 share server domain services; no personal KYC/profile-completion gate applies.
-**The native publication-fee addition is implemented and locally verified.**
+Web/native administration, gallery permissions and publication-fee waivers share
+the same guarded services. Current verification is in [the increment review](owner-admin-review.md).
 Current aggregate, export, browser and real HTTP evidence is recorded separately
 from actual-provider/device acceptance.
 See [current status](completion-status.md) and [Paystack](paystack-integration.md).
+
+## Owner administration, gallery media and manual inspection
+
+All paths in this section begin with `/api/v1`. Authorization uses the current
+database role and active account, never the client's email or displayed link.
+`GET /me` includes capability hints `adminAvailable`, `galleryUploadAllowed` and
+`galleryPermissionRevision`; every mutation independently rechecks authority.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/admin` | Bounded role-scoped listing/user/inspection/audit dashboard. |
+| GET | `/admin/users?query=...` | Bounded email, username or account-ID search. |
+| GET | `/admin/listings/:id` | Review an exact listing outside the displayed queue. |
+| GET | `/admin/listings/:id/document` | Current authorized short-lived private document link/digest. |
+| POST | `/admin/commands` | Strict current-revision reasoned administrative command with client UUID. |
+| GET | `/admin/commands/:clientId` | Read the original actor's committed receipt; never replay a command. |
+| GET / POST | `/bookings/:id/manual-inspection` | Participant gallery-inspection status / `{clientId,evidence}` submission in the eligible window. |
+| GET | `/bookings/:id/manual-inspection?clientId=...` | Exact participant evidence-request receipt readback. |
+
+Command operations cover document approval/rejection, publication/suspension,
+fee-waiver grant/revocation, member suspension/restoration, staff roles, gallery
+permission, independent manual inspection decisions and explicit ownership transfer.
+They carry `clientId`, `targetId`, `expectedRevision` and a 15–2,000-character
+reason plus operation-specific fields. Owner-self exceptions and manual inspection/
+ownership-transfer decisions require a detailed reason of at least 30 characters.
+Only supported listing/gallery exceptions accept the explicit `ownerOverride`;
+it does not remove financial or inspection participant independence. An owner's
+role cannot be assigned/demoted through an ordinary staff-role selector.
+
+Gallery save/submit commands use `mediaSource:'approved_gallery'`, up to ten
+`galleryPhotos` owned paths and optional `videoPath`; submission needs at least
+one photo or video and a private authority document. They forbid `captureId`
+and coordinate fields. Default/omitted `mediaSource` retains the ordinary recorded
+path, whose submission requires a sealed capture/video and precise address match.
+Gallery proof objects/digests and normalized path references are server-built.
+
+Raw gallery byte uploads use
+`POST /uploads/listings-media?mediaSource=approved_gallery&permissionRevision=N`
+with the current grant revision, existing owner `X-Upload-Path` and truthful
+Content-Type. Photos are JPEG/PNG up to 10 MiB, video MP4/MOV/WebM up to 200 MiB;
+video processing retains its 120-second ceiling. Save/submit/edit/publication
+also recheck current approval and serialize against grant revocation.
+
+`GET /uploads/:bucket/info?path=...` reads an exact owned object for recovery,
+including after gallery permission is revoked; it grants no new upload/save
+authority. Web creation durably retains its intended path before bytes and reads
+that object after an unknown acknowledgement or reload. Retrying requires an
+explicit same-content/type/size reselection and the original path, rather than a
+new object name. Browser chunked fingerprints only confirm reselection; the
+server's full-file storage digest remains authoritative. Byte recovery never
+automatically saves or submits a listing.
+
+Owner detail/summary responses add optional `mediaSource` and `galleryPhotos`
+only for gallery rows so recorded responses retain the older strict shape.
+Public discovery adds media origin and protected `galleryPhotoUrls`; `/listings/:id/media`
+returns signed photo URLs for gallery media. Photo-only results have nullable
+video and skip Mux; owners can preview photos while an optional video processes.
+Gallery rows expose no invented capture/GPS match. Revoked or stale grants are
+hidden from public projections and new booking activity. Existing participant
+history remains. Regrant requires a legitimate resave/edit and new review.
+
+Publication-fee overview includes `waived`. A waiver disables new collection and
+permits publication while payments are disabled, subject to current document/media
+rules. It does not mark a payment succeeded or alter financial history. Manual
+gallery inspection approval records evidence without creating spatial proof or
+releasing money. See [contracts](../lib/contracts/admin.ts) and [operator guide](owner-admin-setup.md).
 
 ## Recording location and address admission (2026-11-10)
 
@@ -18,19 +85,24 @@ See [current status](completion-status.md) and [Paystack](paystack-integration.m
 | `GET /api/v1/captures/:id` | Read state without returning GPS; recover an unconfirmed acknowledgment |
 | `POST /api/v1/captures/:id/finish` | `{reading, durationSeconds}` checks fresh end evidence and bounded recording timing |
 | `POST /api/v1/captures/:id/seal` | `{videoPath}` binds the recorded capture to the actual validated owned object/digest |
-| `POST /api/v1/captures/:id/check-address` | `{address}` returns exact capture ID/address hash plus matched/mismatch/unavailable; no precise GPS |
+| `POST /api/v1/captures/:id/check-address` | `{address}` returns exact capture ID/address hash plus matched/mismatch/unavailable; `?details=1` opts into a bounded optional failure reason; no precise GPS |
 | `GET /api/v1/my-listings/requests/:clientId?mode=draft\|submit` | Read original owner mutation receipt only; supports legacy uncertain commands without replaying old coordinate payloads |
 
 Start/finish/seal require the same current AuthSession. Captures expose
 recording/recorded/sealed/expired status and bounded timing metadata, not location
 samples or signing credentials. Recorded/sealed captures support address preflight.
-New draft/submit payloads accept `captureId` and reject free-form coordinate
+Ordinary recorded draft/submit payloads accept `captureId` and reject free-form coordinate
 overrides. Submit requires a sealed capture and a precise Nigerian building/amenity
-geocode within100metres, independently of preflight UI state. It atomically binds
+geocode within 100 metres, independently of preflight UI state. It atomically binds
 the exact video/capture/current address verification. Retakes use a new capture;
 old recordings are not retroactively attested. Provider failure preserves drafts.
-Posted address changes repeat this rule; staff publication checks the exact current
+Posted recorded-address changes repeat this rule; staff publication checks the exact current
 capture/location/video/verification identities. See [setup](recording-location-setup.md).
+
+The optional unavailable reason is `no_result`, `low_confidence`, `imprecise` or
+`provider_unavailable`. Old clients receive the exact earlier response without
+the opt-in; new clients accept a missing reason and use neutral wording.
+Missing building coverage is never reported as a confirmed provider outage.
 
 ## Authentication, transport and recovery
 

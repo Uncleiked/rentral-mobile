@@ -1,3 +1,5 @@
+import { mongoReadinessFailure } from '../database/readiness-errors.ts'
+
 export const STORAGE_BUCKETS = ['listings-media', 'compliance-docs', 'profile-avatars'] as const
 export type StorageBucket = typeof STORAGE_BUCKETS[number]
 export class StorageError extends Error {
@@ -77,6 +79,10 @@ export function verifyUploadBytes(contentType: string, bytes: Uint8Array): void 
 
 export function storageFailure(error: unknown): StorageError {
   if (error instanceof StorageError) return error
+  // Uploads also reserve/claim objects in MongoDB. Preserve the trusted setup or
+  // connectivity diagnosis instead of telling members that local disk failed.
+  const readiness = mongoReadinessFailure(error)
+  if (readiness) return new StorageError(readiness.status, readiness.code, readiness.message)
   if (error && typeof error === 'object' && 'code' in error) {
     if (error.code === 'ENOENT') return new StorageError(404, 'NOT_FOUND', 'This file is unavailable.')
     if (error.code === 'EEXIST') return new StorageError(409, 'FILE_EXISTS', 'This file already exists. Choose a new filename.')

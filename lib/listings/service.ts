@@ -27,6 +27,7 @@ import { committedMutation, mutationCommand, transactionMutation, recordMutation
 import { expireListingReservations } from '@/lib/bookings/service'
 import { z } from 'zod'
 import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
+import { assertGalleryPermission, prepareGalleryMedia } from '@/lib/listings/gallery'
 
 const METADATA_SCHEMAS = {
   house: houseMetadataSchema,
@@ -92,16 +93,18 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
     command = mutationCommand(userId, 'listing_submit', parsed.data.clientId, parsed.data)
     const alreadySaved = await committedMutation(command)
     if (alreadySaved) return { success: true, listingId: alreadySaved }
-    if (muxEnabled() && !muxConfigured()) return { success: false, error: 'Video processing is temporarily unavailable. Save your draft and try again later.' }
     const { category, address, basePrice, draftId, captureId, videoPath, posterPath, documentPath } =
       parsed.data
+    const isGallery = parsed.data.mediaSource === 'approved_gallery'
+    if (!isGallery && (!captureId || !videoPath)) throw new ApiError(409, 'CAPTURE_REQUIRED', 'Record and upload a walkthrough with its location before submitting.')
+    if (videoPath && muxEnabled() && !muxConfigured()) return { success: false, error: 'Video processing is temporarily unavailable. Save your draft and try again later.' }
 
     const metadata = METADATA_SCHEMAS[category].safeParse(parsed.data.metadata)
     if (!metadata.success) {
       return { success: false, error: 'Asset details are incomplete. Go back and check the details step.' }
     }
 
-    if (!ownsPaths(userId, [videoPath, documentPath, posterPath])) {
+    if (!ownsPaths(userId, [videoPath, documentPath, posterPath, ...(parsed.data.galleryPhotos ?? [])])) {
       return { success: false, error: 'Uploaded files could not be verified. Please try again.' }
     }
 
@@ -111,20 +114,24 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
 
     // Only server-sealed recording evidence can supply this point. Geocoder I/O
     // precedes the transaction; exact capture/video binding is checked again in it.
-    const addressMatch = await resolveCaptureAddress(userId, captureId, videoPath, address)
-    const storedObjects = await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
+    const galleryRevision = isGallery ? await withTransaction(tx => assertGalleryPermission(tx, userId)) : null
+    const addressMatch = !isGallery && captureId && videoPath ? await resolveCaptureAddress(userId, captureId, videoPath, address) : null
+    const gallery = isGallery ? await prepareGalleryMedia(userId, { galleryPhotos: parsed.data.galleryPhotos, videoPath, posterPath, documentPath }) : null
+    const storedObjects = gallery?.objects ?? await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
     const storedVideo = storedObjects.find(object => object.path === videoPath)
-    if (!storedVideo) throw new ApiError(409, 'CAPTURE_REQUIRED', 'Upload and seal the walkthrough before submitting it.')
+    if (!isGallery && !storedVideo) throw new ApiError(409, 'CAPTURE_REQUIRED', 'Upload and seal the walkthrough before submitting it.')
 
     const listingData = {
       category,
       text_address: address,
       base_rent_amount: Number(basePrice),
       asset_metadata: metadata.data,
-      video_path: videoPath,
-      poster_path: posterPath ?? null,
+      video_path: videoPath ?? null,
+      poster_path: gallery?.posterPath ?? posterPath ?? null,
       document_path: documentPath,
-      capture_id: captureId,
+      capture_id: isGallery ? null : captureId,
+      media_source: isGallery ? 'approved_gallery' : 'recorded',
+      gallery_media: gallery?.proof ?? [], gallery_media_paths: gallery?.paths ?? [], gallery_permission_revision: galleryRevision,
       wizard_step: null,
     }
 
@@ -134,6 +141,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       await assertActiveAccounts(tx, [userId])
       const replay = await transactionMutation(tx, command)
       if (replay) return { row: await tx.listing.findFirstOrThrow({ where: { id: replay, lister_id: userId }, select: { id: true, lister: { select: { username: true } } } }), replayed: true }
+      if (isGallery) await assertGalleryPermission(tx, userId, galleryRevision!)
       if (draftId) {
         // Serialize draft publication with edits so ownership, status, footage
         // and its stored GPS are checked against the exact row being published.
@@ -155,16 +163,19 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
             select: { id: true, lister: { select: { username: true } } },
           })
 
-      const capture = await bindCaptureToListing(tx, userId, captureId, row.id, storedVideo)
-      if (capture.begin_hash !== addressMatch.capture.begin_hash || capture.video_digest !== addressMatch.capture.video_digest) throw new ListingRevisionError()
-      await setListingCapture(tx, row.id, capture)
-      await recordAddressMatch(tx, row.id, captureId, addressMatch)
+      if (isGallery) await tx.listingLocation.deleteMany({ where: { listing_id: row.id } })
+      else if (captureId && storedVideo && addressMatch) {
+        const capture = await bindCaptureToListing(tx, userId, captureId, row.id, storedVideo)
+        if (capture.begin_hash !== addressMatch.capture.begin_hash || capture.video_digest !== addressMatch.capture.video_digest) throw new ListingRevisionError()
+        await setListingCapture(tx, row.id, capture)
+        await recordAddressMatch(tx, row.id, captureId, addressMatch)
+      } else throw new ApiError(409, 'CAPTURE_REQUIRED', 'Confirm this recording and its location before submitting.')
 
       await tx.listing.update({
         where: { id: row.id },
         data: { listing_status: LISTING_STATUS.PENDING_VERIFICATION },
       })
-      if (muxEnabled()) {
+      if (videoPath && muxEnabled()) {
         await tx.mediaAsset.create({ data: { listing_id: row.id, source_path: videoPath, mux_asset_id: null, playback_id: null } })
       }
       await recordMutation(tx, command, row.id)
@@ -181,11 +192,11 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
     after(() =>
       captureServerEvent(userId, 'listing_created', {
         category,
-        gps_accuracy_meters: addressMatch.capture.start_accuracy,
+        ...(addressMatch ? { gps_accuracy_meters: addressMatch.capture.start_accuracy } : { media_source: 'approved_gallery' }),
         from_draft: Boolean(draftId),
       })
     )
-    if (muxEnabled()) after(async () => {
+    if (videoPath && muxEnabled()) after(async () => {
       try {
         await processListingMedia(listing.id, userId)
       } catch {
@@ -229,12 +240,15 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
     if (alreadySaved) return { success: true, draftId: alreadySaved }
     const { draftId, category, wizardStep, address, basePrice, captureId, videoPath, posterPath, documentPath } =
       parsed.data
+    const isGallery = parsed.data.mediaSource === 'approved_gallery'
 
-    if (!ownsPaths(userId, [videoPath, posterPath, documentPath])) {
+    if (!ownsPaths(userId, [videoPath, posterPath, documentPath, ...(parsed.data.galleryPhotos ?? [])])) {
       return { success: false, error: 'Uploaded files could not be verified. Please try again.' }
     }
     if (captureId && !videoPath) throw new ApiError(400, 'CAPTURE_REQUIRED', 'Attach the uploaded walkthrough belonging to this recording before saving its lock.')
-    const storedObjects = await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
+    const galleryRevision = isGallery ? await withTransaction(tx => assertGalleryPermission(tx, userId)) : null
+    const gallery = isGallery ? await prepareGalleryMedia(userId, { galleryPhotos: parsed.data.galleryPhotos, videoPath, posterPath, documentPath }) : null
+    const storedObjects = gallery?.objects ?? await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
 
     // Whole-naira prices of at most ten digits are exact IEEE-754 integers.
     const priceForDb = basePrice && /^[1-9][0-9]{0,9}$/.test(basePrice) ? Number(basePrice) : null
@@ -246,15 +260,18 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
       base_rent_amount: priceForDb,
       asset_metadata: (parsed.data.metadata ?? {}) as Prisma.InputJsonValue,
       video_path: videoPath ?? null,
-      poster_path: posterPath ?? null,
+      poster_path: gallery?.posterPath ?? posterPath ?? null,
       document_path: documentPath ?? null,
-      capture_id: captureId ?? null,
+      capture_id: isGallery ? null : captureId ?? null,
+      media_source: isGallery ? 'approved_gallery' : 'recorded',
+      gallery_media: gallery?.proof ?? [], gallery_media_paths: gallery?.paths ?? [], gallery_permission_revision: galleryRevision,
     }
 
     const row = await withTransaction(async (tx) => {
       await assertActiveAccounts(tx, [userId])
       const replay = await transactionMutation(tx, command)
       if (replay) return { id: replay, replayed: true }
+      if (isGallery) await assertGalleryPermission(tx, userId, galleryRevision!)
       let id = draftId
       let videoChanged = false
 
@@ -288,7 +305,8 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
       }
 
       if (!id) throw new DraftNotFoundError()
-      if (captureId && videoPath) {
+      if (isGallery) await tx.listingLocation.deleteMany({ where: { listing_id: id } })
+      else if (captureId && videoPath) {
         const video = storedObjects.find(object => object.path === videoPath)
         if (!video) throw new ApiError(409, 'CAPTURE_REQUIRED', 'Upload and seal the walkthrough before saving it.')
         const capture = await bindCaptureToListing(tx, userId, captureId, id, video)
@@ -380,7 +398,7 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
 
     const row = await prisma.listing.findFirst({
       where: { id: listingId, lister_id: userId },
-      select: { id: true, revision: true, category: true, listing_status: true, archived_at: true, text_address: true, capture_id: true, video_path: true, lister: { select: { username: true } } },
+      select: { id: true, revision: true, category: true, listing_status: true, archived_at: true, text_address: true, capture_id: true, video_path: true, media_source: true, gallery_permission_revision: true, lister: { select: { username: true } } },
     })
     if (!row) {
       return { success: false, error: 'Listing not found.' }
@@ -396,34 +414,40 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
     if (!metadata?.success) {
       return { success: false, error: 'Asset details are incomplete. Check each field.' }
     }
-    const addressMatch = addressFingerprint(row.text_address ?? '') !== addressFingerprint(address)
+    const isGallery = row.media_source === 'approved_gallery'
+    const addressEdited = addressFingerprint(row.text_address ?? '') !== addressFingerprint(address)
+    const addressMatch = !isGallery && addressEdited
       ? await resolveCaptureAddress(userId, row.capture_id ?? '', row.video_path ?? '', address) : null
 
     // Category, video, GPS, and documents are padlocked (Item 11) — only the
     // describable attributes are editable.
     await withTransaction(async tx => {
       await assertActiveAccounts(tx, [userId])
-      if (parsed.data.expectedRevision !== undefined || addressMatch) {
+      if (parsed.data.expectedRevision !== undefined || addressMatch || isGallery && addressEdited) {
         const version = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId }, select: { revision: true } })
         if (!version || version.revision !== row.revision) throw new ListingRevisionError()
       }
       if (!await lockRecord(tx, 'listing', row.id)) throw new Error('Listing is no longer editable.')
       const current = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId, listing_status: { not: LISTING_STATUS.DRAFT } },
-        select: { text_address: true, archived_at: true, capture_id: true, video_path: true } })
+        select: { text_address: true, archived_at: true, capture_id: true, video_path: true, media_source: true, gallery_permission_revision: true } })
       if (!current || current.archived_at) throw new Error('Listing is no longer editable.')
+      if ((current.media_source ?? 'recorded') !== (row.media_source ?? 'recorded')) throw new ListingRevisionError()
+      const galleryRevision = isGallery ? await assertGalleryPermission(tx, userId) : null
+      const galleryReapproval = isGallery && current.gallery_permission_revision !== galleryRevision
       const addressChanged = addressFingerprint(current.text_address ?? '') !== addressFingerprint(address)
-      if (addressChanged && (!addressMatch || current.capture_id !== addressMatch.capture.id || current.video_path !== addressMatch.capture.video_path)) throw new ListingRevisionError()
+      if (!isGallery && addressChanged && (!addressMatch || current.capture_id !== addressMatch.capture.id || current.video_path !== addressMatch.capture.video_path)) throw new ListingRevisionError()
       if (addressChanged && platformEnabled()) {
         const reservations = await tx.booking.count({ where: { listing_id: row.id, status: { in: ['confirmed', 'completed', 'disputed'] } } })
         if (reservations) throw new Error('Address changes are unavailable after a confirmed booking.')
-        await tx.documentReview.updateMany({ where: { listing_id: row.id }, data: { status: 'needs_review', reviewed_by: null } })
       }
+      if ((addressChanged || galleryReapproval) && platformEnabled()) await tx.documentReview.updateMany({ where: { listing_id: row.id }, data: { status: 'needs_review', reviewed_by: null } })
       await tx.listing.update({
         where: { id: row.id, lister_id: userId },
         data: {
           text_address: address, base_rent_amount: Number(basePrice), asset_metadata: metadata.data,
           // A changed address cannot retain an earlier spatial/document approval.
-          ...(addressChanged ? { listing_status: LISTING_STATUS.PENDING_VERIFICATION } : {}),
+          ...(addressChanged || galleryReapproval ? { listing_status: LISTING_STATUS.PENDING_VERIFICATION } : {}),
+          ...(isGallery ? { gallery_permission_revision: galleryRevision } : {}),
         },
       })
       if (addressChanged && addressMatch) await recordAddressMatch(tx, row.id, addressMatch.capture.id, addressMatch)

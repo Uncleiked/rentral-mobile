@@ -32,6 +32,7 @@ export const apiBookingSchema = z.object({
   renter: z.object({ username: z.string().max(24).nullable() }).strict(),
   host: z.object({ username: z.string().max(24).nullable() }).strict(),
   checkIn: z.object({ renterAt: timestamp.nullable(), hostAt: timestamp.nullable() }).strict(),
+  inspectionMode: z.enum(['recorded', 'manual']).optional().default('recorded'),
   payments: z.array(z.object({ id: z.uuid(), reference: z.string().min(1).max(150), status: z.string().min(1).max(40) }).strict()).max(100),
   quote: apiBookingQuoteSchema.nullable(), actions: bookingActionSchema, paymentAvailable: z.boolean(),
 }).strict().superRefine((value, context) => {
@@ -59,8 +60,8 @@ export function bookingActions(booking: BookingView, viewerId: string, paymentAv
       BigInt(booking.amount_kobo) > BigInt(booking.hold_credit_kobo) &&
       booking.payments.every(payment => ['created', 'pending', 'failed', 'abandoned'].includes(payment.status)),
     reconcile: renter && paymentAvailable && booking.payments.some(payment => !['succeeded', 'requires_review'].includes(payment.status)),
-    checkIn: (renter || host) && booking.kind === 'inspection' && booking.status === 'confirmed' && Math.abs(Date.parse(booking.starts_at) - now.getTime()) <= 4 * 60 * 60 * 1000,
-    issueCode: renter && booking.kind === 'inspection' && booking.status === 'confirmed',
+    checkIn: booking.listing.media_source !== 'approved_gallery' && (renter || host) && booking.kind === 'inspection' && booking.status === 'confirmed' && Math.abs(Date.parse(booking.starts_at) - now.getTime()) <= 4 * 60 * 60 * 1000,
+    issueCode: booking.listing.media_source !== 'approved_gallery' && renter && booking.kind === 'inspection' && booking.status === 'confirmed',
     convertHold: renter && booking.kind === 'hold' && booking.status === 'confirmed' && booking.settlement_status === 'unsettled' &&
       liveDeadline && !ended && !booking.allocated_hold_credit && paid && !booking.payments.some(payment => payment.status === 'requires_review'),
   }
@@ -85,6 +86,7 @@ export function publicBooking(booking: BookingView, viewerId: string): ApiBookin
     listing: { id: booking.listing_id, category: booking.listing.category, location: discoveryLocation(booking.listing.text_address) },
     renter: { username: booking.seeker.username }, host: { username: booking.lister.username },
     checkIn: { renterAt: booking.seeker_checked_in_at, hostAt: booking.lister_checked_in_at },
+    inspectionMode: booking.listing.media_source === 'approved_gallery' ? 'manual' : 'recorded',
     payments: booking.payments.map(payment => ({ id: payment.id, reference: payment.reference, status: payment.status })),
     quote: quote.success ? quote.data : null, actions: bookingActions(booking, viewerId, paymentAvailable), paymentAvailable,
   })

@@ -4,6 +4,7 @@ import prisma from '@/lib/db'
 import type { Prisma } from '@prisma/client'
 import { lockRecord, withTransaction } from '@/lib/database/transactions'
 import { fetchBoundedProviderJson } from '@/lib/providers/bounded-json'
+import type { CaptureAddressFailureReason } from '@/lib/contracts/capture'
 
 export const SPATIAL_TOLERANCE_METERS = 100
 // WGS84 latitude/longitude, evaluated on the IUGG mean-radius sphere. This is
@@ -44,17 +45,19 @@ const geocodeResponse = z.object({ features: z.array(z.object({
 })).max(1) })
 
 export async function verifyListingAddress(listingId: string): Promise<'matched' | 'mismatch' | 'unavailable'> {
-  const listing = await prisma.listing.findUniqueOrThrow({ where: { id: listingId }, select: { text_address: true } })
-  if (!listing.text_address) return 'unavailable'
+  const listing = await prisma.listing.findUniqueOrThrow({ where: { id: listingId }, select: { text_address: true, media_source: true } })
+  // An approved gallery has no recording-location evidence. Legacy review
+  // controls must not geocode it or manufacture a recording match.
+  if (listing.media_source === 'approved_gallery' || !listing.text_address) return 'unavailable'
   const hash = addressFingerprint(listing.text_address)
   const resolved = await geocodeListingAddress(listing.text_address)
   if (!resolved) return 'unavailable'
   const { longitude, latitude } = resolved
   return withTransaction(async tx => {
     if (!await lockRecord(tx, 'listing', listingId)) return 'unavailable'
-    const current = await tx.listing.findUnique({ where: { id: listingId }, select: { text_address: true, capture_id: true, video_path: true, lister_id: true } })
+    const current = await tx.listing.findUnique({ where: { id: listingId }, select: { text_address: true, capture_id: true, video_path: true, lister_id: true, media_source: true } })
     // A delayed geocoder response cannot approve an address edited meanwhile.
-    if (!current?.text_address || addressFingerprint(current.text_address) !== hash) return 'unavailable'
+    if (current?.media_source === 'approved_gallery' || !current?.text_address || addressFingerprint(current.text_address) !== hash) return 'unavailable'
     const location = await tx.listingLocation.findUnique({ where: { listing_id: listingId }, select: { geometry: true, capture_id: true } })
     const recorded = decodeGeographicPoint(location?.geometry)
     if (current.capture_id) {
@@ -73,8 +76,21 @@ export async function verifyListingAddress(listingId: string): Promise<'matched'
 
 /** Geocode typed text only; precise recording GPS never goes to the provider. */
 export async function geocodeListingAddress(address: string): Promise<GeographicPoint | null> {
+  // Preserve the existing null-without-configuration and throw-on-provider-error
+  // contract for admission/publication callers.
+  if (!process.env.GEOAPIFY_API_KEY?.trim()) return null
+  const result = await geocodeListingAddressWithReason(address)
+  if (result.status === 'resolved') return result.point
+  if (result.reason === 'provider_unavailable') throw new Error('GEOCODER_UNAVAILABLE')
+  return null
+}
+
+export type ListingAddressResolution = { status: 'resolved'; point: GeographicPoint } | { status: 'unavailable'; reason: CaptureAddressFailureReason }
+
+/** A bounded reason distinguishes valid empty/imprecise lookups from outages. */
+export async function geocodeListingAddressWithReason(address: string): Promise<ListingAddressResolution> {
   const key = process.env.GEOAPIFY_API_KEY?.trim()
-  if (!key) return null
+  if (!key) return { status: 'unavailable', reason: 'provider_unavailable' }
   const url = new URL('https://api.geoapify.com/v1/geocode/search')
   url.searchParams.set('text', address)
   url.searchParams.set('filter', 'countrycode:ng')
@@ -82,9 +98,11 @@ export async function geocodeListingAddress(address: string): Promise<Geographic
   url.searchParams.set('apiKey', key)
   let result: z.infer<typeof geocodeResponse>['features'][number] | undefined
   try { result = geocodeResponse.parse(await fetchBoundedProviderJson(url, { headers: { Accept: 'application/json' } }, { maximumBytes: 64 * 1024, timeoutMs: 10000 })).features[0] }
-  catch { throw new Error('GEOCODER_UNAVAILABLE') }
+  catch { return { status: 'unavailable', reason: 'provider_unavailable' } }
   // A city/district centroid cannot verify an individual asset address.
-  if (!result || result.properties.country_code?.toLowerCase() !== 'ng' || result.properties.rank.confidence < 0.8 || !['building', 'amenity'].includes(result.properties.result_type)) return null
+  if (!result) return { status: 'unavailable', reason: 'no_result' }
+  if (result.properties.country_code?.toLowerCase() !== 'ng' || !['building', 'amenity'].includes(result.properties.result_type)) return { status: 'unavailable', reason: 'imprecise' }
+  if (result.properties.rank.confidence < 0.8) return { status: 'unavailable', reason: 'low_confidence' }
   const [longitude, latitude] = result.geometry.coordinates
-  return { longitude, latitude }
+  return { status: 'resolved', point: { longitude, latitude } }
 }

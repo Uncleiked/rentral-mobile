@@ -17,13 +17,14 @@ import { accountIsActive, assertActiveAccounts } from './availability'
 export async function closeAccount(userId: string, input: unknown): Promise<void> {
   const { currentPassword } = accountCloseSchema.parse(input)
   if (!apiRateLimiter.allow(`account-close:${userId}`, 5)) throw new AuthError(429, 'RATE_LIMITED', 'Too many account verification attempts. Please wait a minute.')
-  const proof = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, password_hash: true, closed_at: true } })
+  const proof = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, password_hash: true, closed_at: true, suspended_at: true } })
   const valid = await verifyPassword(currentPassword, accountIsActive(proof) ? proof?.password_hash ?? null : null)
   if (!proof || !accountIsActive(proof) || !valid || !proof.password_hash) throw new AuthError(400, 'CURRENT_PASSWORD_INCORRECT', 'Your current password is incorrect.')
   const [securityReady, financeReady, matchingReady, lifecycleReady, commerceReady, pushReady] = await Promise.all([authSecurityPrepared(), financialPrepared(), matchingPrepared(), lifecyclePrepared(), commercialPrepared(), pushPrepared()])
   await withTransaction(async tx => {
     await assertActiveAccounts(tx, [userId])
-    const current = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, password_hash: true } })
+    const current = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, password_hash: true, staff_role: true } })
+    if (current.staff_role === 'owner') throw new AuthError(409, 'OWNER_TRANSFER_REQUIRED', 'Transfer platform ownership before closing this account.')
     if (current.email !== proof.email || current.password_hash !== proof.password_hash) throw new AuthError(409, 'CREDENTIALS_CHANGED', 'Your account credentials changed. Sign in again before continuing.')
     const booking = await tx.booking.findFirst({ where: { OR: [{ seeker_id: userId }, { lister_id: userId }], status: { in: ['requested', 'awaiting_payment', 'confirmed', 'disputed'] } }, select: { id: true } })
     const dispute = await tx.dispute.findFirst({ where: { status: 'open', booking: { OR: [{ seeker_id: userId }, { lister_id: userId }] } }, select: { id: true } })

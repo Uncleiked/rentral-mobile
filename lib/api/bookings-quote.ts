@@ -4,6 +4,7 @@ import { holdCreditTerms } from '@/lib/bookings/hold-credit'
 import { z } from 'zod'
 import { apiBookingQuoteSchema, apiMoneySchema } from './bookings'
 import { ApiError } from './http'
+import { galleryIsPublic, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 
 export const bookingQuoteResponseSchema = apiBookingQuoteSchema.safeExtend({
   currency: z.literal('NGN'), holdCreditKobo: apiMoneySchema, payableKobo: apiMoneySchema,
@@ -15,8 +16,8 @@ export async function quoteBookingForApi(userId: string, input: unknown): Promis
   const startsAt = new Date(request.startsAt), endsAt = new Date(request.endsAt), now = new Date()
   if ((!request.holdBookingId && startsAt.getTime() < now.getTime() - 60000) || endsAt <= now) throw new BookingError('Choose an available rental period.')
   const listing = await prisma.listing.findFirst({ where: { id: request.listingId, listing_status: 'active' },
-    select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true } })
-  if (!listing || !listing.base_rent_amount) throw new ApiError(404, 'NOT_FOUND', 'This listing is unavailable.')
+    select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true, ...galleryListingSelect, lister: { select: galleryUserSelect } } })
+  if (!listing || !listing.base_rent_amount || !galleryIsPublic(listing)) throw new ApiError(404, 'NOT_FOUND', 'This listing is unavailable.')
   if (listing.lister_id === userId) throw new BookingError('You cannot book your own listing.')
   const quote = quoteBookingBreakdown(request.kind, listing.category, nairaToKobo(listing.base_rent_amount.toString()), startsAt, endsAt, listing.asset_metadata, request.holdDays)
   let holdCreditKobo = BigInt(0)

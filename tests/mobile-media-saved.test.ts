@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 
 const mocks = vi.hoisted(() => ({ listing: vi.fn(), media: vi.fn(), sign: vi.fn(), muxSign: vi.fn(), save: vi.fn(), remove: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: {
@@ -62,6 +63,28 @@ it('requires signed Mux playback while enabled and never exposes a raw fallback'
     videoUrl: 'https://stream.mux.com/playback-id.m3u8?token=video-signature',
     posterUrl: 'https://image.mux.com/playback-id/thumbnail.jpg?token=thumbnail-signature',
   })
+  expect(mocks.sign).not.toHaveBeenCalled()
+})
+
+it('returns gallery photos for photo-only inventory without consulting Mux and keeps owner previews available during video processing', async () => {
+  vi.stubEnv('MUX_ENABLED', 'true')
+  const path = `${owner}/folder/photo.png`, proof = { kind: 'image', path, objectId: createHash('sha256').update(`listings-media\0${path}`).digest('hex'), digest: 'a'.repeat(64), sizeBytes: 100, contentType: 'image/png' }
+  const gallery = { lister_id: owner, listing_status: 'active', poster_path: path, video_path: null, media_source: 'approved_gallery', gallery_permission_revision: 2,
+    gallery_media: [proof], lister: { gallery_upload_allowed: true, gallery_permission_revision: 2 } }
+  mocks.listing.mockResolvedValue(gallery)
+  mocks.sign.mockImplementation(async (path: string) => ({ data: { signedUrl: `https://storage.example/signed/${path}?token=storage-signature` }, error: null }))
+  expect(await listingMediaForApi(viewer, listingId)).toMatchObject({ videoUrl: null, mediaSource: 'approved_gallery', galleryPhotoUrls: [expect.stringContaining('photo.png')] })
+  expect(mocks.media).not.toHaveBeenCalled(); expect(mocks.muxSign).not.toHaveBeenCalled()
+  mocks.listing.mockResolvedValue({ ...gallery, video_path: paths.video_path, listing_status: 'pending_verification' })
+  expect(await listingMediaForApi(owner, listingId)).toMatchObject({ videoUrl: null, galleryPhotoUrls: [expect.stringContaining('photo.png')] })
+})
+
+it('does not sign gallery photos for a public viewer after permission revocation or regrant', async () => {
+  const path = `${owner}/folder/photo.jpg`, proof = { kind: 'image', path, objectId: createHash('sha256').update(`listings-media\0${path}`).digest('hex'), digest: 'a'.repeat(64), sizeBytes: 100, contentType: 'image/jpeg' }
+  for (const capability of [{ gallery_upload_allowed: false, gallery_permission_revision: 3 }, { gallery_upload_allowed: true, gallery_permission_revision: 4 }]) {
+    mocks.listing.mockResolvedValue({ lister_id: owner, listing_status: 'active', poster_path: path, video_path: null, media_source: 'approved_gallery', gallery_permission_revision: 2, gallery_media: [proof], lister: capability })
+    await expect(listingMediaForApi(viewer, listingId)).rejects.toMatchObject({ status: 404 })
+  }
   expect(mocks.sign).not.toHaveBeenCalled()
 })
 

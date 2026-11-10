@@ -4,6 +4,8 @@ import { ApiError, apiFailure, apiSuccess, readApiJson } from '@/lib/api/http'
 import { createLocalStorage, defaultStorageDirectory } from '@/lib/local-storage/core'
 import { requireOwnedStoragePath, storageBucket, storagePrefix, storageFailure, uploadPolicy } from '@/lib/local-storage/policy'
 import { uploadStoredObject, removeStoredObjects } from '@/lib/storage-claims/service'
+import { withTransaction } from '@/lib/database/transactions'
+import { assertGalleryPermission } from '@/lib/listings/gallery'
 
 export const runtime = 'nodejs'
 type Context = { params: Promise<{ bucket: string }> }
@@ -20,6 +22,14 @@ export async function POST(request: Request, context: Context): Promise<Response
     const path = request.headers.get('x-upload-path') ?? ''
     requireOwnedStoragePath(bucket, path, identity.userId)
     const policy = uploadPolicy(bucket, path, request.headers.get('content-type'))
+    const query = new URL(request.url).searchParams
+    const source = query.get('mediaSource')
+    if (source !== null && source !== 'recorded' && source !== 'approved_gallery') throw new ApiError(400, 'INVALID_REQUEST', 'Choose a valid listing media source.')
+    if (source === 'approved_gallery') {
+      if (bucket !== 'listings-media') throw new ApiError(400, 'INVALID_REQUEST', 'Gallery permission applies to listing photos and videos only.')
+      const revision = z.string().regex(/^(0|[1-9][0-9]{0,9})$/).transform(value => Number(value)).pipe(z.number().int().nonnegative().max(2147483647)).parse(query.get('permissionRevision'))
+      await withTransaction(tx => assertGalleryPermission(tx, identity.userId, revision))
+    }
     const length = request.headers.get('content-length')
     if (length && (!/^\d+$/.test(length) || Number(length) > policy.maximumBytes)) throw new ApiError(413, 'FILE_TOO_LARGE', 'This file exceeds the upload limit.')
     const result = await uploadStoredObject(identity.userId, bucket, path, request.body, policy.contentType)

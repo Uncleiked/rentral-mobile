@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), query: vi.fn(), initialize: vi.fn(), findIntent: vi.fn(), createIntent: vi.fn(), updateIntent: vi.fn(), claim: vi.fn(), findAllocation: vi.fn(), findBooking: vi.fn(), updateBooking: vi.fn(), updateBookings: vi.fn(), ledger: vi.fn(), event: vi.fn(), notify: vi.fn() }))
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), query: vi.fn(), initialize: vi.fn(), findIntent: vi.fn(), createIntent: vi.fn(), updateIntent: vi.fn(), claim: vi.fn(), findAllocation: vi.fn(), findBooking: vi.fn(), findListing: vi.fn(), updateBooking: vi.fn(), updateBookings: vi.fn(), ledger: vi.fn(), event: vi.fn(), notify: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, paymentIntent: { updateMany: mocks.claim } } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async () => true }))
 vi.mock('@/lib/bookings/service', () => ({ expireListingReservations: vi.fn(), otherConfirmedHold: vi.fn(async () => null), paidBookingExpiry: () => null }))
@@ -27,18 +27,25 @@ beforeEach(() => {
   mocks.claim.mockResolvedValue({ count: 1 }); mocks.initialize.mockResolvedValue('https://checkout.paystack.com/synthetic')
   mocks.findBooking.mockResolvedValue({ ...booking })
   mocks.findIntent.mockResolvedValue(null)
+  mocks.findListing.mockResolvedValue({ id: 'listing' })
   mocks.createIntent.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...intent, ...data, id: paymentId, status: 'created' }))
   mocks.findAllocation.mockResolvedValue({ hold_booking_id: 'hold', rental_booking_id: 'rental', amount_kobo: BigInt(2000000), currency: 'NGN', hold_booking: { ...source } })
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
     booking: { findFirst: (query: { where: { id?: unknown } }) => typeof query.where.id === 'object' ? Promise.resolve(null) : mocks.findBooking(query), findUnique: mocks.findBooking, findUniqueOrThrow: mocks.findBooking, update: mocks.updateBooking, updateMany: mocks.updateBookings },
-    paymentIntent: { findFirst: mocks.findIntent, findUnique: mocks.findIntent, findUniqueOrThrow: mocks.findIntent, create: mocks.createIntent, update: mocks.updateIntent },
+    paymentIntent: { findFirst: mocks.findIntent, findUnique: mocks.findIntent, findUniqueOrThrow: mocks.findIntent, create: mocks.createIntent, update: mocks.updateIntent, updateMany: mocks.claim },
     holdCreditAllocation: { findUnique: mocks.findAllocation }, user: { findUniqueOrThrow: vi.fn(async () => ({ email: intent.customer_email, kyc_verified: true })), findFirstOrThrow: vi.fn(async () => ({ email: intent.customer_email })), findFirst: vi.fn(async () => ({ id: userId })) },
-    listing: { findFirst: vi.fn(async () => ({ id: 'listing' })) }, paymentEvent: { findUnique: vi.fn(async () => null), create: mocks.event }, ledgerTransaction: { create: mocks.ledger }, notification: { create: mocks.notify },
+    listing: { findFirst: mocks.findListing }, paymentEvent: { findUnique: vi.fn(async () => null), create: mocks.event }, ledgerTransaction: { create: mocks.ledger }, notification: { create: mocks.notify },
   }))
 })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('holding credit collection boundary', () => {
+  it('rechecks a waiver committed after intent preparation before authorizing provider initialization', async () => {
+    mocks.findListing.mockResolvedValueOnce({ id: 'listing' }).mockResolvedValue({ id: 'listing', fee_waived_at: new Date(), fee_waived_by: userId, fee_waiver_reason: 'Reviewed and waived this publication fee.' })
+    await expect(startListingFeePayment(userId, 'listing')).rejects.toThrow('waived')
+    expect(mocks.createIntent).toHaveBeenCalledTimes(1)
+    expect(mocks.initialize).not.toHaveBeenCalled(); expect(mocks.claim).not.toHaveBeenCalled()
+  })
   it('creates and sends a provider intent for the exact remaining balance', async () => {
     await startBookingPayment(userId, booking.id)
     expect(mocks.createIntent).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ amount_kobo: BigInt(8000000) }) }))

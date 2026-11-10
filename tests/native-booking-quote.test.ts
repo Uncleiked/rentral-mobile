@@ -35,14 +35,28 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 
 it('quotes exact server prices and fees as integer kobo strings without allocating or reserving anything', async () => {
+  const privateDigest = 'd'.repeat(64), privateObjectId = 'c'.repeat(64)
+  mocks.listing.mockResolvedValueOnce({ id: listingId, lister_id: host, category: 'car', base_rent_amount: '30000.01',
+    asset_metadata: { pricePeriod: 'day', agencyFee: '10.25', cautionFee: '0' }, media_source: 'recorded', gallery_permission_revision: 9,
+    gallery_media: { photos: [{ path: 'PRIVATE_GALLERY_PATH', objectId: privateObjectId, digest: privateDigest }], video: null },
+    lister: { gallery_upload_allowed: true, gallery_permission_revision: 9 },
+    privateLocation: { geometry: { type: 'Point', coordinates: [3.456789, 6.987654] } },
+  })
   const response = await quote(request(input))
   expect(response.status).toBe(200)
-  expect(await response.json()).toEqual({ success: true, data: { currency: 'NGN', period: 'day', days: 1,
+  const body = await response.json()
+  expect(body).toEqual({ success: true, data: { currency: 'NGN', period: 'day', days: 1,
     baseKobo: '3000001', fees: [{ label: 'Agency fee', amountKobo: '1025' }], totalKobo: '3001026', holdCreditKobo: '0', payableKobo: '3001026' } })
   expect(mocks.identity).toHaveBeenCalledWith(expect.any(Request), { platform: true, mutation: true, verified: true })
   expect(mocks.listing).toHaveBeenCalledExactlyOnceWith({ where: { id: listingId, listing_status: 'active' },
-    select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true } })
+    select: { id: true, lister_id: true, category: true, base_rent_amount: true, asset_metadata: true,
+      media_source: true, gallery_media: true, gallery_permission_revision: true,
+      lister: { select: { gallery_upload_allowed: true, gallery_permission_revision: true } } },
+  })
   expect(mocks.hold).not.toHaveBeenCalled()
+  expect(JSON.stringify(body)).not.toMatch(/gallery_media|gallery_permission_revision|gallery_upload_allowed|privateLocation|geometry|coordinates|PRIVATE_GALLERY_PATH|objectId|digest|3\.456789|6\.987654/)
+  expect(JSON.stringify(body)).not.toContain(privateDigest)
+  expect(JSON.stringify(body)).not.toContain(privateObjectId)
 })
 
 it.each([{ kind: 'inspection', total: '300000' }, { kind: 'hold', total: '6000000' }])('uses shared fixed $kind pricing', async ({ kind, total }) => {

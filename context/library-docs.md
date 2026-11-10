@@ -1,6 +1,11 @@
 ## Rentral Library Docs & Integration Patterns
 
-### Current integration rules (2026-11-09)
+### Current integration rules (2026-11-10)
+
+- Owner/admin decisions, manual document approval, gallery exceptions and fee
+  waivers follow [owner/admin setup](owner-admin-setup.md). `User.staff_role` and
+  current gallery grant revision are authoritative. Owner email is never a runtime
+  privilege rule. Human approval binds the exact authority-document path/digest.
 
 - npm 11.19.1 workspaces/Node 24.x replace pnpm. Next.js 16.4.5 includes the reviewed
   security update. Follow installed Next docs for cookies/proxy/route APIs.
@@ -42,13 +47,13 @@
 - Web Inter uses next/font/local with the installed licensed Inter assets;
   native Inter uses expo-font and direct weight imports. Do not restore a network
   Google Fonts dependency or icon-family barrel imports.
-- Gemini/Geoapify use fixed-host bounded JSON transport, redirect denial and whole
-  response deadlines. Document signals remain advisory and cannot publish assets
-  or replace human review. See document-providers.md.
+- Geoapify uses fixed-host bounded JSON transport, redirect denial and whole
+  response deadlines. Gemini screening/provider code has been removed. Documents
+  require human review; preserve historical findings/audits. See document-providers.md.
 - Account closure is soft and exports are allowlisted/cursor bounded. Encrypted
   backup verification restores only to an isolated quarantined target; existing
   source credentials, funds and storage must never be reset by a verification run.
-- Optional media/payment/AI/geocoding providers remain separately configured and
+- Optional media/payment/geocoding providers remain separately configured and
   gated. Existing timeout/idempotency/uncertain-result constraints still apply.
 - Oluso monitoring requires both OLUSO_ENABLED=true and OLUSO_API_KEY. It is
   optional; missing monitoring configuration must not break backend startup.

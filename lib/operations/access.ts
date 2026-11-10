@@ -4,7 +4,7 @@ import type { StaffPermission } from '@/lib/auth/roles-policy'
 
 /** Legacy name retained for callers; persisted roles are the sole authority. */
 export async function isAdminId(id: string): Promise<boolean> {
-  return await currentStaffRole(id) === 'admin'
+  return ['owner', 'admin'].includes(await currentStaffRole(id) ?? '')
 }
 
 export async function requireStaffId(permission: StaffPermission = 'staff:workspace'): Promise<string | null> {

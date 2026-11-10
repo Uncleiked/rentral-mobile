@@ -1,5 +1,83 @@
 # UI Registry
 
+### Owner/admin decisions and recovery — 2026-11-10
+
+Files: components/admin/AdminWorkspace.tsx, apps/mobile/app/admin.tsx.
+
+| Property | Pattern |
+| --- | --- |
+| Web panels | `min-w-0 rounded-2xl border border-border-subtle bg-surface-card p-5 sm:p-6` |
+| Web fields | `w-full min-w-0 rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary` |
+| Web actions | `min-h-11 rounded-xl border border-border-subtle px-4 py-3 text-sm font-semibold disabled:opacity-50`; semantic accent/inverse for commit |
+| Text/status | Primary headings, secondary decision details, muted labels/help; visible inline `role=status` |
+| Native panels | `colors.surface`, `colors.border`, `radius.xl`, `space.xl` padding and `space.lg` gap |
+| Native type | Inter semibold heading 18; regular help 13/22; semantic warning text for uncertain results |
+
+Current server permissions determine available controls. Written reasons belong
+beside the decision, and owner-self exceptions require a separate explicit
+acknowledgment. Show fee state as waived/paid/unpaid without conflation. Wrap long
+IDs/emails/reasons and preserve newlines. Pending decisions have their own visible
+recovery panel; pause new decisions, retain the original actor/nonce/body, read
+the receipt first and offer exact retry only after absence is confirmed. A link
+to specialized finance does not imply that a listing review moved money.
+
+### Approved gallery creation and photo display — 2026-11-10
+
+Files: components/listing/GalleryListingWorkspace.tsx, components/listing/ListingGallery.tsx,
+apps/mobile/app/create-listing.tsx, apps/mobile/src/components/gallery-photos.tsx.
+
+Reuse web surface-card/border-subtle rounded-2xl panels and rounded-xl labeled
+fields/minimum-44px actions. Selected media previews sit inside semantic bordered
+cards; photo selection/removal and optional video are explicit. Retained server
+files are labelled honestly. Native create panels use existing `radius.xl`,
+`space.lg`, semantic help/status colors and small bounded thumbnails. Full native
+photos use `radius.lg`, contain scaling and a 4:3 presentation with readable
+per-image failure/retry guidance.
+
+Always show gallery origin and the absence of recorded GPS proof. Photo-only
+listings have a real image surface and no empty video/Mux player. New source/grant
+selection is independent of personal KYC. Revoked permissions preserve the draft
+and explain the block. Human review, video processing and paid/waived publication
+remain separate states. Unknown saves keep their original command for receipt
+readback rather than showing success or creating another request.
+
+Raw byte uploads have a separate visible recovery panel. Persist the intended
+path/form before upload, read the owned file after interruption or reload, and
+require deliberate same-content reselection before exact-path retry. Browser
+recovery never implies a completed listing save. A reviewed abandonment explains
+that it keeps other work and does not delete server files. Permission revocation
+still permits recovery readback while blocking new uploads or saves.
+
+### Manual inspection evidence — 2026-11-10
+
+Files: components/bookings/ManualInspectionReview.tsx,
+apps/mobile/src/components/manual-inspection.tsx.
+
+Web evidence uses border-subtle separation, rounded-xl fields/actions and muted
+13–14px help. Native uses the standard surface/border/radius.xl/space.xl card,
+semibold 19px heading and regular 13/22 help. Preserve multiline statements,
+show pending/approved/rejected status in words, and label the evidence as manual.
+Explain that review creates no GPS proof or automatic payout. Keep uncertain
+submissions actor/booking scoped and read the original receipt before retry.
+
+### Profile photo and address feedback — 2026-11-10
+
+Files: apps/mobile/src/components/avatar-editor.tsx,
+apps/mobile/src/components/capture-address-check.tsx,
+components/listing/MetadataForm.tsx.
+
+Keep the selected avatar visible until explicit discard or a confirmed profile
+save. Use the existing round preview, `space.lg` rhythm, primary/secondary Button
+hierarchy and regular 12/21 muted status text; failures use semantic warning.
+Product copy says choose/save/remove and retains useful database setup/connectivity
+messages instead of claiming that local file storage failed.
+
+Address checks keep the established 17px heading, regular 13/21 help, medium
+13/22 status and `space.lg`. Distinguish no result, uncertain building, imprecise
+lookup and provider outage with useful correction/retry guidance. A missing
+building is not called an outage. Legacy responses use neutral fallback wording.
+Neither color nor an icon alone conveys permission, a match or success.
+
 ### Rentral identity and native launch — 2026-11-10
 
 Files: components/brand/RentralLogo.tsx, apps/mobile/src/components/BrandLogo.tsx,

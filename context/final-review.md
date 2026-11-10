@@ -1,6 +1,32 @@
 # Rentral completion review
 
-## Current capture/location/brand review — 2026-11-10
+## Current owner/admin/gallery review — 2026-11-10
+
+The [current increment review](owner-admin-review.md) covers the approved owner
+console, native administration, human document decisions, fee waivers, gallery
+exceptions, manual inspections and reported upload/address failures. It records
+the exact current verification and acceptance boundaries; use the
+[operator guide](owner-admin-setup.md) for setup and normal workflows.
+
+Current permissions are persisted database decisions. Owner-self listing review
+has an explicit audited override, while financial and manual-inspection
+independence remains mandatory. Gallery provenance is labelled truthfully and
+grant revocation cannot manufacture fresh GPS or silently restore publication.
+AI screening is retired. Source review and owned integration have passed;
+selected Atlas preparation, the exact named-account owner grant and both native
+exports are verified. The ordinary aggregate passed **1,868 / 0 failures / 107
+configured skips**; all **107 owned real cases** passed separately. Production
+build, TypeScript, global lint and **11 browser journeys in six files** passed.
+Exact evidence is recorded in the linked review. Physical-device, real-provider and
+deployment/store acceptance remain separate. The final delivery revision is
+recorded in Git history and the handback, rather than assumed from this document.
+
+Local backend 3000 and Metro 8090 were restored and verified. Help/icon responses,
+signed-out Admin guards, final offline environment and private-value checks passed.
+
+## Previous capture/location/brand review — `cb42fd1`, 2026-11-10
+
+The checkpoint below predates the owner/admin/gallery increment.
 
 The [increment review](capture-location-brand-review.md) records the latest
 approved recording-location lock, address admission, client recovery, branding,

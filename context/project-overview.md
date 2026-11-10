@@ -1,6 +1,6 @@
 ## PROJECT OVERVIEW: RENTRAL
 
-## Current implementation and authority — 2026-11-09
+## Current implementation and authority — 2026-11-10
 
 Rentral now has an Expo SDK 58 Android/iOS application in `apps/mobile` and the
 existing Next.js web/API backend. The user selected npm 11.19.1 workspaces,
@@ -27,8 +27,10 @@ Real devices and optional providers still need separate acceptance.
 
 The completion build adds full member/host native booking, check-in, listing/draft,
 vault, messaging, feedback, notification, saved-search, lease and account controls.
-Staff finance, listing/safety review, matching moderation and lifecycle decisions
-remain web workspaces. Squat-Mates uses opt-in preferences and mutual contact;
+Owner/admin decisions are available in the native app and canonical web `/admin`;
+specialized finance, matching and lifecycle workspaces remain on the web.
+Asset documents receive human review; current database grants control gallery
+uploads, location exceptions and publication-fee waivers. Squat-Mates uses opt-in preferences and mutual contact;
 Insights uses consented coarse aggregates with privacy thresholds. Paid Insights
 terms and independently reviewed sponsorship require verified Paystack collections.
 There is no recurring-payment mandate, invented wallet balance or credit score.
@@ -37,8 +39,8 @@ Paystack is the only supported payment provider. Source includes recipient setup
 refund/payout approval, exact-kobo reservations/journals, authenticated webhook
 receipts and explicit uncertain-outcome reconciliation. Real settlement stays off
 until merchant capabilities, custody/fee policy and provider acceptance are agreed.
-Resend recovery and dual-confirmed email changes, Expo push, Mux and advisory
-Gemini/Geoapify integrations are implemented behind their configuration/gates;
+Resend recovery and dual-confirmed email changes, Expo push, Mux and Geoapify
+integrations are implemented behind their configuration/gates;
 implementation does not mean those providers have been activated or accepted.
 
 Security settings revoke sessions/devices on credential changes; soft closure

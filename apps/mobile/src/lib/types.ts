@@ -2,6 +2,7 @@ export type Listing = {
   id: string; title: string; category: 'house' | 'car' | 'boat'; location: string; price: string; pricePeriod: string
   intent: string; posterUrl: string | null; videoUrl: string | null; useMux: boolean
   badges: string[]; saved: boolean; savingAvailable: boolean; holdUntil: string | null
+  mediaSource?: 'recorded' | 'approved_gallery'; galleryPhotoUrls?: string[]
   host: { username: string; avatarUrl: string | null; identityVerified: boolean }
 }
 export type ListingDetails = Listing & {

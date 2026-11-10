@@ -77,6 +77,8 @@ export type DraftPayload = {
   id: string
   revision?: number
   captureId?: string | null
+  mediaSource?: 'recorded' | 'approved_gallery'
+  galleryPhotos?: string[]
   category: ListingCategory
   address: string
   basePrice: string

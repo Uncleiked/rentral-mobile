@@ -42,7 +42,10 @@ describe('consented aggregate analytics boundaries', () => {
     const expected = createHmac('sha256', secret).update(`${new Date().toISOString().slice(0, 7)}:raw-user-1`).digest('hex')
     expect(saved).toMatchObject({ create: { subject_hash: expected, event_type: 'search', category: 'house', neighborhood: 'yaba', budget_band: '1m-3m', bedrooms: 2 }, update: {} })
     expect(saved.where.dedupe_key).toBe(saved.create.dedupe_key)
-    expect(mocks.active).toHaveBeenCalledWith({ where: { id: 'raw-user-1', OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }, data: { revision: { increment: 1 } } })
+    expect(mocks.active).toHaveBeenCalledWith({ where: { id: 'raw-user-1', AND: [
+      { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+      { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+    ] }, data: { revision: { increment: 1 } } })
     expect(JSON.stringify(saved)).not.toContain('raw-user-1')
   })
   it('does not record an event after the authenticated account disappears', async () => {

@@ -3,7 +3,6 @@ import{Image,StyleSheet,Text,View}from'react-native'
 import{useEvent}from'expo'
 import{useVideoPlayer,VideoView}from'expo-video'
 import{router}from'expo-router'
-import{z}from'zod'
 import{Button}from'./Button'
 import{useMemberResource}from'../hooks/use-member-resource'
 import{useAuth}from'../providers/AuthProvider'
@@ -13,7 +12,7 @@ import{config}from'../lib/config'
 import{errorMessage}from'../lib/api'
 import type{Listing}from'../lib/types'
 import{colors,fonts,radius,space}from'../theme'
-const mediaSchema=z.object({videoUrl:z.string().url().nullable(),posterUrl:z.string().url().nullable(),expiresAt:z.string().datetime({offset:true})})
+import{nativeListingMediaSchema}from'../lib/listing-media'
 function FeedVideo({uri,onRefresh}:{uri:string;onRefresh:()=>void}){
  const player=useVideoPlayer({uri,contentType:uri.includes('.m3u8')?'hls':'auto'},value=>{value.loop=true;value.muted=true;value.play()})
  const{isPlaying}=useEvent(player,'playingChange',{isPlaying:player.playing})
@@ -29,7 +28,7 @@ function FeedVideo({uri,onRefresh}:{uri:string;onRefresh:()=>void}){
  </View>
 }
 export function WalkthroughFeedCard({listing,active,height,compact}:{listing:Listing;active:boolean;height:number;compact:boolean}){
- const media=useMemberResource(`/listings/${listing.id}/media`,mediaSchema,active,240000)
+ const media=useMemberResource(`/listings/${listing.id}/media`,nativeListingMediaSchema,active,240000)
  const{session}=useAuth()
  const[requested,setRequested]=useState(false)
  const[localSaved,setLocalSaved]=useState<{base:Listing;saved:boolean}|null>(null)
@@ -44,7 +43,7 @@ export function WalkthroughFeedCard({listing,active,height,compact}:{listing:Lis
   <View style={[styles.frame,compact&&styles.compactFrame]}>{active&&requested&&uri?<FeedVideo key={uri} uri={uri} onRefresh={refresh}/>:<View style={styles.placeholder}>
    {poster?<Image source={{uri:poster}} alt={`Preview of ${listing.title}`} style={styles.poster} resizeMode="cover"/>:null}
    {uri||media.loading?<View style={styles.open}><Button title={media.loading?'Loading walkthrough…':'Open walkthrough'} busy={media.loading} disabled={!active||!uri} onPress={()=>setRequested(true)}/></View>:null}
-   {active&&!media.loading&&!uri?<><Text style={styles.help}>{media.error??'This listing has no playable walkthrough yet.'}</Text><Button title="Reload walkthrough" secondary onPress={refresh}/></>:null}
+   {active&&!media.loading&&!uri?<><Text style={styles.help}>{media.error??(listing.mediaSource==='approved_gallery'?'Photo gallery listing · view all photos in listing details.':'This listing has no playable walkthrough yet.')}</Text>{listing.mediaSource==='approved_gallery'&&!media.error?null:<Button title="Reload walkthrough" secondary onPress={refresh}/>}</>:null}
   </View>}</View>
   <View style={styles.copy}><Text style={styles.title} numberOfLines={2}>{listing.title}</Text><Text style={styles.help}>{listing.location} · @{listing.host.username}{listing.holdUntil?' · On hold':''}</Text><Text selectable style={styles.price}>{listingPriceLabel(listing.price)} <Text style={styles.help}>/ {listing.pricePeriod}</Text></Text>
    <View style={styles.controls}><View style={styles.flex}><Button title="View listing details" secondary onPress={()=>router.push({pathname:'/listing/[id]',params:{id:listing.id}})}/></View>{listing.savingAvailable?<View style={styles.flex}><Button title={saved?'Remove saved listing':'Save listing'} secondary busy={saving} onPress={()=>{void save()}}/></View>:null}</View>

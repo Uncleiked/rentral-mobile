@@ -39,7 +39,7 @@ function booking(overrides: Partial<BookingView> = {}): BookingView {
     amount_kobo: '300000', hold_credit_kobo: '0', currency: 'NGN', settlement_status: 'unsettled', createdAt: now,
     pricing_snapshot: { period: 'fixed', days: 1, baseKobo: '300000', fees: [], totalKobo: '300000' },
     rental_hold_credit: null, allocated_hold_credit: null, seeker_checked_in_at: null, lister_checked_in_at: null,
-    listing: { category: 'house', text_address: 'Private building 77, Lekki Phase 1, Lagos' },
+    listing: { category: 'house', media_source: null, text_address: 'Private building 77, Lekki Phase 1, Lagos' },
     seeker: { username: 'member' }, lister: { username: 'host' }, payments: [], ...overrides,
   }
 }

@@ -1,5 +1,9 @@
 # Rentral environment setup, step by step
 
+For owner access, manual document review, publication-fee waivers and approved
+gallery uploads, follow [owner/admin setup](owner-admin-setup.md). These features
+add no new environment secrets. Gemini document screening has been removed.
+
 For the recording-time GPS lock, address match and new branding increment, follow
 the [recording location setup guide](recording-location-setup.md), including the
 additive capture database preparation and backend-only Geoapify key.
@@ -267,8 +271,6 @@ MUX_SIGNING_KEY_ID=
 MUX_SIGNING_PRIVATE_KEY=
 MEDIA_WORKER_ENABLED=false
 MEDIA_WORKER_SECRET=
-GEMINI_API_KEY=
-GEMINI_DOCUMENT_MODEL=
 GEOAPIFY_API_KEY=
 ```
 
@@ -277,14 +279,15 @@ do not encode it twice. The backend pushes local private bytes through resumable
 upload and reconciles provider state, so Mux need not fetch a LAN URL. See
 [media processing](media-processing.md).
 
-Gemini is optional advisory document screening: configure both a key and a current
-image/PDF plus JSON-capable bare model ID, without `models/`. Geoapify is required
-for the recording-location address check before listing submission; configure the
+Documents are reviewed by authorized people; no AI document key is used. Geoapify
+is required for ordinary recorded listings' address checks; configure the
 backend-only `GEOAPIFY_API_KEY` using the [step-by-step guide](recording-location-setup.md).
 Missing/unavailable/imprecise geocoding preserves drafts and blocks submission.
-Neither AI nor GPS proves ownership. Publication
-still requires independent human document review, a matching address, ready signed
-video, and a verified publication fee. Existing originals remain private.
+Approved gallery uploaders have an explicit manual-review exception to recording
+and address checks. Photo-only listings need no Mux video. Publication requires
+human approval of the current authority document and either a verified fee or an
+audited admin waiver. Videos still require Mux readiness. Existing originals stay
+private; GPS is not proof of ownership or an exact apartment number.
 
 ### Local workers
 

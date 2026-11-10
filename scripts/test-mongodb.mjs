@@ -48,15 +48,18 @@ try {
   const backupOnly = process.argv.includes('--backup-only')
   const authOnly = process.argv.includes('--auth-only')
   const coreOnly = process.argv.includes('--core-only')
-  if ([backupOnly, authOnly, coreOnly].filter(Boolean).length > 1) throw new Error('Choose only one isolated suite.')
+  const adminOnly = process.argv.includes('--admin-only')
+  const avatarOnly = process.argv.includes('--avatar-only')
+  if ([backupOnly, authOnly, coreOnly, adminOnly, avatarOnly].filter(Boolean).length > 1) throw new Error('Choose only one isolated suite.')
   if (backupOnly || authOnly) docker(['exec', container, 'mongosh', shellUri, '--quiet', '--eval', `db.getSiblingDB('${database}').getCollection('_FixtureOwnership').insertOne({_id:'${owner}'})`])
-  const test = spawnSync(process.execPath, [vitest, 'run', ...integrationTimeoutArgs, authOnly ? 'tests/auth-security.integration.test.ts' : backupOnly ? 'tests/backup.integration.test.ts' : 'tests/mongodb.integration.test.ts'], {
+  const suite = adminOnly ? 'tests/owner-admin.integration.test.ts' : avatarOnly ? 'tests/profile-avatar.integration.test.ts' : authOnly ? 'tests/auth-security.integration.test.ts' : backupOnly ? 'tests/backup.integration.test.ts' : 'tests/mongodb.integration.test.ts'
+  const test = spawnSync(process.execPath, [vitest, 'run', ...integrationTimeoutArgs, suite], {
     stdio: 'inherit', windowsHide: true,
     env: { ...process.env, MONGODB_URL: uri, DATABASE_URL: uri, RENTRAL_TEST_MONGO_URI: uri, RENTRAL_TEST_MONGO_OWNER: owner, NODE_ENV: 'test', ...(backupOnly ? { RENTRAL_TEST_BACKUP_ARCHIVE: stagedArchive } : {}) },
   })
   process.exitCode = test.status ?? 1
   if (backupOnly && test.status === 0) backupPassed = true
-  if (test.status === 0 && !backupOnly && !authOnly && !coreOnly) {
+  if (test.status === 0 && !backupOnly && !authOnly && !coreOnly && !adminOnly && !avatarOnly) {
     const financial = spawnSync(process.execPath, [vitest, 'run', ...integrationTimeoutArgs, 'tests/financial-domain.integration.test.ts'], {
       stdio: 'inherit', windowsHide: true,
       env: { ...process.env, MONGODB_URL: uri, DATABASE_URL: uri, RENTRAL_TEST_MONGO_URI: uri, RENTRAL_TEST_MONGO_OWNER: owner, NODE_ENV: 'test' },

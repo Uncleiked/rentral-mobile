@@ -13,7 +13,7 @@ vi.mock('../apps/mobile/src/lib/config',()=>({config:{apiUrl:'http://192.168.0.1
 vi.mock('../apps/mobile/src/lib/session-storage',()=>({sessionStorage:{getItem:fixture.get,setItem:fixture.set,removeItem:fixture.remove}}))
 import {ApiError}from'../apps/mobile/src/lib/api'
 import {prepareNativeListingUpload,uploadPreparedNativeListingFile}from'../apps/mobile/src/lib/native-upload'
-import {buildNativeDraftCommand,canClearDeclinedDraft}from'../apps/mobile/src/lib/native-draft-workflow'
+import {buildNativeDraftCommand,canClearDeclinedDraft,isLegacyDraftCommand}from'../apps/mobile/src/lib/native-draft-workflow'
 import {dismissNativeDeviceDraft,loadNativeDeviceDraft,nativeDraftDirectory,newNativeDeviceDraft,resolveNativeDeviceDraft,saveNativeDeviceDraft,stashNativeDraftFile,type NativeDeviceDraft}from'../apps/mobile/src/lib/native-draft-store'
 import {EMPTY_LISTING_FORM,formFromOwnerListing,listingFormError,nativeListingMetadata}from'../apps/mobile/src/lib/native-listing'
 import {ownerListingDetailSchema}from'../lib/contracts/listings'
@@ -44,6 +44,35 @@ it('streams a200MB native File without reading an ArrayBuffer and preserves MOV 
  expect(await uploadPreparedNativeListingFile(prepared,actor)).toBe(prepared.path)
  expect(fixture.fetch).toHaveBeenCalledExactlyOnceWith('http://192.168.0.1:3000/api/v1/uploads/listings-media',expect.objectContaining({body:expect.objectContaining({uri:'file:///camera/recording.mov'}),headers:expect.objectContaining({'Content-Type':'video/quicktime','X-Upload-Path':prepared.path})}))
  expect(fixture.arrayBuffer).not.toHaveBeenCalled()
+})
+it('streams an approved gallery photo with its current grant revision and preserves an exact upload acknowledgment',async()=>{
+ fixture.size=2048
+ const prepared=prepareNativeListingUpload('file:///picked/photo.jpg','photo',actor,'image/jpeg',undefined,7)
+ expect(prepared).toMatchObject({kind:'photo',bucket:'listings-media',contentType:'image/jpeg',galleryPermissionRevision:7})
+ fixture.fetch.mockResolvedValue(Response.json({success:true,data:{path:prepared.path}},{status:201}))
+ expect(await uploadPreparedNativeListingFile(prepared,actor)).toBe(prepared.path)
+ expect(fixture.fetch).toHaveBeenCalledExactlyOnceWith('http://192.168.0.1:3000/api/v1/uploads/listings-media?mediaSource=approved_gallery&permissionRevision=7',expect.objectContaining({body:expect.objectContaining({uri:'file:///picked/photo.jpg'})}))
+ expect(fixture.arrayBuffer).not.toHaveBeenCalled()
+})
+it('submits a photo-only gallery server draft without inventing a video, capture or GPS match',()=>{
+ const photo=`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/photo.jpg`
+ const saved=ownerListingDetailSchema.parse({...savedServer,mediaSource:'approved_gallery',galleryPhotos:[photo],videoPath:null,captureId:null,hasCoords:false})
+ const draft=newNativeDeviceDraft(actor,saved)
+ const command=buildNativeDraftCommand(draft,'submit',clientId)
+ expect(command.listing).toMatchObject({mediaSource:'approved_gallery',galleryPhotos:[photo],posterPath:photo,documentPath:saved.documentPath})
+ expect(command.listing).not.toHaveProperty('videoPath');expect(command.listing).not.toHaveProperty('captureId');expect(command.listing).not.toHaveProperty('lat');expect(command.listing).not.toHaveProperty('lng')
+ expect(isLegacyDraftCommand(command)).toBe(false)
+})
+it('keeps gallery selections and nonce recovery durable while blocking unknown photo upload reuse',async()=>{
+ fixture.size=2048
+ const draft:NativeDeviceDraft={...newNativeDeviceDraft(actor),mediaSource:'approved_gallery',form}
+ const uri=`${nativeDraftDirectory(actor,draft.localId).uri}/photo.jpg`
+ const prepared=prepareNativeListingUpload(uri,'photo',actor,'image/jpeg',undefined,3)
+ draft.galleryFiles=[{id:clientId,uri,kind:'photo',mimeType:'image/jpeg',upload:{upload:prepared,state:'unknown'}}]
+ await saveNativeDeviceDraft(draft)
+ expect((await loadNativeDeviceDraft(actor))?.galleryFiles?.[0].upload?.state).toBe('unknown')
+ expect(()=>buildNativeDraftCommand(draft,'draft',clientId)).toThrow('confirm every selected gallery file')
+ expect(fixture.fetch).not.toHaveBeenCalled()
 })
 it('does not relabel an unrecognized video container as mp4',()=>{
  expect(()=>prepareNativeListingUpload('file:///camera/unknown.bin','video',actor)).toThrow('actual recorded video format')

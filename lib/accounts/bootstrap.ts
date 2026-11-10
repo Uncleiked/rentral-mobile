@@ -5,7 +5,7 @@ import { activeAccountWhere } from './availability'
 
 export const accountSelect = {
   id: true, email: true, username: true, account_type: true, bio: true,
-  avatar_url: true, createdAt: true,
+  avatar_url: true, createdAt: true, staff_role: true, gallery_upload_allowed: true, gallery_permission_revision: true,
 } satisfies Prisma.UserSelect
 
 export type AccountRecord = Prisma.UserGetPayload<{ select: typeof accountSelect }>

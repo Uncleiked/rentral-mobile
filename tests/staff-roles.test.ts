@@ -27,11 +27,19 @@ describe('audited staff role changes', () => {
       action: 'change_staff_role', target_id: target, metadata: { previousRole: null, role: 'moderator', source: 'staff_workspace' } }) }))
   })
   it('denies non-administrators even when invoking the domain service directly', async () => {
-    for (const role of ['moderator', 'finance', 'analyst', 'owner', null]) {
+    for (const role of ['moderator', 'finance', 'analyst', null]) {
       mocks.user.mockResolvedValue({ staff_role: role })
       await expect(changeStaffRole(actor, input)).rejects.toThrow('Staff access')
     }
     expect(mocks.update).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
+  })
+  it('permits owner administration but rejects assigning or demoting ownership through ordinary role changes', async () => {
+    mocks.user.mockImplementation(async ({ where }: { where: { id: string } }) => ({ staff_role: where.id === actor ? 'owner' : null }))
+    await changeStaffRole(actor, input)
+    expect(mocks.update).toHaveBeenCalledWith({ where: { id: target }, data: { staff_role: 'moderator' } })
+    await expect(changeStaffRole(actor, { ...input, role: 'owner' })).rejects.toThrow()
+    mocks.user.mockResolvedValue({ staff_role: 'owner' })
+    await expect(changeStaffRole(actor, input)).rejects.toThrow('Ownership can only change')
   })
   it('prevents self-demotion and rejects forged request fields before any transaction', async () => {
     await expect(changeStaffRole(actor, { ...input, userId: actor, role: 'member' })).rejects.toThrow('another administrator')

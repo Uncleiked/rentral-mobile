@@ -1,10 +1,10 @@
 import type { Prisma } from '@prisma/client'
 
-export const activeAccountWhere = { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] } satisfies Prisma.UserWhereInput
-export const activeAccountSelect = { id: true, closed_at: true } satisfies Prisma.UserSelect
+export const activeAccountWhere = { AND: [{ OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }, { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] }] } satisfies Prisma.UserWhereInput
+export const activeAccountSelect = { id: true, closed_at: true, suspended_at: true } satisfies Prisma.UserSelect
 
-export function accountIsActive(account: { closed_at: Date | null } | null | undefined): boolean {
-  return Boolean(account && account.closed_at == null)
+export function accountIsActive(account: { closed_at: Date | null; suspended_at?: Date | null } | null | undefined): boolean {
+  return Boolean(account && account.closed_at == null && account.suspended_at == null)
 }
 
 export class AccountUnavailableError extends Error {

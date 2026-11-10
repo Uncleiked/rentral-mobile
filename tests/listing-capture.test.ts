@@ -4,7 +4,7 @@ vi.mock('@/lib/db', () => ({ default: { listingCapture: { findFirst: mocks.find 
 vi.mock('@/lib/accounts/availability', () => ({ assertActiveAccounts: vi.fn(async () => undefined) }))
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: mocks.transaction }))
 vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepare, claimStorageObjects: mocks.claim, storageObjectId: () => 'object' }))
-vi.mock('@/lib/listings/spatial', async original => ({ ...await original<typeof import('@/lib/listings/spatial')>(), geocodeListingAddress: mocks.geocode }))
+vi.mock('@/lib/listings/spatial', async original => ({ ...await original<typeof import('@/lib/listings/spatial')>(), geocodeListingAddressWithReason: mocks.geocode }))
 import { beginCaptureForOwner, finishCaptureForOwner, sealCaptureForOwner, getCaptureForOwner, checkCaptureAddressForOwner, bindCaptureToListing, assertFreshCaptureReading } from '@/lib/listings/capture'
 import { beginCaptureInputSchema, captureReadingSchema } from '@/lib/contracts/capture'
 import { saveListingInputSchema, saveDraftInputSchema } from '@/lib/contracts/listings'
@@ -33,7 +33,7 @@ beforeEach(() => {
   mocks.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...row, ...data }))
   mocks.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...row, ...data }))
   mocks.prepare.mockResolvedValue([video]); mocks.claim.mockResolvedValue(undefined); mocks.object.mockResolvedValue({ createdAt: new Date(started.getTime() + 1000), upload_completed_at: now })
-  mocks.geocode.mockResolvedValue({ longitude: 3.4, latitude: 6.45 })
+  mocks.geocode.mockResolvedValue({ status: 'resolved', point: { longitude: 3.4, latitude: 6.45 } })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -127,10 +127,11 @@ describe('video binding and address checks', () => {
     expect(mocks.prepare).not.toHaveBeenCalled()
   })
   it('never treats ambiguous or failed geocoding as a match', async () => {
-    row = record('recorded'); mocks.geocode.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('provider timeout'))
-    expect(await checkCaptureAddressForOwner(owner, id, { address: 'Building, Lekki, Lagos' })).toMatchObject({ status: 'unavailable' })
-    expect(await checkCaptureAddressForOwner(owner, id, { address: 'Building, Lekki, Lagos' })).toMatchObject({ status: 'unavailable' })
-    mocks.geocode.mockResolvedValue({ longitude: 3.4, latitude: 6.5 })
+    row = record('recorded'); mocks.geocode.mockResolvedValueOnce({ status: 'unavailable', reason: 'no_result' }).mockRejectedValueOnce(new Error('private upstream diagnostics'))
+    expect(await checkCaptureAddressForOwner(owner, id, { address: 'Building, Lekki, Lagos' })).toMatchObject({ status: 'unavailable', reason: 'no_result' })
+    const failed = await checkCaptureAddressForOwner(owner, id, { address: 'Building, Lekki, Lagos' })
+    expect(failed).toMatchObject({ status: 'unavailable', reason: 'provider_unavailable' }); expect(JSON.stringify(failed)).not.toContain('private upstream')
+    mocks.geocode.mockResolvedValue({ status: 'resolved', point: { longitude: 3.4, latitude: 6.5 } })
     expect(await checkCaptureAddressForOwner(owner, id, { address: 'Building, Lekki, Lagos' })).toMatchObject({ status: 'mismatch' })
   })
   it('does not expose precise stored evidence in owner readback', async () => {

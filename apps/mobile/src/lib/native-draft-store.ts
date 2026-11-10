@@ -18,14 +18,16 @@ const captureSchema = z.object({ uri: z.string().min(1).max(3000), captureId: id
 export const nativeCaptureSessionSchema = z.object({ id, phase: z.enum(['starting', 'recording', 'finishing', 'recorded', 'sealing', 'sealed', 'interrupted', 'expired']),
   status: captureStatusSchema.nullable(), finishInput: finishCaptureInputSchema.nullable(), sealPath: z.string().max(500).nullable() }).strict()
 const documentSchema = z.object({ uri: z.string().min(1).max(3000), name: z.string().max(300), mimeType: z.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']) }).strict()
-const serverSchema = z.object({ id, revision: z.number().int().nonnegative(), videoPath: z.string().max(500).nullable(), posterPath: z.string().max(500).nullable(), documentPath: z.string().max(500).nullable(), documentName: z.string().max(300).nullable(), captureId: id.nullable().optional(), hasCoords: z.boolean(), status: z.string().max(80) }).strict()
+const serverSchema = z.object({ id, revision: z.number().int().nonnegative(), videoPath: z.string().max(500).nullable(), posterPath: z.string().max(500).nullable(), documentPath: z.string().max(500).nullable(), documentName: z.string().max(300).nullable(), captureId: id.nullable().optional(), hasCoords: z.boolean(), status: z.string().max(80), mediaSource: z.enum(['recorded', 'approved_gallery']).optional(), galleryPhotos: z.array(z.string().max(500)).max(10).optional() }).strict()
 const uploadStateSchema = z.object({ upload: nativeUploadSchema, state: z.enum(['prepared', 'unknown', 'uploaded']) }).strict()
+const galleryFileSchema = z.object({ id, uri: z.string().min(1).max(3000), kind: z.enum(['photo', 'video']), mimeType: z.enum(['image/jpeg', 'image/png', 'video/mp4', 'video/quicktime', 'video/webm']), upload: uploadStateSchema.nullable() }).strict()
 // Old pending commands are evidence of an uncertain prior request, never instructions
 // to create a new unverified listing. Keep their exact payload for receipt readback.
 const legacyCoordinates = { lat: z.number().min(-90).max(90).optional(), lng: z.number().min(-180).max(180).optional(), accuracy: z.number().nonnegative().optional() }
-export const nativeDraftCommandSchema = z.discriminatedUnion('mode', [z.object({ mode: z.literal('draft'), listing: saveDraftInputSchema.extend(legacyCoordinates).strict() }).strict(), z.object({ mode: z.literal('submit'), listing: saveListingInputSchema.extend({ ...legacyCoordinates, captureId: id.optional() }).strict() }).strict()])
+export const nativeDraftCommandSchema = z.discriminatedUnion('mode', [z.object({ mode: z.literal('draft'), listing: z.object({ ...saveDraftInputSchema.shape, ...legacyCoordinates }).strict() }).strict(), z.object({ mode: z.literal('submit'), listing: z.object({ ...saveListingInputSchema.shape, ...legacyCoordinates, captureId: id.optional() }).strict() }).strict()])
 export const nativeDraftSchema = z.object({ version: z.literal(1), actorId: id, localId: id, sequence: z.number().int().nonnegative(), category: z.enum(LISTING_CATEGORIES), form: formSchema,
   capture: captureSchema.nullable(), captureSession: nativeCaptureSessionSchema.nullable().optional(), document: documentSchema.nullable(), videoUpload: uploadStateSchema.nullable(), documentUpload: uploadStateSchema.nullable(),
+  mediaSource: z.enum(['recorded', 'approved_gallery']).optional(), galleryFiles: z.array(galleryFileSchema).max(11).optional(),
   server: serverSchema.nullable(), pending: nativeDraftCommandSchema.nullable(), savedAt: z.string().datetime({ offset: true }) }).strict()
 export type NativeDeviceDraft = z.infer<typeof nativeDraftSchema>
 export type NativeDraftCommand = z.infer<typeof nativeDraftCommandSchema>
@@ -40,10 +42,13 @@ function serialize<T>(actorId: string, work: () => Promise<T>): Promise<T> {
 }
 export function nativeDraftDirectory(actorId: string, localId: string): Directory { return new Directory(Paths.document, 'rentral-listing-drafts', id.parse(actorId), id.parse(localId)) }
 function validateFiles(draft: NativeDeviceDraft): void {
-  const uris = [draft.capture?.uri, draft.document?.uri, draft.videoUpload?.upload.uri, draft.documentUpload?.upload.uri].filter((uri): uri is string => Boolean(uri))
+  const uris = [draft.capture?.uri, draft.document?.uri, draft.videoUpload?.upload.uri, draft.documentUpload?.upload.uri, ...(draft.galleryFiles ?? []).flatMap(item => [item.uri, item.upload?.upload.uri])].filter((uri): uri is string => Boolean(uri))
   const prefix = uris.length ? `${nativeDraftDirectory(draft.actorId, draft.localId).uri.replace(/\/$/, '')}/` : ''
   if (uris.some(uri => !uri.startsWith(prefix) || !/^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(uri.slice(prefix.length)))) throw new Error('The device draft file location cannot be confirmed. Your server drafts remain available in My listings.')
   for (const item of [draft.videoUpload, draft.documentUpload]) if (item && !item.upload.path.startsWith(`${draft.actorId}/`)) throw new Error('This device draft belongs to another upload account.')
+  const gallery = draft.galleryFiles ?? []
+  if (gallery.filter(item => item.kind === 'photo').length > 10 || gallery.filter(item => item.kind === 'video').length > 1 || new Set(gallery.map(item => item.id)).size !== gallery.length) throw new Error('Keep at most ten gallery photos and one gallery video.')
+  for (const item of gallery) if (item.upload && (!item.upload.upload.path.startsWith(`${draft.actorId}/`) || item.upload.upload.uri !== item.uri || item.upload.upload.kind !== item.kind || item.upload.upload.galleryPermissionRevision === undefined)) throw new Error('This saved gallery upload cannot be confirmed for this account.')
   if (draft.pending && !draft.pending.listing.clientId) throw new Error('This saved request is missing its recovery identifier. Check My listings before dismissing it.')
   if (draft.capture?.captureId && draft.captureSession && draft.capture.captureId !== draft.captureSession.id) throw new Error('This saved walkthrough no longer matches its recording location session.')
   if (draft.captureSession?.status && draft.captureSession.status.id !== draft.captureSession.id) throw new Error('This saved location status belongs to another recording.')
@@ -96,7 +101,7 @@ export function dismissNativeDeviceDraft(actorId: string): Promise<boolean> {
     catch { return true }
   })
 }
-export async function stashNativeDraftFile(actorId: string, localId: string, uri: string, kind: 'video' | 'document', mimeType?: string): Promise<string> {
+export async function stashNativeDraftFile(actorId: string, localId: string, uri: string, kind: 'video' | 'document' | 'photo', mimeType?: string): Promise<string> {
   const prepared = prepareNativeListingUpload(uri, kind, actorId, mimeType)
   const extension = prepared.path.split('.').pop()!
   const directory = nativeDraftDirectory(actorId, localId)
@@ -108,8 +113,8 @@ export async function stashNativeDraftFile(actorId: string, localId: string, uri
 }
 export function newNativeDeviceDraft(actorId: string, listing?: OwnerListingDetail): NativeDeviceDraft {
   return { version: 1, actorId: id.parse(actorId), localId: Crypto.randomUUID(), sequence: 0, category: listing?.category ?? 'house', form: listing ? formFromOwnerListing(listing) : { ...EMPTY_LISTING_FORM },
-    capture: null, captureSession: null, document: null, videoUpload: null, documentUpload: null, server: listing ? serverDraftState(listing) : null, pending: null, savedAt: new Date().toISOString() }
+    capture: null, captureSession: null, document: null, videoUpload: null, documentUpload: null, ...(listing?.mediaSource === 'approved_gallery' ? { mediaSource: 'approved_gallery' as const, galleryFiles: [] } : {}), server: listing ? serverDraftState(listing) : null, pending: null, savedAt: new Date().toISOString() }
 }
 export function serverDraftState(listing: OwnerListingDetail): NativeDeviceDraft['server'] {
-  return { id: listing.id, revision: listing.revision, videoPath: listing.videoPath, posterPath: listing.posterPath, documentPath: listing.documentPath, documentName: listing.documentName, captureId: listing.captureId, hasCoords: listing.hasCoords, status: listing.status }
+  return { id: listing.id, revision: listing.revision, videoPath: listing.videoPath, posterPath: listing.posterPath, documentPath: listing.documentPath, documentName: listing.documentName, captureId: listing.captureId, hasCoords: listing.hasCoords, status: listing.status, ...(listing.mediaSource === 'approved_gallery' ? { mediaSource: listing.mediaSource, galleryPhotos: listing.galleryPhotos ?? [] } : {}) }
 }

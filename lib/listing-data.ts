@@ -1,7 +1,8 @@
 import prisma from '@/lib/db'
 import { muxEnabled } from '@/lib/media/config'
 import { listingMediaStatuses } from '@/lib/media/status'
-import { listingMediaUrl, originalNameFromPath } from '@/lib/storage'
+import { listingMediaUrl, listingPhotoUrl, originalNameFromPath } from '@/lib/storage'
+import { galleryIsPublic, galleryPhotoPaths, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 import { requireUserId } from '@/lib/action-helpers'
 import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import {
@@ -26,11 +27,11 @@ export async function getDraftForOwner(draftId: string): Promise<DraftPayload | 
 
   const row = await prisma.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: {
     id: true, revision: true, capture_id: true, category: true, text_address: true, base_rent_amount: true, asset_metadata: true,
-    wizard_step: true, video_path: true, poster_path: true, document_path: true,
+    wizard_step: true, video_path: true, poster_path: true, document_path: true, ...galleryListingSelect,
     privateLocation: { select: { id: true, capture_id: true } },
   } })
   if (!row || !LISTING_CATEGORIES.includes(row.category as ListingCategory)) return null
-  const capture = row.capture_id && row.privateLocation?.capture_id === row.capture_id ? await prisma.listingCapture.findFirst({
+  const capture = row.media_source !== 'approved_gallery' && row.capture_id && row.privateLocation?.capture_id === row.capture_id ? await prisma.listingCapture.findFirst({
     where: { id: row.capture_id, owner_id: userId, state: 'sealed', listing_id: row.id, video_path: row.video_path }, select: { id: true },
   }) : null
 
@@ -52,6 +53,7 @@ export async function getDraftForOwner(draftId: string): Promise<DraftPayload | 
     documentPath: row.document_path,
     documentName: originalNameFromPath(row.document_path),
     hasCoords: Boolean(capture),
+    ...(row.media_source === 'approved_gallery' ? { mediaSource: 'approved_gallery' as const, galleryPhotos: galleryPhotoPaths(row) } : {}),
   }
 }
 
@@ -61,7 +63,9 @@ export type FeedListing = {
   price: string
   priceDenomination: string
   category: 'House' | 'Car' | 'Boat'
-  videoUrl: string
+  videoUrl: string | null
+  mediaSource?: 'recorded' | 'approved_gallery'
+  galleryPhotoUrls?: string[]
   useMux: boolean
   posterUrl: string | null
   badges: string[]
@@ -102,17 +106,21 @@ export async function getMarketplaceFeed(): Promise<FeedListing[]> {
       video_path: true,
       poster_path: true,
       listing_status: true,
-      lister: { select: { username: true, avatar_url: true, kyc_verified: true } },
+      ...galleryListingSelect,
+      lister: { select: { username: true, avatar_url: true, kyc_verified: true, ...galleryUserSelect } },
     },
   })
 
   const useMux = muxEnabled()
   const media = await listingMediaStatuses(rows.map(row => row.id))
   return rows.flatMap((row) => {
+    if (!galleryIsPublic(row)) return []
+    const galleryPhotos = galleryPhotoPaths(row)
+    const rowUseMux = useMux && Boolean(row.video_path)
     // Posted rows need usable media and a public handle. Account helpers fill
     // missing handles before listing mutations; no identity wizard is required.
-    const videoUrl = useMux ? '' : row.video_path ? listingMediaUrl(row.id, 'video') : null
-    if ((!useMux && !videoUrl) || !row.lister.username || (useMux && media.get(row.id)?.status !== 'ready')) return []
+    const videoUrl = rowUseMux ? '' : row.video_path ? listingMediaUrl(row.id, 'video') : null
+    if ((!rowUseMux && !videoUrl && !galleryPhotos.length) || !row.lister.username || (rowUseMux && media.get(row.id)?.status !== 'ready')) return []
 
     const metadata = (row.asset_metadata ?? {}) as ListingMetadataJson
     return [
@@ -122,10 +130,12 @@ export async function getMarketplaceFeed(): Promise<FeedListing[]> {
         price: formatListingPrice(row.base_rent_amount),
         priceDenomination: listingPriceDenomination(row.category, true),
         category: capitalizeCategory(row.category) as FeedListing['category'],
-        videoUrl: videoUrl ?? '',
-        useMux,
-        posterUrl: !useMux && row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
-        badges: feedBadges(row.category, metadata, row.listing_status),
+        videoUrl,
+        useMux: rowUseMux,
+        posterUrl: row.poster_path ? listingMediaUrl(row.id, 'poster') : null,
+        mediaSource: row.media_source === 'approved_gallery' ? 'approved_gallery' : 'recorded',
+        galleryPhotoUrls: galleryPhotos.map((_path, index) => listingPhotoUrl(row.id, index)),
+        badges: [...feedBadges(row.category, metadata, row.listing_status), ...(row.media_source === 'approved_gallery' ? ['Admin-approved gallery'] : [])],
         username: row.lister.username,
         avatarUrl: row.lister.avatar_url,
         isVerified: row.lister.kyc_verified,

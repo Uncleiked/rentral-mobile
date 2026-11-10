@@ -8,6 +8,7 @@ import { getPublicHostListings } from '@/lib/discovery'
 import { publicListing } from './projection'
 import { publicAvatarReference } from '@/lib/accounts/avatar-reference'
 import { activeAccountWhere } from '@/lib/accounts/availability'
+import { galleryIsPublic, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
 
 export const profileHandleSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/)
 const publicProfileSchema = z.object({
@@ -33,7 +34,7 @@ export async function profileForApi(username: string) {
   if (!user?.username) throw new ApiError(404, 'NOT_FOUND', 'This profile is unavailable.')
   const [ratings, listings, safety] = await Promise.all([
     prisma.review.aggregate({ where: { subject_id: user.id, booking: { status: 'completed' } }, _avg: { rating: true }, _count: { _all: true } }),
-    prisma.listing.findMany({ where: { lister_id: user.id, listing_status: 'active' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50, select: { id: true } }),
+    prisma.listing.findMany({ where: { lister_id: user.id, listing_status: 'active' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50, select: { id: true, ...galleryListingSelect, lister: { select: galleryUserSelect } } }),
     hasActiveSafetyNotice(user.id),
   ])
   const organization = user.account_type === 'organization'
@@ -42,7 +43,7 @@ export async function profileForApi(username: string) {
     accountType: organization ? 'organization' : 'individual', identityVerified: user.kyc_verified,
     memberSince: user.createdAt.toISOString(), bio: user.bio, avatarUrl: publicProfileAvatar(user.avatar_url, user.id),
     safetyNotice: { active: safety, text: safety ? PUBLIC_SAFETY_NOTICE : null },
-    reviewCount: ratings._count._all, averageRating: ratings._avg.rating, listingIds: listings.map(listing => listing.id),
+    reviewCount: ratings._count._all, averageRating: ratings._avg.rating, listingIds: listings.filter(galleryIsPublic).map(listing => listing.id),
   })
   if (!result.success) throw new ApiError(503, 'PROFILE_UNAVAILABLE', 'This profile could not be verified. Please refresh.')
   return result.data

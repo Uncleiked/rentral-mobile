@@ -7,7 +7,7 @@ import { lockRecord, withTransaction } from '@/lib/database/transactions'
 import { claimStorageObjects, prepareListingStorage, storageObjectId, type PreparedStorageObject } from '@/lib/storage-claims/service'
 import { beginCaptureInputSchema, finishCaptureInputSchema, sealCaptureInputSchema, checkCaptureAddressInputSchema,
   captureStatusSchema, captureAddressResultSchema, CAPTURE_FINISH_WINDOW_MS, CAPTURE_SEAL_WINDOW_MS, type CaptureReading } from '@/lib/contracts/capture'
-import { addressFingerprint, decodeGeographicPoint, distanceMetersWgs84, geocodeListingAddress, SPATIAL_TOLERANCE_METERS } from './spatial'
+import { addressFingerprint, decodeGeographicPoint, distanceMetersWgs84, geocodeListingAddressWithReason, SPATIAL_TOLERANCE_METERS } from './spatial'
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const point = (reading: CaptureReading) => ({ type: 'Point', coordinates: [reading.longitude, reading.latitude] })
@@ -139,11 +139,11 @@ export async function checkCaptureAddressForOwner(ownerId: string, id: string, i
   const row = await prisma.listingCapture.findFirst({ where: { id, owner_id: ownerId } })
   if (!row || !['recorded', 'sealed'].includes(row.state)) throw unavailable()
   if (row.state === 'recorded' && (!row.seal_by || row.seal_by <= new Date())) throw expired()
-  let resolved: Awaited<ReturnType<typeof geocodeListingAddress>> = null
-  try { resolved = await geocodeListingAddress(data.address) } catch { /* Provider failure is never a match. */ }
+  let resolved: Awaited<ReturnType<typeof geocodeListingAddressWithReason>> = { status: 'unavailable', reason: 'provider_unavailable' }
+  try { resolved = await geocodeListingAddressWithReason(data.address) } catch { /* Unexpected provider failures never become a match. */ }
   const start = decodeGeographicPoint(row.start_geometry)
-  return captureAddressResultSchema.parse({ captureId: id, status: !start || !resolved ? 'unavailable' : distanceMetersWgs84(start, resolved) <= SPATIAL_TOLERANCE_METERS ? 'matched' : 'mismatch',
-    addressHash: addressFingerprint(data.address), toleranceMeters: SPATIAL_TOLERANCE_METERS })
+  return captureAddressResultSchema.parse({ captureId: id, status: !start || resolved.status === 'unavailable' ? 'unavailable' : distanceMetersWgs84(start, resolved.point) <= SPATIAL_TOLERANCE_METERS ? 'matched' : 'mismatch',
+    ...(resolved.status === 'unavailable' ? { reason: resolved.reason } : {}), addressHash: addressFingerprint(data.address), toleranceMeters: SPATIAL_TOLERANCE_METERS })
 }
 
 /** The listing lock and storage claims surround this call in the SAME transaction. */

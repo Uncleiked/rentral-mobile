@@ -4,7 +4,12 @@ Expo Android/iOS app with a local Next.js backend, MongoDB, JWT email/password
 accounts and private filesystem storage. Members enter Explore directly after
 sign-in; personal KYC onboarding and mandatory profile completion are removed.
 
-Recording-location matching now uses a server-acknowledged GPS capture, immutable
+Owner administration is available at `/admin` and in the native Account screen.
+Human document review, audited fee waivers and revocable gallery-uploader
+permissions share the same server checks. Photo-only approved galleries need no
+recording/GPS or Mux; videos still need processing. Follow [owner/admin setup](context/owner-admin-setup.md).
+
+Ordinary recorded listings use a server-acknowledged GPS capture, immutable
 video upload/digest binding and a required Geoapify address check before submission.
 The minimalist Rentral identity includes generated icon assets and an accessible
 native launch reveal. Follow [location setup](context/recording-location-setup.md)

@@ -33,7 +33,7 @@ it('requires an authenticated user and valid input', async () => {
 
 it('only saves a currently active listing, using the authenticated identity', async () => {
   expect(await setListingSaved({ listingId, saved: true, userId: 'another-user' })).toEqual({ success: true, data: { saved: true } })
-  expect(mocks.findListing).toHaveBeenCalledWith({ where: { id: listingId, listing_status: 'active' }, select: { id: true, lister_id: true } })
+  expect(mocks.findListing).toHaveBeenCalledWith({ where: { id: listingId, listing_status: 'active' }, select: { id: true, lister_id: true, media_source: true, gallery_permission_revision: true } })
   expect(mocks.upsert).toHaveBeenCalledWith({ where: { user_id_listing_id: { user_id: 'current-user', listing_id: listingId } }, create: { user_id: 'current-user', listing_id: listingId }, update: {} })
   mocks.findListing.mockResolvedValue(null)
   expect(await setListingSaved({ listingId, saved: true })).toMatchObject({ success: false })

@@ -20,6 +20,7 @@ export function RootNavigator() {
       <Stack.Screen name="push-settings" options={{ title: 'Remote update settings' }} />
       <Stack.Screen name="privacy" options={{ title: 'Privacy choices' }} />
       <Stack.Screen name="settings" options={{ title: 'Account security' }} />
+      <Stack.Screen name="admin" options={{ title: 'Admin' }} />
       <Stack.Screen name="appeals" options={{ title: 'Safety and appeals' }} />
       <Stack.Screen name="financial" options={{ title: 'Payments and refunds' }} />
       <Stack.Screen name="financial-request" options={{ title: 'Payment review request' }} />

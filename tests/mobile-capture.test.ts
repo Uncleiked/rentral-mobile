@@ -82,6 +82,16 @@ describe('native capture transport and recovery', () => {
   })
 })
 describe('address preflight identity', () => {
+  it('opts into bounded lookup reasons while remaining compatible with an older backend response', async () => {
+    const address = '12 Fixture Street, Yaba, Lagos', addressHash = createHash('sha256').update(captureAddressKey(address)).digest('hex')
+    respond({ captureId: id, status: 'unavailable', addressHash, toleranceMeters: 100, reason: 'imprecise' })
+    expect(await checkNativeCaptureAddress(id, address, actor)).toMatchObject({ status: 'unavailable', reason: 'imprecise' })
+    expect(fixture.fetch).toHaveBeenCalledWith(`http://192.168.0.1:3000/api/v1/captures/${id}/check-address?details=1`, expect.objectContaining({ body: JSON.stringify({ address }), headers: expect.objectContaining({ 'X-Rentral-Account': actor }) }))
+    respond({ captureId: id, status: 'unavailable', addressHash, toleranceMeters: 100 })
+    expect(await checkNativeCaptureAddress(id, address, actor)).toMatchObject({ status: 'unavailable' })
+    respond({ captureId: id, status: 'unavailable', addressHash, toleranceMeters: 100, reason: 'private arbitrary provider error' })
+    await expect(checkNativeCaptureAddress(id, address, actor)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
   it('accepts only the exact normalized address fingerprint and captured recording in the response', async () => {
     const address = '  12 Fixture Street,   Yaba, Lagos  ', addressHash = createHash('sha256').update(captureAddressKey(address)).digest('hex')
     respond({ captureId: id, status: 'matched', addressHash, toleranceMeters: 100 }); expect((await checkNativeCaptureAddress(id, address, actor)).status).toBe('matched')

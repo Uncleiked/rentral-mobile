@@ -5,7 +5,7 @@ import { assertStaffPermission, hasStaffPermission } from './roles'
 import { STAFF_ROLES } from './roles-policy'
 
 export const changeStaffRoleSchema = z.object({
-  userId: z.uuid(), role: z.enum([...STAFF_ROLES, 'member']),
+  userId: z.uuid(), role: z.enum(['admin', 'moderator', 'finance', 'analyst', 'member']),
   reason: z.string().trim().min(15).max(2000),
 }).strict()
 
@@ -18,6 +18,7 @@ export async function changeStaffRole(actorId: string, input: unknown): Promise<
     await assertStaffPermission(tx, actorId, 'staff:manage')
     if (!await lockRecord(tx, 'user', data.userId)) throw new Error('Member not found.')
     const target = await tx.user.findUniqueOrThrow({ where: { id: data.userId }, select: { staff_role: true } })
+    if (target.staff_role === 'owner') throw new Error('Ownership can only change through an explicit owner transfer.')
     const role = data.role === 'member' ? null : data.role
     if (role === target.staff_role) return
     await tx.user.update({ where: { id: data.userId }, data: { staff_role: role } })

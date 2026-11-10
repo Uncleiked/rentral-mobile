@@ -4,12 +4,14 @@ import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, ArrowUpRight, BadgeCheck, MapPin, ShieldCheck, Video } from 'lucide-react'
 import { MarketplaceShell } from '@/components/layout/MarketplaceShell'
 import { ListingVideo } from '@/components/listing/ListingVideo'
+import { ListingGallery } from '@/components/listing/ListingGallery'
 import { SaveListingButton } from '@/components/feed/SaveListingButton'
 import { ShareListingButton } from '@/components/feed/ShareListingButton'
 import { requireUserId } from '@/lib/action-helpers'
 import { getListingDetails, getProfileReviews } from '@/lib/discovery'
 import { ListingFeeButton } from '@/components/bookings/ListingFeeButton'
 import { paymentsEnabled } from '@/lib/payments/config'
+import { ownedPublicationFee } from '@/lib/api/listing-payments'
 import { ListingBookingActions } from '@/components/bookings/ListingBookingActions'
 
 type Props = { params: Promise<{ id: string }> }
@@ -26,6 +28,7 @@ export default async function ListingDetailsPage({ params }: Props) {
   const { id } = await params
   const listing = await getListingDetails(id, userId)
   if (!listing) notFound()
+  const publicationFee = listing.isOwner && listing.status === 'pending_verification' ? await ownedPublicationFee(userId, listing.id) : null
   const reviews = await getProfileReviews(listing.listerId)
   const amenities = typeof listing.metadata.amenities === 'string' ? listing.metadata.amenities.split(',').map(value => value.trim()).filter(Boolean).slice(0, 30) : []
   const fees = Object.entries({ agencyFee: 'Agency', legalFee: 'Legal', cautionFee: 'Caution deposit', serviceCharge: 'Service charge' }).flatMap(([key, label]) => {
@@ -39,6 +42,8 @@ export default async function ListingDetailsPage({ params }: Props) {
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="min-w-0">
         <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-border-subtle bg-surface-card"><ListingVideo listingId={listing.id} useMux={listing.useMux} src={listing.videoUrl} poster={listing.posterUrl} controls playsInline className="h-full w-full object-contain" /></div>
+        {listing.mediaSource === 'approved_gallery' && <p className="mt-3 text-xs leading-5 text-text-muted">Admin-approved gallery media. The recording location has not been verified; inspections use manual review.</p>}
+        {listing.galleryPhotoUrls && (listing.galleryPhotoUrls.length > 1 || listing.useMux || Boolean(listing.videoUrl)) && <ListingGallery photos={listing.galleryPhotoUrls} title={listing.title} />}
         <div className="my-6 flex flex-wrap gap-2"><span className="inline-flex items-center gap-2 rounded-full border border-border-subtle px-3 py-2 text-[11px] text-text-secondary"><Video className="h-3.5 w-3.5 text-accent-hover" />Recorded walkthrough</span>{listing.isVerified && <span className="inline-flex items-center gap-2 rounded-full border border-glass-border-success bg-accent-muted px-3 py-2 text-[11px] text-accent-hover"><BadgeCheck className="h-3.5 w-3.5" />Host identity verified</span>}{listing.metadata.hasCaptain === true && <span className="rounded-full border border-border-subtle px-3 py-2 text-[11px] text-text-secondary">Captain included</span>}</div>
         <section className="border-t border-border-subtle py-7"><h2 className="mb-5 text-lg font-semibold">The details that matter</h2><dl className="grid grid-cols-2 gap-5 sm:grid-cols-3">{Object.entries(fieldLabels).flatMap(([key, label]) => {
           const value = listing.metadata[key]
@@ -49,7 +54,7 @@ export default async function ListingDetailsPage({ params }: Props) {
       </div>
       <aside className="rounded-3xl border border-border-subtle bg-surface-card p-6 lg:sticky lg:top-24">
         <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-text-muted">{listing.intent === 'buy' ? 'For sale · inspection enquiries' : 'Make your next move'}</p><p className="mt-4 flex flex-wrap items-baseline gap-2"><span className="text-3xl font-semibold tracking-tight">₦{listing.price}</span>{listing.intent !== 'buy' && <span className="text-xs text-text-muted">/ {listing.priceDenomination}</span>}</p>{fees.length > 0 && <div className="mt-5 border-t border-border-subtle pt-4"><p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Additional charges declared by host</p><dl className="space-y-2">{fees.map(fee => <div key={fee.label} className="flex flex-wrap justify-between gap-2 text-xs"><dt className="text-text-muted">{fee.label}</dt><dd className="text-text-secondary">₦{fee.amount}</dd></div>)}</dl></div>}<p className="mt-3 text-xs leading-relaxed text-text-muted">Final dates, fees, and terms are shown before you commit. A request does not confirm a booking.</p>
-        {listing.isOwner ? <><Link href={listing.status === 'draft' ? `/marketplace/listing/create?draft=${listing.id}` : `/marketplace/listing/${listing.id}/edit`} className="mt-6 flex items-center justify-center gap-2 rounded-full bg-accent-primary px-5 py-3.5 text-sm font-semibold text-text-inverse hover:bg-accent-hover">{listing.status === 'draft' ? 'Continue your draft' : 'Manage this listing'}<ArrowUpRight className="h-4 w-4" /></Link>{listing.status === 'pending_verification' && <div className="mt-4"><ListingFeeButton listingId={listing.id} enabled={paymentsEnabled()} /></div>}</> : <ListingBookingActions listingId={listing.id} intent={listing.intent} holdUntil={listing.holdUntil} />}
+        {listing.isOwner ? <><Link href={listing.status === 'draft' ? `/marketplace/listing/create?draft=${listing.id}` : `/marketplace/listing/${listing.id}/edit`} className="mt-6 flex items-center justify-center gap-2 rounded-full bg-accent-primary px-5 py-3.5 text-sm font-semibold text-text-inverse hover:bg-accent-hover">{listing.status === 'draft' ? 'Continue your draft' : 'Manage this listing'}<ArrowUpRight className="h-4 w-4" /></Link>{listing.status === 'pending_verification' && <div className="mt-4"><ListingFeeButton listingId={listing.id} enabled={paymentsEnabled()} waived={Boolean(publicationFee?.waived)} /></div>}</> : <ListingBookingActions listingId={listing.id} intent={listing.intent} holdUntil={listing.holdUntil} />}
         <div className="mt-6 border-t border-border-subtle pt-5"><ShieldCheck className="mb-3 h-5 w-5 text-accent-hover" /><h3 className="text-xs font-semibold">Keep your rental on Rentral</h3><p className="mt-2 text-xs leading-relaxed text-text-muted">Keep conversations and payment records here. Identity checks and recorded media support your decision; they cannot guarantee ownership or condition.</p><Link href="/help" className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-accent-hover">Read our rental guide<ArrowUpRight className="h-3 w-3" /></Link></div>
       </aside>
     </div>

@@ -6,7 +6,7 @@ import { memberResponse } from './member-api'
 export type PublicationFee = z.infer<typeof publicationFeeSchema>
 export type PreparedPublicationCheckout = z.infer<typeof publicationFeeCheckoutSchema> & { actorId: string; listingId: string }
 export function canOpenPublicationCheckout(fee: PublicationFee): boolean {
-  return fee.actions.checkout && fee.paymentAvailable && fee.environment !== null && !fee.archived && fee.listingStatus === 'pending_verification'
+  return !fee.waived && fee.actions.checkout && fee.paymentAvailable && fee.environment !== null && !fee.archived && fee.listingStatus === 'pending_verification'
     && (!fee.payment || ['failed', 'abandoned'].includes(fee.payment.status) || fee.payment.environment === fee.environment && ['created', 'pending'].includes(fee.payment.status))
 }
 export function canReopenPublicationCheckout(fee: PublicationFee, prepared: PreparedPublicationCheckout, actorId: string, listingId: string): boolean {

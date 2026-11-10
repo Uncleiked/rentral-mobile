@@ -1,6 +1,21 @@
 ## Rentral: Multi-Asset Spatial Trust Architecture
 
-## Current architecture — 2026-11-09
+## Current architecture — 2026-11-10
+
+- `/admin` and native Admin share current-role services and strict versioned
+  commands with atomic audit/receipt readback. Owner authority is persisted by
+  account ID; ordinary role/suspension/closure cannot remove the owner. Ownership
+  transfer is explicit and serialized. Financial independence remains in force.
+- Human document approval binds exact private bytes/path/digest; Gemini screening
+  is removed. A publication-fee waiver is its own audited decision, never a fake
+  payment or ledger entry. Paid collections and unknown references remain factual.
+- Listings distinguish `recorded` from `approved_gallery`. Gallery proof binds up
+  to ten owned photos and one optional video to durable storage claims; current
+  gallery permission/revision gates writes/publication/discovery. Revocation hides
+  affected listings pending review. No capture or GPS match is manufactured.
+- Gallery inspections use independent manual evidence review without spatial
+  proof or provider settlement. Recorded inspections retain proximity/handshake.
+  Additive preparation records `ownerAdminVersion: 1`; existing records persist.
 
 - Node 24.x/npm 11.19.1 workspace: Next.js 16.4.5 web/API and Expo SDK 58 native app.
 - MongoDB via pinned Prisma 6.19.3. Do not upgrade to Prisma 7 until its MongoDB

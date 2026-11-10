@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 
 const mocks = vi.hoisted(() => ({ findRaw: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), saves: vi.fn(), media: vi.fn(), holds: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findRaw: mocks.findRaw, findMany: mocks.findMany, findFirst: mocks.findFirst }, savedListing: { findMany: mocks.saves }, booking: { findMany: mocks.holds } } }))
@@ -72,6 +73,22 @@ it('does not offer a Mux listing before its video is ready', async () => {
   expect((await getDiscoveryListings(parseDiscoveryFilters({}))).listings).toEqual([])
   mocks.media.mockResolvedValue(new Map([[id, { status: 'ready', attempts: 1 }]]))
   expect((await getDiscoveryListings(parseDiscoveryFilters({}))).listings[0]).toMatchObject({ useMux: true, videoUrl: null })
+})
+
+it('shows photo-only approved gallery inventory without Mux and hides stale or revoked grants', async () => {
+  vi.stubEnv('MUX_ENABLED', 'true')
+  const path = 'host/folder/photo.jpg'
+  const gallery = { ...row, video_path: null, poster_path: path, media_source: 'approved_gallery', gallery_permission_revision: 3,
+    gallery_media: [{ kind: 'image', path, objectId: createHash('sha256').update(`listings-media\0${path}`).digest('hex'), digest: 'a'.repeat(64), sizeBytes: 100, contentType: 'image/jpeg' }],
+    lister: { ...row.lister, gallery_upload_allowed: true, gallery_permission_revision: 3 } }
+  mocks.findMany.mockResolvedValue([gallery])
+  const result = await getDiscoveryListings(parseDiscoveryFilters({}), 'viewer')
+  expect(result.listings[0]).toMatchObject({ videoUrl: null, useMux: false, mediaSource: 'approved_gallery', galleryPhotoUrls: [`/api/listings/${id}/source?kind=photo&index=0`], badges: expect.arrayContaining(['Admin-approved gallery']) })
+  expect(JSON.stringify(result)).not.toContain(path)
+  mocks.findMany.mockResolvedValue([{ ...gallery, lister: { ...gallery.lister, gallery_upload_allowed: false, gallery_permission_revision: 4 } }])
+  expect((await getDiscoveryListings(parseDiscoveryFilters({}), 'viewer')).listings).toEqual([])
+  mocks.findMany.mockResolvedValue([{ ...gallery, lister: { ...gallery.lister, gallery_permission_revision: 5 } }])
+  expect((await getDiscoveryListings(parseDiscoveryFilters({}), 'viewer')).listings).toEqual([])
 })
 
 it('shows the public title entered in the native listing form', async () => {

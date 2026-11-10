@@ -18,6 +18,7 @@ export interface EditableListing {
   address: string
   basePrice: string
   metadata: Record<string, unknown>
+  mediaSource?: 'recorded' | 'approved_gallery'
 }
 
 export function ListingEditForm({ listing }: { listing: EditableListing }) {
@@ -62,8 +63,7 @@ export function ListingEditForm({ listing }: { listing: EditableListing }) {
       <div className="mb-6 flex items-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3">
         <Lock className="h-4 w-4 shrink-0 text-text-muted" />
         <p className="text-xs font-medium text-text-secondary">
-          The walkthrough video, GPS lock, and ownership documents are sealed to this listing —
-          create a new listing if those change.
+          {listing.mediaSource === 'approved_gallery' ? 'Gallery media and authority documents are sealed to this listing. Its recording location is unverified; create a new listing if the media changes.' : 'The walkthrough video, GPS lock and authority documents are sealed to this listing. Create a new listing if those change.'}
         </p>
       </div>
 

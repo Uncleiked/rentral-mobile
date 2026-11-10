@@ -10,7 +10,7 @@ import { canOpenPublicationCheckout, canReopenPublicationCheckout, currentPublic
 import { beginPublicationCheckout, loadListingFeeRecovery, reviewPublicationPayment, verifyPublicationPayment } from '../apps/mobile/src/lib/listing-fee-recovery'
 const actor = '11111111-1111-4111-8111-111111111111', listing = '22222222-2222-4222-8222-222222222222', other = '33333333-3333-4333-8333-333333333333'
 const reference = `rentral-${other}`, path = `/my-listings/${listing}/publication-fee`, key = `rentral.listing-fee.pending.${actor}.${listing}`
-const initial: PublicationFee = { listingId: listing, currency: 'NGN', amountKobo: '100000', paymentAvailable: true, environment: 'test', listingStatus: 'pending_verification', archived: false, payment: null, actions: { checkout: true, reconcile: false } }
+const initial: PublicationFee = { listingId: listing, currency: 'NGN', amountKobo: '100000', paymentAvailable: true, environment: 'test', listingStatus: 'pending_verification', archived: false, waived: false, payment: null, actions: { checkout: true, reconcile: false } }
 const payment = { id: other, reference, status: 'pending' as const, environment: 'test' as const, amountKobo: '100000' as const, currency: 'NGN' as const, createdAt: '2030-01-01T00:00:00Z', paidAt: null }
 const pending: PublicationFee = { ...initial, payment, actions: { checkout: true, reconcile: true } }
 const paid: PublicationFee = { ...pending, payment: { ...payment, status: 'succeeded', paidAt: '2030-01-01T00:00:01Z' }, actions: { checkout: false, reconcile: true } }
@@ -40,7 +40,7 @@ it('binds read, checkout and reconciliation to the captured owner and checks the
   await expect(loadPublicationFee(listing, actor)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
 })
 it.each([
-  { paymentAvailable: false }, { environment: null }, { archived: true }, { listingStatus: 'draft' }, { listingStatus: 'active' }, { actions: { checkout: false, reconcile: false } },
+  { paymentAvailable: false }, { waived: true }, { environment: null }, { archived: true }, { listingStatus: 'draft' }, { listingStatus: 'active' }, { actions: { checkout: false, reconcile: false } },
   { payment: { ...payment, environment: 'live' as const } }, { payment: { ...payment, environment: null } },
   ...(['initializing', 'uncertain', 'succeeded', 'requires_review', 'reversed'] as const).map(status => ({ payment: { ...payment, status } })),
 ])('keeps checkout disabled for unavailable, wrong-mode, archived or unresolved state %#', patch => {

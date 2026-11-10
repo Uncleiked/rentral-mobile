@@ -8,6 +8,7 @@ vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: moc
 import { GET } from '@/app/api/listings/[id]/source/route'
 import { listingMediaUrl } from '@/lib/storage'
 import { authRedirect } from '@/lib/auth-policy'
+import { activeAccountWhere } from '@/lib/accounts/availability'
 
 const id = '27d5a2ee-62c1-4c5d-93de-7a0ee6d5728d'
 const listing = { lister_id: 'owner', video_path: 'owner/folder/123_video.mp4', poster_path: 'owner/folder/123_poster.jpg' }
@@ -54,8 +55,9 @@ describe('private listing previews', () => {
   it('scopes every lookup to the owner or active inventory', async () => {
     await get()
     expect(mocks.find).toHaveBeenCalledWith({
-      where: { id, OR: [{ lister_id: 'owner' }, { listing_status: 'active' }] },
-      select: { lister_id: true, video_path: true, poster_path: true },
+      where: { id, lister: { is: activeAccountWhere }, OR: [{ lister_id: 'owner' }, { listing_status: 'active' }] },
+      select: { lister_id: true, video_path: true, poster_path: true, media_source: true, gallery_media: true, gallery_permission_revision: true,
+        lister: { select: { gallery_upload_allowed: true, gallery_permission_revision: true } } },
     })
   })
   it('does not distinguish inaccessible listings from missing listings', async () => {

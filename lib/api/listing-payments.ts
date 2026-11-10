@@ -10,10 +10,11 @@ import { paystackEnvironment } from '@/lib/payments/providers/paystack/client'
 import { assertPaymentEnvironment, knownTerminalPayment, PaymentCallbackConfigurationError, PaymentEnvironmentMismatchError } from '@/lib/payments/environment'
 import { PUBLICATION_FEE_KOBO, publicationFeeCheckoutSchema, publicationFeeSchema } from '@/lib/contracts/listing-payments'
 import { ApiError, apiFailure, readApiJson } from './http'
+import { publicationFeeWaived } from '@/lib/listings/fee-policy'
 
 export type ListingPaymentContext = { params: Promise<{ id: string }> }
 export async function ownedPublicationFee(userId: string, listingId: string) {
-  const listing = await prisma.listing.findFirst({ where: { id: listingId, lister_id: userId }, select: { id: true, listing_status: true, archived_at: true } })
+  const listing = await prisma.listing.findFirst({ where: { id: listingId, lister_id: userId }, select: { id: true, listing_status: true, archived_at: true, fee_waived_at: true, fee_waived_by: true, fee_waiver_reason: true } })
   if (!listing) throw new ApiError(404, 'NOT_FOUND', 'This listing is unavailable.')
   const payment = await prisma.paymentIntent.findFirst({ where: { listing_id: listingId, user_id: userId, kind: 'listing_fee' },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -24,10 +25,10 @@ export async function ownedPublicationFee(userId: string, listingId: string) {
   if (configured) { try { paymentCallbackUrl(null); paymentAvailable = true } catch { /* Keep saved history/reconciliation available while checkout is misconfigured. */ } }
   const compatible = !payment || payment.provider_environment === environment
   const result = publicationFeeSchema.safeParse({ listingId: listing.id, listingStatus: listing.listing_status, archived: Boolean(listing.archived_at),
-    currency: 'NGN', amountKobo: PUBLICATION_FEE_KOBO, environment, paymentAvailable,
+    currency: 'NGN', amountKobo: PUBLICATION_FEE_KOBO, environment, paymentAvailable, waived: publicationFeeWaived(listing),
     payment: payment ? { id: payment.id, reference: payment.reference, status: payment.status, environment: payment.provider_environment,
       amountKobo: payment.amount_kobo.toString(), currency: payment.currency, createdAt: payment.createdAt.toISOString(), paidAt: payment.paid_at?.toISOString() ?? null } : null,
-    actions: { checkout: Boolean(paymentAvailable && (compatible || payment && knownTerminalPayment(payment)) && listing.listing_status === 'pending_verification' && !listing.archived_at && (!payment || ['created', 'pending', 'failed', 'abandoned'].includes(payment.status))),
+    actions: { checkout: Boolean(!publicationFeeWaived(listing) && paymentAvailable && (compatible || payment && knownTerminalPayment(payment)) && listing.listing_status === 'pending_verification' && !listing.archived_at && (!payment || ['created', 'pending', 'failed', 'abandoned'].includes(payment.status))),
       reconcile: Boolean(configured && compatible && payment) } })
   if (!result.success) throw new ApiError(503, 'PUBLICATION_FEE_DATA_UNAVAILABLE', 'The publication fee details could not be verified. Refresh before paying.')
   return result.data
@@ -43,10 +44,10 @@ export async function boundPublicationCheckout(userId: string, listingId: string
   return withTransaction(async tx => {
     await assertActiveAccounts(tx, [userId]); await lockRecord(tx, 'listing', listingId)
     const listing = await tx.listing.findFirst({ where: { id: listingId, lister_id: userId, listing_status: 'pending_verification',
-      OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, select: { id: true } })
+      OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, select: { id: true, fee_waived_at: true, fee_waived_by: true, fee_waiver_reason: true } })
     const matches = await tx.paymentIntent.findMany({ where: { user_id: userId, listing_id: listingId, kind: 'listing_fee', checkout_url: url }, take: 2, select: { id: true } })
     const latest = await tx.paymentIntent.findFirst({ where: { user_id: userId, listing_id: listingId, kind: 'listing_fee' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } })
-    if (!listing || matches.length !== 1 || matches[0].id !== latest?.id) throw new ApiError(409, 'PUBLICATION_FEE_CHANGED', 'The listing or payment changed while checkout was prepared. Refresh the saved payment before continuing.')
+    if (!listing || publicationFeeWaived(listing) || matches.length !== 1 || matches[0].id !== latest?.id) throw new ApiError(409, 'PUBLICATION_FEE_CHANGED', 'The listing or payment changed while checkout was prepared. Refresh the saved payment before continuing.')
     await lockRecord(tx, 'paymentIntent', latest.id)
     const payment = await tx.paymentIntent.findFirst({ where: { id: latest.id, user_id: userId, listing_id: listingId, kind: 'listing_fee', checkout_url: url,
       provider_environment: configured, status: 'pending' }, select: { id: true, reference: true, provider_environment: true } })

@@ -39,3 +39,8 @@ export function videoExtensionForMime(mimeType: string): string {
 export function listingMediaUrl(listingId: string, kind: 'video' | 'poster'): string {
   return `/api/listings/${encodeURIComponent(listingId)}/source?kind=${kind}`
 }
+
+export function listingPhotoUrl(listingId: string, index: number): string {
+  if (!Number.isInteger(index) || index < 0 || index >= 10) throw new Error('INVALID_GALLERY_PHOTO')
+  return `/api/listings/${encodeURIComponent(listingId)}/source?kind=photo&index=${index}`
+}

@@ -15,6 +15,7 @@ import { applyVerifiedCommercialOrder, revokeCommercialOrder } from '@/lib/comme
 import { recordConfirmedBookingObservation } from '@/lib/analytics/observations'
 import { assertPaymentEnvironment, knownTerminalPayment } from './environment'
 import { PUBLICATION_FEE_KOBO } from '@/lib/contracts/listing-payments'
+import { publicationFeeWaived } from '@/lib/listings/fee-policy'
 export { startCommercialOrderPayment } from './commercial'
 
 const paymentMetadataSchema = z.object({ rentral_payment_id: z.string().uuid(), rentral_user_id: z.string().uuid() })
@@ -86,8 +87,9 @@ export async function startListingFeePayment(userId: string, listingId: string):
     await assertActiveAccounts(tx, [userId])
     await lockRecord(tx, 'listing', listingId)
     const listing = await tx.listing.findFirst({ where: { id: listingId, lister_id: userId, listing_status: 'pending_verification',
-      OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, select: { id: true } })
+      OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, select: { id: true, fee_waived_at: true, fee_waived_by: true, fee_waiver_reason: true } })
     if (!listing) throw new Error('Only your submitted listings can receive a publication fee.')
+    if (publicationFeeWaived(listing)) throw new Error('The publication fee has been waived. Refresh this listing instead of paying.')
     const existing = await tx.paymentIntent.findFirst({ where: { listing_id: listingId, user_id: userId, kind: 'listing_fee' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
     if (existing && !knownTerminalPayment(existing)) assertPaymentEnvironment(existing.provider_environment, environment)
     if (existing && !['failed', 'abandoned'].includes(existing.status)) return existing
@@ -99,7 +101,14 @@ export async function startListingFeePayment(userId: string, listingId: string):
   if (intent.status === 'succeeded') throw new Error('The publication fee has already been received.')
   if (intent.status === 'pending' && intent.checkout_url) return intent.checkout_url
   if (intent.status !== 'created') throw new Error('This payment is being reconciled. Check status before paying again.')
-  const claimed = await prisma.paymentIntent.updateMany({ where: { id: intent.id, status: 'created' }, data: { status: 'initializing' } })
+  const claimed = await withTransaction(async tx => {
+    await assertActiveAccounts(tx, [userId])
+    await lockRecord(tx, 'listing', listingId)
+    const current = await tx.listing.findFirst({ where: { id: listingId, lister_id: userId, listing_status: 'pending_verification', OR: [{ archived_at: null }, { archived_at: { isSet: false } }] },
+      select: { id: true, fee_waived_at: true, fee_waived_by: true, fee_waiver_reason: true } })
+    if (!current || publicationFeeWaived(current)) throw new Error('This listing changed or its publication fee was waived. Refresh before preparing checkout.')
+    return tx.paymentIntent.updateMany({ where: { id: intent.id, user_id: userId, listing_id: listingId, status: 'created' }, data: { status: 'initializing' } })
+  })
   if (!claimed.count) throw new Error('Checkout is already being prepared.')
   try {
     const url = await initializePaystack({ id: intent.id, userId, email: intent.customer_email, reference: intent.reference,

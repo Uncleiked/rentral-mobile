@@ -63,13 +63,34 @@ async function captureGenerated() {
 }
 
 async function runFinancialBrowser(db, origin, session) {
+  assert.equal(db.databaseName, database, 'Browser data belongs only to the owned fixture database.')
+  assert.ok(['127.0.0.1', 'localhost'].includes(new URL(origin).hostname), 'Browser registration uses only the owned loopback backend.')
+  assert.ok(await db.collection('_FixtureOwnership').findOne({ _id: owner }), 'Fixture ownership must be present before seeding browser identities.')
   await db.collection('User').updateOne({ _id: session.user.id }, { $set: { staff_role: 'admin' } })
   const draftId = randomUUID()
   await db.collection('Listing').insertOne({ _id: draftId, revision: 0, lister_id: session.user.id, category: 'house', listing_status: 'draft', wizard_step: 'details',
     text_address: 'Initial owned fixture address', base_rent_amount: 500000, asset_metadata: { listingTitle: 'Owned draft before editing', bedrooms: '2', bathrooms: '2', sizeSqm: '80', amenities: '' },
     video_path: null, poster_path: null, document_path: null, capture_id: null, archived_at: null, archived_status: null, createdAt: new Date(), updatedAt: new Date() })
+  // A separate actor keeps recorded-draft acceptance unchanged. Authentication
+  // comes from the real HTTP endpoint; fixture-only role/grant setup stays in the
+  // owned database and never derives privileges from JWT metadata or email.
+  // Like the three native HTTP registrations below, this Node client has no
+  // browser Origin. This mode does not claim production browser-CSRF acceptance.
+  const registration = await fetch(`${origin}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: `gallery-owner-${owner.slice(0, 12)}@fixture.invalid`, password: `OwnedGallery!${randomUUID()}` }), signal: AbortSignal.timeout(120000) })
+  assert.equal(registration.status, 201, 'Synthetic gallery owner registers through the owned JWT endpoint.')
+  const registrationBody = await registration.json(), gallerySession = registrationBody?.data
+  assert.ok(gallerySession?.user?.id && gallerySession.access_token && gallerySession.refresh_token, 'Synthetic gallery owner receives its own JWT session.')
+  await db.collection('User').updateOne({ _id: gallerySession.user.id }, { $set: { staff_role: 'owner', gallery_upload_allowed: true, gallery_permission_revision: 1 } })
+  const galleryDraftId = randomUUID()
+  await db.collection('Listing').insertOne({ _id: galleryDraftId, revision: 0, lister_id: gallerySession.user.id, category: 'house', listing_status: 'draft', wizard_step: 'details',
+    text_address: 'Initial synthetic gallery address, Lagos', base_rent_amount: 500000, asset_metadata: { listingTitle: 'Owned gallery draft', bedrooms: '2', bathrooms: '2', sizeSqm: '80', amenities: '' },
+    media_source: 'approved_gallery', gallery_permission_revision: 1, gallery_media: [], gallery_media_paths: [], video_path: null, poster_path: null, document_path: null,
+    capture_id: null, archived_at: null, archived_status: null, createdAt: new Date(), updatedAt: new Date() })
+  check('separate synthetic gallery owner and draft preserve the original recorded browser fixture')
   const browserFixture = path.join(artifactRoot, 'finance-browser-session.json')
-  await writeFile(browserFixture, JSON.stringify({ origin, accessToken: session.access_token, refreshToken: session.refresh_token, actorId: session.user.id, email: session.user.email, draftId }), { mode: 0o600 })
+  await writeFile(browserFixture, JSON.stringify({ origin, accessToken: session.access_token, refreshToken: session.refresh_token, actorId: session.user.id, email: session.user.email, draftId,
+    galleryDraftId, galleryOwner: { accessToken: gallerySession.access_token, refreshToken: gallerySession.refresh_token, actorId: gallerySession.user.id, email: gallerySession.user.email } }), { mode: 0o600 })
   // Keep the parent event loop draining the owned Next stdout/stderr pipes
   // during compilation and browser work. A synchronous wait can fill them.
   const status = await new Promise((resolveStatus, rejectStatus) => {
@@ -129,7 +150,7 @@ try {
       NEXT_PUBLIC_APP_URL: origin, RENTRAL_PLATFORM_ENABLED: 'true', RENTRAL_STORAGE_DIR: storageRoot,
       RENTRAL_BUILD_DIR: runtimeBuildDirectory, AUTH_DEV_EMAIL_OUTBOX: productionBrowser ? 'false' : 'true',
       NEXT_TELEMETRY_DISABLED: '1', NEXT_PUBLIC_POSTHOG_ENABLED: 'false', NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: '',
-      PAYMENTS_ENABLED: 'false', MUX_ENABLED: 'false', LIFECYCLE_WORKER_ENABLED: 'false', GEMINI_API_KEY: '',
+      PAYMENTS_ENABLED: 'false', MUX_ENABLED: 'false', LIFECYCLE_WORKER_ENABLED: 'false',
       AUTH_EMAIL_ENABLED: 'false', NOTIFICATION_EMAIL_ENABLED: 'false', SETTLEMENT_ENABLED: 'false',
       COMMERCIAL_ENABLED: 'false', PUSH_NOTIFICATIONS_ENABLED: 'false', OLUSO_ENABLED: 'false', RENTRAL_ANALYTICS_ENABLED: 'false',
       PAYSTACK_SECRET_KEY: '', RESEND_API_KEY: '', PAYMENT_ACCOUNT_HASH_SECRET: '',

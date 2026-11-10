@@ -13,6 +13,7 @@ import {
 } from '@/store/useRentralStore'
 import { captureAddressResultSchema } from '@/lib/contracts/capture'
 import { listingRequest } from '@/lib/listings/capture-client'
+import { captureAddressMessage } from '@/lib/listings/address-check-message'
 
 export function MetadataForm({ actorId }: { actorId: string }) {
   const [checking, setChecking] = useState(false)
@@ -71,11 +72,12 @@ export function MetadataForm({ actorId }: { actorId: string }) {
     if (!captureId) { setAddressError('Record a new walkthrough to lock its location on the server before checking the address.'); return }
     setChecking(true); setAddressError(null)
     try {
-      const result = await listingRequest(actorId, `/api/v1/captures/${captureId}/check-address`, captureAddressResultSchema, { address: String(submittedAddress).trim() })
+      const result = await listingRequest(actorId, `/api/v1/captures/${captureId}/check-address?details=1`, captureAddressResultSchema, { address: String(submittedAddress).trim() })
       if (!active.current || !isWizardCurrent(actorId, generation)) return
       const current = useRentralStore.getState()
       if (current.captureId !== captureId || current.address.trim() !== String(submittedAddress).trim() || current.category !== category) { setAddressError('The recording or address changed. Check the address again.'); return }
-      if (result.captureId !== captureId || result.status !== 'matched') { setAddressError(result.status === 'mismatch' ? 'This address does not match the location recorded with your walkthrough. Correct it before continuing.' : 'The address could not be verified precisely. Include the building number, street, area and state, then try again.'); return }
+      if (result.captureId !== captureId) { setAddressError('This address result belongs to a different recording. Check the current address again.'); return }
+      if (result.status !== 'matched') { setAddressError(captureAddressMessage(result.status, result.reason)); return }
       goNext()
     } catch (reason) { if (active.current) setAddressError(reason instanceof Error ? reason.message : 'Address verification is unavailable. Your details have been kept.') }
     finally { if (active.current) setChecking(false) }

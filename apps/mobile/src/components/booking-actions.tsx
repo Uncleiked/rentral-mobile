@@ -59,7 +59,7 @@ export function BookingActions({ booking, onUpdated, refresh }: Props) {
     })
   }
   function issueCode(): void {
-    if (uncertain) return
+    if (uncertain || booking.inspectionMode === 'manual') return
     setShownCode('')
     void perform('code', async () => {
       const result = await issueCheckInCode(booking.id, actorId)
@@ -67,7 +67,7 @@ export function BookingActions({ booking, onUpdated, refresh }: Props) {
     })
   }
   async function checkIn(): Promise<void> {
-    if (pending.current || uncertain || !isCurrent(actorId)) return
+    if (pending.current || uncertain || booking.inspectionMode === 'manual' || !isCurrent(actorId)) return
     pending.current = true; setBusy('check-in'); setError(null); setNotice(null)
     let submitted = false
     try {
@@ -137,7 +137,7 @@ export function BookingActions({ booking, onUpdated, refresh }: Props) {
     </> : null}
     {booking.payments[0] ? <Text selectable style={styles.help}>Latest payment: {memberStatus(booking.payments[0].status)}</Text> : null}
     {booking.actions.reconcile && booking.payments[0] ? <Button title="Check payment status" secondary disabled={locked} busy={busy === 'reconcile'} onPress={reconcile} /> : null}
-    {booking.status === 'confirmed' && booking.kind === 'inspection' ? <>
+    {booking.status === 'confirmed' && booking.kind === 'inspection' && booking.inspectionMode !== 'manual' ? <>
       <Text style={styles.help}>Check in together within 20 metres of the asset. Location is sent privately for the proximity check; it is not displayed to the other participant.</Text>
       <Text style={styles.help}>Your check-in: {(booking.role === 'renter' ? booking.checkIn.renterAt : booking.checkIn.hostAt) ? 'Recorded' : 'Waiting'} · Other participant: {(booking.role === 'renter' ? booking.checkIn.hostAt : booking.checkIn.renterAt) ? 'Recorded' : 'Waiting'}</Text>
       {booking.actions.issueCode ? <><Button title="Show my check-in code" secondary disabled={locked || Boolean(uncertain)} busy={busy === 'code'} onPress={issueCode} />

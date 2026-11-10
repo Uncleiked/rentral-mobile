@@ -1,5 +1,33 @@
 # Rentral UI Registry
 
+### Owner/admin, gallery and manual review — 2026-11-10
+
+Canonical detailed patterns: [current registry](context/ui-registry.md), entries
+**Owner/admin decisions and recovery**, **Approved gallery creation and photo
+display**, **Manual inspection evidence**, and **Profile photo and address feedback**.
+
+Web admin/gallery panels use `bg-surface-card border-border-subtle rounded-2xl
+p-5 sm:p-6`; fields reuse `bg-background-app rounded-xl p-3 text-sm` and semantic
+text. Actions keep `min-h-11`, rounded-xl borders and disabled opacity; commit
+uses the existing semantic accent/inverse pair. Long IDs, emails and multiline
+reasons wrap. Native panels use `colors.surface/colors.border`, `radius.xl`,
+`space.xl` and `space.lg`; Inter semibold headings and regular 13/22 help match
+existing member workflows. Gallery images use contained media and semantic
+surfaces, not an empty player for photo-only listings.
+
+Show human decisions, gallery origin, unverified recording location and
+paid/waived/unpaid state explicitly. Owner-self review has its own acknowledgment;
+other participant/financial independence remains. Unconfirmed decisions/evidence/
+listing saves have a visible recovery state and preserve the original actor and
+request before readback/exact retry. Retain the selected avatar on failure.
+Gallery raw-upload recovery persists its intended path before bytes, preserves
+the form across reload and requires owned-file readback before a deliberate
+same-content/path retry. Show it separately from listing-command recovery;
+reviewed abandonment never claims server deletion.
+Address failure wording distinguishes missing/uncertain/imprecise data from an
+outage and remains neutral for legacy responses. Keep technical provider details
+and coordinates out of these product flows.
+
 ### Rentral identity, opening reveal and recording recovery — 2026-11-10
 
 Canonical patterns: context/ui-registry.md entries of the same date. Reuse

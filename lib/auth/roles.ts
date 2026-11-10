@@ -2,12 +2,13 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { lockRecord } from '@/lib/database/transactions'
 import { permissionsForRole, roleAllows, staffRole, type StaffPermission, type StaffRole } from './roles-policy'
+import { accountIsActive } from '@/lib/accounts/availability'
 
 /** Each privileged request reads the current database role, never JWT metadata
  * or a legacy environment allowlist. Revocation therefore takes effect at once. */
 export async function currentStaffRole(userId: string): Promise<StaffRole | null> {
-  const account = await prisma.user.findUnique({ where: { id: userId }, select: { staff_role: true } })
-  return staffRole(account?.staff_role)
+  const account = await prisma.user.findUnique({ where: { id: userId }, select: { staff_role: true, closed_at: true, suspended_at: true } })
+  return accountIsActive(account) ? staffRole(account?.staff_role) : null
 }
 
 export async function hasStaffPermission(userId: string, permission: StaffPermission): Promise<boolean> {
@@ -21,6 +22,6 @@ export async function staffPermissions(userId: string): Promise<readonly StaffPe
 /** Serialize privileged mutations with role changes and recheck under that lock. */
 export async function assertStaffPermission(tx: Prisma.TransactionClient, userId: string, permission: StaffPermission): Promise<void> {
   if (!await lockRecord(tx, 'user', userId)) throw new Error('Staff access required.')
-  const account = await tx.user.findUnique({ where: { id: userId }, select: { staff_role: true } })
-  if (!roleAllows(account?.staff_role, permission)) throw new Error('Staff access required.')
+  const account = await tx.user.findUnique({ where: { id: userId }, select: { staff_role: true, closed_at: true, suspended_at: true } })
+  if (!accountIsActive(account) || !roleAllows(account?.staff_role, permission)) throw new Error('Staff access required.')
 }

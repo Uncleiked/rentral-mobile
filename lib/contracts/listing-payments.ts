@@ -6,6 +6,7 @@ const timestamp = z.string().datetime({ offset: true })
 export const publicationFeeReferenceSchema = z.string().regex(/^rentral-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/)
 export const publicationFeeSchema = z.object({ listingId: z.uuid(), currency: z.literal('NGN'), amountKobo: z.literal(PUBLICATION_FEE_KOBO),
   paymentAvailable: z.boolean(), environment, listingStatus: z.string().min(1).max(80), archived: z.boolean(),
+  waived: z.boolean().optional().default(false),
   payment: z.object({ id: z.uuid(), reference: publicationFeeReferenceSchema,
     status: z.enum(['created', 'initializing', 'pending', 'uncertain', 'succeeded', 'requires_review', 'failed', 'abandoned', 'reversed']),
     environment, amountKobo: z.literal(PUBLICATION_FEE_KOBO), currency: z.literal('NGN'), createdAt: timestamp, paidAt: timestamp.nullable() }).strict().nullable(),

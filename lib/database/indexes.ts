@@ -1,5 +1,5 @@
 import type { CreateIndexesOptions, Db, Document, IndexDirection } from 'mongodb'
-import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION } from './metadata.ts'
+import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION, OWNER_ADMIN_VERSION } from './metadata.ts'
 
 type IndexPlan = { collection: string; keys: Record<string, IndexDirection>; options: CreateIndexesOptions }
 const plan = (collection: string, keys: Record<string, IndexDirection>, unique = false): IndexPlan => ({
@@ -127,6 +127,9 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
     email: { bsonType: 'string', minLength: 3 }, username: { bsonType: ['string', 'null'] },
     password_hash: { bsonType: ['string', 'null'] }, staff_role: { bsonType: ['string', 'null'] },
     closed_at: { bsonType: ['date', 'null'] },
+    suspended_at: nullableDate, suspension_reason: { bsonType: ['string', 'null'], maxLength: 2000 },
+    gallery_upload_allowed: { bsonType: ['bool', 'null'] },
+    gallery_permission_revision: { bsonType: ['int', 'long', 'null'], minimum: 0 },
     push_consent_version: { bsonType: ['int', 'long', 'null'], minimum: 0 },
     analytics_consent: { bsonType: ['bool', 'null'] }, analytics_consent_at: { bsonType: ['date', 'null'] },
     analytics_subjects: { bsonType: ['array', 'null'], maxItems: 64, items: {
@@ -134,7 +137,20 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
       properties: { month: { bsonType: 'string', pattern: '^[0-9]{4}-[0-9]{2}$' }, subject: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' } },
     } },
   }),
-  Listing: jsonSchema(['lister_id', 'category', 'listing_status'], { lister_id: id, category: { enum: ['house', 'car', 'boat'] }, listing_status: { enum: ['draft', 'pending_verification', 'active', 'suspended'] }, base_rent_amount: { bsonType: ['double', 'int', 'long', 'null'], minimum: 1, maximum: 9999999999 } }),
+  Listing: jsonSchema(['lister_id', 'category', 'listing_status'], {
+    lister_id: id, category: { enum: ['house', 'car', 'boat'] }, listing_status: { enum: ['draft', 'pending_verification', 'active', 'suspended'] },
+    base_rent_amount: { bsonType: ['double', 'int', 'long', 'null'], minimum: 1, maximum: 9999999999 },
+    media_source: { enum: ['recorded', 'approved_gallery', null] },
+    gallery_permission_revision: { bsonType: ['int', 'long', 'null'], minimum: 0 },
+    gallery_media: { bsonType: ['array', 'null'], maxItems: 11, items: {
+      bsonType: 'object', required: ['kind', 'path', 'objectId', 'digest', 'sizeBytes', 'contentType'], additionalProperties: false,
+      properties: { kind: { enum: ['image', 'video'] }, path: { bsonType: 'string', maxLength: 500 }, objectId: id,
+        digest: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, sizeBytes: { bsonType: ['double', 'int', 'long'], minimum: 1, maximum: 209715200 },
+        contentType: { bsonType: 'string', maxLength: 128 } },
+    } },
+    gallery_media_paths: { bsonType: 'array', maxItems: 11, uniqueItems: true, items: { bsonType: 'string', maxLength: 500 } },
+    fee_waived_at: nullableDate, fee_waived_by: { bsonType: ['string', 'null'] }, fee_waiver_reason: { bsonType: ['string', 'null'], maxLength: 2000 },
+  }),
   ListingLocation: jsonSchema(['listing_id', 'geometry'], { listing_id: id, geometry: { bsonType: 'object', required: ['type', 'coordinates'], properties: { type: { enum: ['Point'] }, coordinates: { bsonType: 'array', minItems: 2, maxItems: 2, items: { bsonType: ['double', 'int', 'long'] } } } } }),
   ListingCapture: jsonSchema(['owner_id', 'session_id', 'begin_hash', 'state', 'start_geometry', 'start_accuracy', 'start_sample_at', 'started_at', 'finish_by'], {
     owner_id: id, session_id: id, begin_hash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, state: { enum: ['recording', 'recorded', 'sealed'] },
@@ -188,6 +204,11 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
     status: { enum: ['requested', 'awaiting_payment', 'confirmed', 'completed', 'cancelled', 'expired', 'disputed', 'converted'] },
     starts_at: { bsonType: 'date' }, ends_at: { bsonType: 'date' }, amount_kobo: positiveMoney,
     hold_credit_kobo: { bsonType: 'long', minimum: 0 }, currency,
+    manual_inspection_status: { enum: ['pending', 'approved', 'rejected', null] },
+    manual_inspection_evidence: { bsonType: ['string', 'null'], maxLength: 2000 },
+    manual_inspection_requested_by: { bsonType: ['string', 'null'] }, manual_inspection_requested_at: nullableDate,
+    manual_inspection_reviewed_by: { bsonType: ['string', 'null'] }, manual_inspection_reviewed_at: nullableDate,
+    manual_inspection_review_reason: { bsonType: ['string', 'null'], maxLength: 2000 },
   }), { $expr: { $and: [{ $gt: ['$ends_at', '$starts_at'] }, { $ne: ['$seeker_id', '$lister_id'] }, { $lte: [{ $ifNull: ['$hold_credit_kobo', 0] }, '$amount_kobo'] }] } }] },
   PaymentIntent: jsonSchema(['user_id', 'reference', 'idempotency_key', 'amount_kobo', 'currency'], { user_id: id, reference: id, idempotency_key: id, amount_kobo: positiveMoney, currency,
     provider_environment: { enum: ['test', 'live', null] } }),
@@ -225,13 +246,14 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
   }),
   WorkerState: jsonSchema([], { lease_expires_at: nullableDate, last_started_at: nullableDate, last_completed_at: nullableDate }),
   MutationReceipt: jsonSchema(['actor_id', 'scope', 'client_id', 'input_hash', 'resource_id'], {
-    actor_id: id, scope: { enum: ['listing_submit', 'listing_draft_save', 'booking_create'] }, client_id: id, resource_id: id,
+    actor_id: id, scope: { enum: ['listing_submit', 'listing_draft_save', 'booking_create', 'admin_command', 'manual_inspection_request'] }, client_id: id, resource_id: id,
     input_hash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
   }),
   AdminAudit: { $and: [jsonSchema(['action', 'target_type', 'target_id', 'reason'], {
     actor_id: { bsonType: ['string', 'null'], minLength: 1 }, operator_id: { enum: ['local-database-operator', null] },
     action: id, target_type: id, target_id: id, reason: { bsonType: 'string', minLength: 1, maxLength: 5000 },
   }), { $or: [{ actor_id: { $type: 'string', $ne: '' } }, { actor_id: null, operator_id: 'local-database-operator' }] }] },
+  DocumentReview: jsonSchema([], { approved_path: { bsonType: ['string', 'null'], maxLength: 500 }, approved_digest: { bsonType: ['string', 'null'], pattern: '^[a-f0-9]{64}$' } }),
   EmailChange: jsonSchema(['user_id', 'old_email', 'new_email', 'credential_fingerprint', 'status', 'old_token_hash', 'new_token_hash', 'expires_at'], {
     user_id: id, old_email: { bsonType: 'string', minLength: 3, maxLength: 254 }, new_email: { bsonType: 'string', minLength: 3, maxLength: 254 },
     credential_fingerprint: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, old_token_hash: id, new_token_hash: id,
@@ -316,10 +338,10 @@ export async function ensureMongoIndexes(db: Db): Promise<{ collections: number;
     await payments.dropIndex('PaymentIntent_provider_transaction_id_key')
   }
   // Commit readiness last: a partial or failed setup must not enable unindexed writes.
-  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
+  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; ownerAdminVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
     { _id: MONGO_SETUP_ID }, { $set: { schemaVersion: MONGO_SCHEMA_VERSION, storageClaimsVersion: STORAGE_CLAIMS_VERSION,
       financialVersion: FINANCIAL_VERSION, lifecycleVersion: LIFECYCLE_VERSION, mutationVersion: MUTATION_VERSION, authSecurityVersion: AUTH_SECURITY_VERSION,
-      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, completedAt: new Date() } }, { upsert: true },
+      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, ownerAdminVersion: OWNER_ADMIN_VERSION, completedAt: new Date() } }, { upsert: true },
   )
   return { collections: MONGO_COLLECTIONS.length, indexes: MONGO_INDEXES.length }
 }

@@ -3,14 +3,16 @@ import { listingFormError, nativeListingMetadata } from './native-listing'
 import type { NativeDeviceDraft, NativeDraftCommand } from './native-draft-store'
 import { ApiError } from './api'
 import { captureAddressKey } from './native-capture-policy'
-import type { CaptureStatus } from '../../../../lib/contracts/capture'
+import type { CaptureAddressFailureReason, CaptureStatus } from '../../../../lib/contracts/capture'
 
-export type NativeAddressCheck = { captureId: string; addressKey: string; status: 'matched' | 'mismatch' | 'unavailable' }
+export type NativeAddressCheck = { captureId: string; addressKey: string; status: 'matched' | 'mismatch' | 'unavailable'; reason?: CaptureAddressFailureReason }
+export function nativeDraftUsesGallery(draft: NativeDeviceDraft): boolean { return (draft.mediaSource ?? draft.server?.mediaSource) === 'approved_gallery' }
 export function draftCaptureId(draft: NativeDeviceDraft): string | null { return draft.capture ? draft.capture.captureId ?? null : draft.server?.captureId ?? null }
 export function nativeAddressCheckMatches(draft: NativeDeviceDraft, check: NativeAddressCheck | null): boolean {
   return Boolean(check && check.status === 'matched' && draftCaptureId(draft) === check.captureId && captureAddressKey(draft.form.address) === check.addressKey)
 }
 export function isLegacyDraftCommand(command: NativeDraftCommand): boolean {
+  if (command.listing.mediaSource === 'approved_gallery') return false
   return ['lat', 'lng', 'accuracy'].some(key => key in command.listing) || Boolean(command.listing.videoPath && !command.listing.captureId)
 }
 export function recoveredCaptureSession(draft: NativeDeviceDraft, status: CaptureStatus): NonNullable<NativeDeviceDraft['captureSession']> {
@@ -35,6 +37,7 @@ export function canClearDeclinedDraft(reason: unknown, restoring: boolean, ackno
 
 export function buildNativeDraftCommand(draft: NativeDeviceDraft, mode: 'draft' | 'submit', clientId: string): NativeDraftCommand {
   if (draft.pending) throw new Error('Confirm the saved listing request before preparing another.')
+  if (nativeDraftUsesGallery(draft)) return buildGalleryDraftCommand(draft, mode, clientId)
   if (draft.capture && draft.videoUpload?.state !== 'uploaded') throw new Error('Upload and confirm your walkthrough before saving this server draft.')
   if (draft.document && draft.documentUpload?.state !== 'uploaded') throw new Error('Upload and confirm your private document before saving this server draft.')
   const videoPath = draft.videoUpload?.state === 'uploaded' ? draft.videoUpload.upload.path : draft.server?.videoPath ?? undefined
@@ -53,6 +56,24 @@ export function buildNativeDraftCommand(draft: NativeDeviceDraft, mode: 'draft' 
   const invalid = listingFormError(draft.category, draft.form)
   if (invalid) throw new Error(invalid)
   if (!videoPath || !captureId || (!draft.capture && !draft.server?.hasCoords)) throw new Error('Record a walkthrough with its capture location, or resume the unchanged server recording.')
+  if (!documentPath) throw new Error('Choose an ownership or listing-authority document before submitting.')
+  return { mode, listing: saveListingInputSchema.strict().parse(input) }
+}
+
+function buildGalleryDraftCommand(draft: NativeDeviceDraft, mode: 'draft' | 'submit', clientId: string): NativeDraftCommand {
+  const files = draft.galleryFiles ?? []
+  if (files.some(item => item.upload?.state !== 'uploaded' || item.upload.upload.uri !== item.uri)) throw new Error('Upload and confirm every selected gallery file before saving this server draft.')
+  if (draft.document && (draft.documentUpload?.state !== 'uploaded' || draft.documentUpload.upload.uri !== draft.document.uri)) throw new Error('Upload and confirm the selected authority document before saving.')
+  const selectedPhotos = files.filter(item => item.kind === 'photo').map(item => item.upload!.upload.path)
+  const galleryPhotos = selectedPhotos.length ? selectedPhotos : draft.server?.mediaSource === 'approved_gallery' ? draft.server.galleryPhotos ?? [] : []
+  const videoPath = files.find(item => item.kind === 'video')?.upload?.upload.path ?? (draft.server?.mediaSource === 'approved_gallery' ? draft.server.videoPath : null)
+  const documentPath = draft.documentUpload?.state === 'uploaded' ? draft.documentUpload.upload.path : draft.server?.documentPath
+  const input = { clientId, category: draft.category, mediaSource: 'approved_gallery' as const, galleryPhotos,
+    ...(draft.server ? { draftId: draft.server.id, expectedRevision: draft.server.revision } : {}), address: draft.form.address.trim(), basePrice: draft.form.basePrice,
+    metadata: nativeListingMetadata(draft.category, draft.form), ...(videoPath ? { videoPath } : {}), ...(documentPath ? { documentPath } : {}), ...(galleryPhotos[0] ? { posterPath: galleryPhotos[0] } : {}) }
+  if (mode === 'draft') return { mode, listing: saveDraftInputSchema.strict().parse({ ...input, wizardStep: !videoPath && !galleryPhotos.length ? 'capture' : !draft.form.address || !draft.form.basePrice ? 'details' : !documentPath ? 'documents' : 'checkout' }) }
+  const invalid = listingFormError(draft.category, draft.form); if (invalid) throw new Error(invalid)
+  if (!videoPath && !galleryPhotos.length) throw new Error('Choose at least one gallery photo or a video before submitting.')
   if (!documentPath) throw new Error('Choose an ownership or listing-authority document before submitting.')
   return { mode, listing: saveListingInputSchema.strict().parse(input) }
 }
