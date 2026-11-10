@@ -1,6 +1,71 @@
 ## Progress Tracker
 
-## Final source and local verification — 2026-11-10
+## Recording location, branding and recovery — 2026-11-10
+
+The [approved increment](capture-location-brand-blueprint.md) is implemented and
+locally verified: an online private backend location lock precedes recording;
+fresh end evidence and the actual uploaded video bind to the capture; server
+admission blocks submission unless Geoapify resolves a precise Nigerian
+building/amenity within **100 metres**. Address edits cannot replace recording
+evidence. Existing drafts remain; recordings without the new evidence require a
+new take. MongoDB/JWT, npm, Paystack only and no personal KYC remain authoritative.
+
+Web/native clients recover uncertain commands through owner-scoped status/receipt
+readback. Original web commands/nonces survive navigation, and late responses
+cannot modify another actor/wizard. Full browser refresh without the retained
+video honestly requires retake. The shared emerald doorway/r brand, native icons/
+splash and bounded reduced-motion launch reveal are complete. The favicon now
+embeds RGBA PNG data, fixing Next's image-processing failure. See the
+[increment review](capture-location-brand-review.md).
+
+- **1,792 unit checks passed**, with 95 owned-fixture cases skipped by the
+  ordinary invocation. Global ESLint passed. Final owned Mongo core passed
+  **55/55**; separate financial/auth/backup runs passed **40** (18 financial,
+  20 auth, 2 backup). These are distinct observed runs, not a claimed single
+  serial 95-case execution. Actual backup wrapper: 14 synthetic records, 4 files,
+  1 balanced journal and 1 claim; source preserved and restore quarantined.
+- Final production Next rebuild passed: **99 static pages**, compile **8.9s**,
+  TypeScript **5.5s**. All **8 production browser journeys passed in 30.7s**, plus
+  **8 real HTTP fixture checks**, using owned loopback Mongo with providers off.
+  The original 320px overflow assertion and both listing lost-response/retry
+  journeys passed. The real stepper overflow is fixed; assertions were retained.
+  Fixture `localhost-a9a64c420dd2` cleaned its owned server/database resources.
+- Final Android export passed **2,094 modules / about 5.8 MB**; iOS passed
+  **2,115 modules / about 5.8 MB**. Native TypeScript/scoped lint passed. Native
+  intercepted capture/address preview passed **8 checks / 21 API calls / 0 errors
+  or outbound requests** at 320/390/768 widths. These are local artifacts and
+  controlled previews, not physical camera/GPS acceptance.
+- Reviewed additive Atlas setup verified **52 application collections / 156
+  indexes** and `captureVersion: 1`, preserving all **52 pre-existing collections
+  and 4 non-marker documents** with unchanged preservation hashes. No reset/import,
+  role grant, provider send, user-file deletion or original PostgreSQL write ran.
+- Dependency audit reports **0 vulnerabilities**. Deterministic brand generation
+  and 9 asset/launch regressions passed. Actual `/help`, `/favicon.ico` and
+  `/icon.svg` returned 200; a completed warm nonexistent-account login returned
+  401 without account/session writes. An earlier aborted cold request is not
+  successful first-request evidence for this increment.
+- The source/public secret scan covered **1,140 files against 8 actual private
+  values**, with **0 matches**. Private env files were not edited by this increment.
+  Offline env inspection found only `MUX_WEBHOOK_SECRET` still a template;
+  other Mux fields and Geoapify are populated, without live-provider acceptance.
+
+Runtime handback is verified: the existing user-owned backend on 3000 serves
+`/help`, `/favicon.ico` and `/icon.svg` with 200, Metro on 8090 reports its packager
+running, and a read-only Atlas probe confirms reachability and capture readiness.
+No working user server was restarted and no tunnel is implied. The delivery
+revision is recorded in Git history; remote verification belongs to the final
+handback. The prior whole-app baseline was delivered as `6f2af2f`. Follow the
+[location setup](recording-location-setup.md), [Windows Mux guide](mux-local-setup.md)
+and [environment guide](environment-setup.md). Real Android/iOS camera/GPS/slow-
+storage/launch checks, provider acceptance, and Vercel object-storage/worker
+hosting remain separate. No public tunnel, real provider send/charge, deployment,
+EAS/store build or release was performed by this work.
+
+## Baseline source and local verification — 2026-11-10
+
+The evidence below records the previously delivered whole-app revision
+`6f2af2f`; current increment results are above. Its pre-push handoff wording is
+historical and does not mean that baseline remains unpushed.
 
 The approved [completion blueprint](remaining-work-blueprint.md) is implemented
 for Expo Android/iOS, npm, local Next.js, saved Atlas/MongoDB/JWT and private local

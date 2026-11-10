@@ -6,6 +6,7 @@ import { useSignIn } from '../../src/hooks/useSignIn'
 import { Page } from '../../src/components/Page'
 import { Field } from '../../src/components/Field'
 import { Button } from '../../src/components/Button'
+import { BrandLogo } from '../../src/components/BrandLogo'
 import { colors, fonts, radius, space } from '../../src/theme'
 import heroHome from '../../assets/hero-home.jpg'
 
@@ -17,7 +18,7 @@ export default function SignIn() {
   function openPolicy(path: string): void {
     if (config.apiUrl) void Linking.openURL(`${config.apiUrl}/${path}`).catch(() => setLinkError('Could not open this page. Please try again.'))
   }
-  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Page title="rentral." subtitle="Homes. Cars. Boats. One place.">
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Page title={<BrandLogo />} subtitle="Homes. Cars. Boats. One place.">
     <View style={styles.hero}><Image source={heroHome} alt="" style={styles.heroImage} resizeMode="cover" /><View style={styles.scrim} />
       <View style={styles.heroCopy}><Text style={styles.eyebrow}>MADE FOR YOUR NEXT MOVE</Text><Text style={styles.headline}>A place to stay.{'\n'}A way to go.</Text><View style={styles.location}><Ionicons name="location-outline" size={14} color={colors.text} /><Text style={styles.locationText}>Starting in Lagos</Text></View></View>
     </View>

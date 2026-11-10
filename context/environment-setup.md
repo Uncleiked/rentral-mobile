@@ -1,5 +1,9 @@
 # Rentral environment setup, step by step
 
+For the recording-time GPS lock, address match and new branding increment, follow
+the [recording location setup guide](recording-location-setup.md), including the
+additive capture database preparation and backend-only Geoapify key.
+
 Rentral uses an Expo Android/iOS app and a separate Next.js backend. Your saved
 MongoDB Atlas connection stays on the backend. Accounts use local JWT sessions;
 there is no personal KYC onboarding, Supabase setup or OPay integration.
@@ -251,15 +255,18 @@ is distinguished from inbox delivery; unknown acceptance is not blindly resent.
 
 ### Mux, document screening and addresses
 
+Follow the [Mux credentials and local webhook guide](mux-local-setup.md).
+Keep processing off until actual credentials are configured:
+
 ```dotenv
-MUX_ENABLED=true
-MUX_TOKEN_ID=YOUR_VIDEO_API_TOKEN_ID
-MUX_TOKEN_SECRET=YOUR_VIDEO_API_TOKEN_SECRET
-MUX_WEBHOOK_SECRET=YOUR_MUX_WEBHOOK_SECRET
-MUX_SIGNING_KEY_ID=YOUR_SIGNING_KEY_ID
-MUX_SIGNING_PRIVATE_KEY=YOUR_MUX_PRIVATE_KEY
-MEDIA_WORKER_ENABLED=true
-MEDIA_WORKER_SECRET=YOUR_SEPARATE_RANDOM_WORKER_SECRET
+MUX_ENABLED=false
+MUX_TOKEN_ID=
+MUX_TOKEN_SECRET=
+MUX_WEBHOOK_SECRET=
+MUX_SIGNING_KEY_ID=
+MUX_SIGNING_PRIVATE_KEY=
+MEDIA_WORKER_ENABLED=false
+MEDIA_WORKER_SECRET=
 GEMINI_API_KEY=
 GEMINI_DOCUMENT_MODEL=
 GEOAPIFY_API_KEY=
@@ -271,8 +278,11 @@ upload and reconciles provider state, so Mux need not fetch a LAN URL. See
 [media processing](media-processing.md).
 
 Gemini is optional advisory document screening: configure both a key and a current
-image/PDF plus JSON-capable bare model ID, without `models/`. Geoapify supplies
-address geocoding when configured. Neither AI nor GPS proves ownership. Publication
+image/PDF plus JSON-capable bare model ID, without `models/`. Geoapify is required
+for the recording-location address check before listing submission; configure the
+backend-only `GEOAPIFY_API_KEY` using the [step-by-step guide](recording-location-setup.md).
+Missing/unavailable/imprecise geocoding preserves drafts and blocks submission.
+Neither AI nor GPS proves ownership. Publication
 still requires independent human document review, a matching address, ready signed
 video, and a verified publication fee. Existing originals remain private.
 

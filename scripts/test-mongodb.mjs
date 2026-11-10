@@ -47,7 +47,8 @@ try {
   console.log('Running MongoDB constraints, privacy and concurrency checks against the owned fixture.')
   const backupOnly = process.argv.includes('--backup-only')
   const authOnly = process.argv.includes('--auth-only')
-  if (backupOnly && authOnly) throw new Error('Choose only one isolated suite.')
+  const coreOnly = process.argv.includes('--core-only')
+  if ([backupOnly, authOnly, coreOnly].filter(Boolean).length > 1) throw new Error('Choose only one isolated suite.')
   if (backupOnly || authOnly) docker(['exec', container, 'mongosh', shellUri, '--quiet', '--eval', `db.getSiblingDB('${database}').getCollection('_FixtureOwnership').insertOne({_id:'${owner}'})`])
   const test = spawnSync(process.execPath, [vitest, 'run', ...integrationTimeoutArgs, authOnly ? 'tests/auth-security.integration.test.ts' : backupOnly ? 'tests/backup.integration.test.ts' : 'tests/mongodb.integration.test.ts'], {
     stdio: 'inherit', windowsHide: true,
@@ -55,7 +56,7 @@ try {
   })
   process.exitCode = test.status ?? 1
   if (backupOnly && test.status === 0) backupPassed = true
-  if (test.status === 0 && !backupOnly && !authOnly) {
+  if (test.status === 0 && !backupOnly && !authOnly && !coreOnly) {
     const financial = spawnSync(process.execPath, [vitest, 'run', ...integrationTimeoutArgs, 'tests/financial-domain.integration.test.ts'], {
       stdio: 'inherit', windowsHide: true,
       env: { ...process.env, MONGODB_URL: uri, DATABASE_URL: uri, RENTRAL_TEST_MONGO_URI: uri, RENTRAL_TEST_MONGO_OWNER: owner, NODE_ENV: 'test' },

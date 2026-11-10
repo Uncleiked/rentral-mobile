@@ -1,5 +1,19 @@
 # Rentral completion review
 
+## Current capture/location/brand review — 2026-11-10
+
+The [increment review](capture-location-brand-review.md) records the latest
+approved recording-location lock, address admission, client recovery, branding,
+launch and favicon changes. Source and local verification are complete: final
+99-page build, 8 production browser journeys and 1,792 unit checks passed. The
+delivery revision is recorded in Git history; remote verification belongs to
+the final handback. Existing backend
+3000/Metro 8090 and read-only Atlas capture readiness passed runtime handback.
+The evidence below belongs to the earlier whole-app baseline delivered as
+`6f2af2f`; its pre-push handoff notes are historical.
+
+## Previously delivered whole-app review
+
 Reviewed 2026-11-10 against the [approved blueprint](remaining-work-blueprint.md),
 [current architecture](architecture.md), and [31-area matrix](completion-status.md).
 **Source implementation and local validation are complete, including native

@@ -1,12 +1,12 @@
 import { MongoClient } from 'mongodb'
 import { mongoDatabaseName, mongoUrl } from './config'
-import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION } from './metadata'
+import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION } from './metadata'
 import { MONGO_READINESS_MESSAGES, type MongoReadinessCode } from './readiness-errors'
 
 const READY_CACHE_MS = 5000
-type SetupMarker = { _id: string; schemaVersion: number; storageClaimsVersion?: number; financialVersion?: number; lifecycleVersion?: number; mutationVersion?: number; authSecurityVersion?: number; matchingVersion?: number; mediaUploadVersion?: number; commercialVersion?: number; messagingActivityVersion?: number; pushVersion?: number }
+type SetupMarker = { _id: string; schemaVersion: number; storageClaimsVersion?: number; financialVersion?: number; lifecycleVersion?: number; mutationVersion?: number; authSecurityVersion?: number; matchingVersion?: number; mediaUploadVersion?: number; commercialVersion?: number; messagingActivityVersion?: number; pushVersion?: number; captureVersion?: number }
 let native: { uri: string; client: MongoClient } | null = null
-let cached: { uri: string; until: number; storageClaimsReady: boolean; financialReady: boolean; lifecycleReady: boolean; mutationReady: boolean; authSecurityReady: boolean; matchingReady: boolean; mediaUploadReady: boolean; commercialReady: boolean; messagingActivityReady: boolean; pushReady: boolean } | null = null
+let cached: { uri: string; until: number; storageClaimsReady: boolean; financialReady: boolean; lifecycleReady: boolean; mutationReady: boolean; authSecurityReady: boolean; matchingReady: boolean; mediaUploadReady: boolean; commercialReady: boolean; messagingActivityReady: boolean; pushReady: boolean; captureReady: boolean } | null = null
 let pending: { uri: string; promise: Promise<void> } | null = null
 
 export class MongoReadinessError extends Error {
@@ -32,7 +32,7 @@ export async function assertMongoReady(): Promise<void> {
     const connection = native
     let marker: SetupMarker | null
     try {
-      marker = await connection.client.db(mongoDatabaseName(uri)).collection<SetupMarker>(MONGO_SETUP_COLLECTION).findOne({ _id: MONGO_SETUP_ID }, { projection: { schemaVersion: 1, storageClaimsVersion: 1, financialVersion: 1, lifecycleVersion: 1, mutationVersion: 1, authSecurityVersion: 1, matchingVersion: 1, mediaUploadVersion: 1, commercialVersion: 1, messagingActivityVersion: 1, pushVersion: 1 } })
+      marker = await connection.client.db(mongoDatabaseName(uri)).collection<SetupMarker>(MONGO_SETUP_COLLECTION).findOne({ _id: MONGO_SETUP_ID }, { projection: { schemaVersion: 1, storageClaimsVersion: 1, financialVersion: 1, lifecycleVersion: 1, mutationVersion: 1, authSecurityVersion: 1, matchingVersion: 1, mediaUploadVersion: 1, commercialVersion: 1, messagingActivityVersion: 1, pushVersion: 1, captureVersion: 1 } })
     } catch {
       // A failed initial driver connection retains a closed topology. Discard
       // that client so a later request can recover after connectivity returns.
@@ -48,7 +48,7 @@ export async function assertMongoReady(): Promise<void> {
       financialReady: marker.financialVersion === FINANCIAL_VERSION, lifecycleReady: marker.lifecycleVersion === LIFECYCLE_VERSION,
       mutationReady: marker.mutationVersion === MUTATION_VERSION, authSecurityReady: marker.authSecurityVersion === AUTH_SECURITY_VERSION,
       matchingReady: marker.matchingVersion === MATCHING_VERSION, mediaUploadReady: marker.mediaUploadVersion === MEDIA_UPLOAD_VERSION,
-      commercialReady: marker.commercialVersion === COMMERCIAL_VERSION, messagingActivityReady: marker.messagingActivityVersion === MESSAGING_ACTIVITY_VERSION, pushReady: marker.pushVersion === PUSH_VERSION }
+      commercialReady: marker.commercialVersion === COMMERCIAL_VERSION, messagingActivityReady: marker.messagingActivityVersion === MESSAGING_ACTIVITY_VERSION, pushReady: marker.pushVersion === PUSH_VERSION, captureReady: marker.captureVersion === CAPTURE_VERSION }
   })()
   pending = { uri, promise }
   try { await promise } finally { if (pending?.promise === promise) pending = null }
@@ -144,6 +144,25 @@ export async function pushPrepared(): Promise<boolean> {
 
 export async function assertPushReady(): Promise<void> {
   if (!await pushPrepared()) throw new MongoReadinessError('DATABASE_SETUP_REQUIRED')
+}
+
+export async function assertCaptureReady(): Promise<void> {
+  const uri = mongoUrl(process.env.MONGODB_URL ?? process.env.DATABASE_URL)
+  await assertMongoReady()
+  if (cached?.uri !== uri || !cached.captureReady) throw new MongoReadinessError('DATABASE_SETUP_REQUIRED')
+}
+
+export async function capturePrepared(): Promise<boolean> {
+  const uri = mongoUrl(process.env.MONGODB_URL ?? process.env.DATABASE_URL)
+  await assertMongoReady()
+  // Deletion takes the storage-object write lock before this check. Refresh a
+  // negative marker so a just-enabled capture seal cannot be hidden for the
+  // readiness cache window in another server process.
+  if (cached?.uri === uri && !cached.captureReady) {
+    cached.until = 0
+    await assertMongoReady()
+  }
+  return cached?.uri === uri && cached.captureReady
 }
 
 /** Used when shutting down an owned test fixture; it never changes database data. */

@@ -18,7 +18,7 @@ import {dismissNativeDeviceDraft,loadNativeDeviceDraft,nativeDraftDirectory,newN
 import {EMPTY_LISTING_FORM,formFromOwnerListing,listingFormError,nativeListingMetadata}from'../apps/mobile/src/lib/native-listing'
 import {ownerListingDetailSchema}from'../lib/contracts/listings'
 
-const actor='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222',serverId='33333333-3333-4333-8333-333333333333',clientId='44444444-4444-4444-8444-444444444444'
+const actor='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222',serverId='33333333-3333-4333-8333-333333333333',clientId='44444444-4444-4444-8444-444444444444',captureId='55555555-5555-4555-8555-555555555555'
 it('never discards an older uncertain listing nonce after a rejected retry, actor change or failed acknowledgment readback',()=>{
  const declined=new ApiError('Declined','INVALID_INPUT',400)
  expect(canClearDeclinedDraft(declined,false,false)).toBe(true)
@@ -27,7 +27,7 @@ it('never discards an older uncertain listing nonce after a rejected retry, acto
  for(const[code,status]of[['ACCOUNT_CHANGED',409],['INVALID_RETRY',409],['INVALID_RESPONSE',200],['NETWORK_ERROR',0],['UNAVAILABLE',503]]as const)expect(canClearDeclinedDraft(new ApiError('Unconfirmed',code,status),false,false)).toBe(false)
 })
 const form={...EMPTY_LISTING_FORM,address:'Fixture address in Yaba',basePrice:'500000',bedrooms:'2',bathrooms:'2',sizeSqm:'80',agencyFee:'123.45',rentalIntent:'shortlet' as const,propertyType:'apartment' as const,kitchens:'1',floors:'2'}
-const savedServer={id:serverId,revision:8,category:'house',status:'draft',address:form.address,basePrice:form.basePrice,metadata:nativeListingMetadata('house',form),wizardStep:'checkout',videoPath:`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/1_video.mp4`,posterPath:null,documentPath:`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/2_proof.pdf`,documentName:'proof.pdf',hasCoords:true,createdAt:'2030-01-01T10:00:00.000Z',updatedAt:'2030-01-01T10:00:00.000Z',archivedAt:null,actions:{edit:false,resume:true,archive:true,restore:false}}
+const savedServer={id:serverId,revision:8,category:'house',status:'draft',address:form.address,basePrice:form.basePrice,metadata:nativeListingMetadata('house',form),wizardStep:'checkout',videoPath:`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/1_video.mp4`,posterPath:null,documentPath:`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/2_proof.pdf`,documentName:'proof.pdf',hasCoords:true,captureId,createdAt:'2030-01-01T10:00:00.000Z',updatedAt:'2030-01-01T10:00:00.000Z',archivedAt:null,actions:{edit:false,resume:true,archive:true,restore:false}}
 beforeEach(()=>{
  vi.resetAllMocks();fixture.values.clear();fixture.size=200*1024*1024;fixture.exists=true
  fixture.get.mockImplementation(async key=>fixture.values.get(key)??null)
@@ -178,4 +178,39 @@ it('reports a definite upload rejection as an error without inventing success',a
  const prepared=prepareNativeListingUpload('file:///camera/recording.mp4','video',actor)
  fixture.fetch.mockResolvedValue(Response.json({success:false,error:'Container is not accepted.'},{status:415}))
  await expect(uploadPreparedNativeListingFile(prepared,actor)).rejects.toBeInstanceOf(ApiError)
+})
+it('preserves legacy pending coordinates and its exact nonce solely for readback after restart',async()=>{
+ const draft=newNativeDeviceDraft(actor)
+ const pending={mode:'submit' as const,listing:{clientId,category:'house' as const,address:form.address,basePrice:form.basePrice,metadata:nativeListingMetadata('house',form),videoPath:savedServer.videoPath,documentPath:savedServer.documentPath,lat:6.5,lng:3.4,accuracy:10}}
+ await saveNativeDeviceDraft({...draft,pending,sequence:1})
+ expect((await loadNativeDeviceDraft(actor))?.pending).toEqual(pending)
+ expect(fixture.fetch).not.toHaveBeenCalled()
+})
+it('retains a completed video and exact finish request across an uncertain finish acknowledgment',async()=>{
+ const draft=newNativeDeviceDraft(actor),uri=`${nativeDraftDirectory(actor,draft.localId).uri}/video.mp4`
+ const finishInput={reading:{latitude:6.5,longitude:3.4,accuracy:10,capturedAt:'2030-01-01T10:00:20.000Z'},durationSeconds:20}
+ const captureSession={id:captureId,phase:'finishing' as const,status:null,finishInput,sealPath:null}
+ await saveNativeDeviceDraft({...draft,capture:{uri,duration:20,captureId},captureSession,sequence:1})
+ const restored=await loadNativeDeviceDraft(actor)
+ expect(restored?.captureSession).toEqual(captureSession);expect(restored?.capture).toEqual({uri,duration:20,captureId})
+ expect(()=>buildNativeDraftCommand(restored!,'submit',clientId)).toThrow('Upload and confirm')
+ expect(fixture.fetch).not.toHaveBeenCalled()
+})
+it('retains legacy local footage without treating its editable coordinates as a backend capture',async()=>{
+ const draft=newNativeDeviceDraft(actor),uri=`${nativeDraftDirectory(actor,draft.localId).uri}/video.mp4`
+ const upload=prepareNativeListingUpload(uri,'video',actor)
+ const legacy={...draft,form,capture:{uri,lat:6.5,lng:3.4,accuracy:10,duration:20},videoUpload:{upload,state:'uploaded' as const}}
+ await saveNativeDeviceDraft({...legacy,sequence:1})
+ expect((await loadNativeDeviceDraft(actor))?.capture?.lat).toBe(6.5)
+ expect(()=>buildNativeDraftCommand(legacy,'draft',clientId)).toThrow('fresh walkthrough')
+})
+it('sends only a confirmed sealed capture id with the exact video, never editable coordinates',()=>{
+ const draft=newNativeDeviceDraft(actor),uri=`${nativeDraftDirectory(actor,draft.localId).uri}/video.mp4`
+ const upload=prepareNativeListingUpload(uri,'video',actor)
+ const status={id:captureId,status:'sealed' as const,startedAt:'2030-01-01T10:00:00.000Z',finishBy:'2030-01-01T10:03:00.000Z',finishedAt:'2030-01-01T10:00:20.000Z',sealBy:'2030-01-08T10:00:20.000Z',videoPath:upload.path,listingId:null}
+ const current={...draft,form,capture:{uri,duration:20,captureId},captureSession:{id:captureId,phase:'sealed' as const,status,finishInput:null,sealPath:upload.path},videoUpload:{upload,state:'uploaded' as const},server:{...newNativeDeviceDraft(actor,ownerListingDetailSchema.parse(savedServer)).server!,videoPath:null,captureId:null}}
+ const command=buildNativeDraftCommand(current,'submit',clientId)
+ expect(command.listing).toMatchObject({captureId,videoPath:upload.path})
+ expect(command.listing).not.toHaveProperty('lat');expect(command.listing).not.toHaveProperty('lng');expect(command.listing).not.toHaveProperty('accuracy')
+ expect(()=>buildNativeDraftCommand({...current,captureSession:{...current.captureSession,phase:'sealing'}},'submit',clientId)).toThrow('backend location binding')
 })

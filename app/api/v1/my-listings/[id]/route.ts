@@ -20,7 +20,7 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
     const input = editSchema.parse(await readApiJson(request))
     const result = input.operation === 'archive' ? await setListingArchivedForUser(identity.userId, id, input.archived)
       : await updateListingForUser(identity.userId, { ...input.listing, listingId: id })
-    if (!result.success) throw new ApiError(result.uncertain ? 503 : result.code ? 409 : 400, result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
+    if (!result.success) throw new ApiError(result.status ?? (result.uncertain ? 503 : result.code ? 409 : 400), result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
     return apiSuccess(await ownListingDetail(identity.userId, id))
   } catch (error) { return apiFailure(error, 'my-listings/detail') }
 }

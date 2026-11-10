@@ -85,6 +85,7 @@ model Listing {
   documentReview   DocumentReview?
   verification     ListingVerification?
   privateLocation  ListingLocation?
+  capture_id String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -700,6 +701,7 @@ model MarketEvent {
 
 model ListingVerification {
   listing_id String @id @map("_id")
+  capture_id String?
   address_hash String
   spatial_status String @default("pending")
   distance_meters Float?
@@ -766,8 +768,39 @@ model ListingLocation {
   listing_id String @unique
   listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   geometry Json
+  capture_id String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Private recording evidence. Start/end readings never appear in client DTOs.
+// Transitions seal the original readings; a replacement recording uses a new id.
+model ListingCapture {
+  id String @id @map("_id")
+  revision Int @default(0)
+  owner_id String
+  session_id String
+  begin_hash String
+  finish_hash String?
+  state String @default("recording")
+  start_geometry Json
+  start_accuracy Float
+  start_sample_at DateTime
+  started_at DateTime @default(now())
+  finish_by DateTime
+  end_geometry Json?
+  end_accuracy Float?
+  end_sample_at DateTime?
+  finished_at DateTime?
+  seal_by DateTime?
+  duration_seconds Float?
+  video_path String?
+  video_object_id String?
+  video_digest String?
+  listing_id String?
+  sealed_at DateTime?
+  @@index([owner_id, started_at])
+  @@index([listing_id])
 }
 
 model AuthSession {
@@ -813,6 +846,8 @@ model StorageObject {
   lease_expires_at DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // Only actual successful upload completion sets this. Legacy adoption does not.
+  upload_completed_at DateTime?
 
   @@unique([bucket, path])
   @@index([owner_id, state, createdAt])

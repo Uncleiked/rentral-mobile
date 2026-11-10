@@ -20,7 +20,7 @@ beforeEach(() => {
   mocks.lock.mockResolvedValue(true)
   mocks.transaction.mockImplementation(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx))
   vi.stubEnv('GEOAPIFY_API_KEY', 'test-only-not-a-real-key')
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ features: [{ geometry: { coordinates: [point.longitude, point.latitude] }, properties: { result_type: 'building', rank: { confidence: 0.95 } } }] })))
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ features: [{ geometry: { coordinates: [point.longitude, point.latitude] }, properties: { result_type: 'building', country_code: 'ng', rank: { confidence: 0.95 } } }] })))
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
@@ -87,6 +87,10 @@ describe('address matching and stale provider results', () => {
   })
   it('does not accept a foreign-country response despite the requested Nigeria filter', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [{ geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'building', country_code: 'gh', rank: { confidence: 1 } } }] }))
+    expect(await verifyListingAddress(listingId)).toBe('unavailable'); expect(mocks.upsert).not.toHaveBeenCalled()
+  })
+  it('does not accept a result that omits country proof', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ features: [{ geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'building', rank: { confidence: 1 } } }] }))
     expect(await verifyListingAddress(listingId)).toBe('unavailable'); expect(mocks.upsert).not.toHaveBeenCalled()
   })
 })

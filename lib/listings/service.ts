@@ -17,7 +17,9 @@ import { captureServerEvent } from '@/lib/posthog'
 import { muxConfigured, muxEnabled } from '@/lib/media/config'
 import { processListingMedia } from '@/lib/media/processing'
 import { platformEnabled } from '@/lib/platform'
-import { addressFingerprint } from '@/lib/listings/spatial'
+import { addressFingerprint, decodeGeographicPoint, distanceMetersWgs84, geocodeListingAddress, SPATIAL_TOLERANCE_METERS } from '@/lib/listings/spatial'
+import { bindCaptureToListing, readCaptureForSubmission } from '@/lib/listings/capture'
+import { ApiError } from '@/lib/api/http'
 import { lockRecord, withTransaction } from '@/lib/database/transactions'
 import { claimStorageObjects, prepareListingStorage } from '@/lib/storage-claims/service'
 import { StorageError } from '@/lib/local-storage/policy'
@@ -32,7 +34,7 @@ const METADATA_SCHEMAS = {
   boat: boatMetadataSchema,
 } as const
 
-type ActionFailure = { success: false; error: string; uncertain?: boolean; code?: 'INVALID_RETRY' | 'STALE_LISTING' | 'ACCOUNT_UNAVAILABLE' }
+type ActionFailure = { success: false; error: string; uncertain?: boolean; code?: string; status?: number }
 type SaveListingResult = { success: true; listingId: string } | ActionFailure
 type SaveDraftResult = { success: true; draftId: string } | ActionFailure
 type UpdateListingResult = { success: true } | ActionFailure
@@ -40,7 +42,6 @@ type UpdateListingResult = { success: true } | ActionFailure
 // Thrown inside a $transaction to abort with a specific user-facing message
 // while still rolling back — caught once, right below the transaction call.
 class DraftNotFoundError extends Error {}
-class MissingCoordinatesError extends Error {}
 class ListingRevisionError extends Error {}
 
 // Authenticated local-file adapters scope uploads to the actor's folder. This
@@ -52,15 +53,30 @@ function ownsPaths(userId: string, paths: (string | undefined | null)[]): boolea
     .every((path) => path.startsWith(ownedPrefix) && !path.includes('..'))
 }
 
-async function setListingCoordinates(
+async function setListingCapture(
   tx: Prisma.TransactionClient,
   listingId: string,
-  lng: number,
-  lat: number
+  capture: { id: string; start_geometry: Prisma.JsonValue }
 ) {
-  const geometry = { type: 'Point', coordinates: [lng, lat] }
   await tx.listingLocation.upsert({ where: { listing_id: listingId },
-    create: { id: listingId, listing_id: listingId, geometry }, update: { geometry } })
+    create: { id: listingId, listing_id: listingId, geometry: capture.start_geometry as Prisma.InputJsonValue, capture_id: capture.id },
+    update: { geometry: capture.start_geometry as Prisma.InputJsonValue, capture_id: capture.id } })
+}
+
+async function resolveCaptureAddress(userId: string, captureId: string, videoPath: string, address: string) {
+  const capture = await readCaptureForSubmission(userId, captureId, videoPath)
+  let resolved: Awaited<ReturnType<typeof geocodeListingAddress>>
+  try { resolved = await geocodeListingAddress(address) } catch { resolved = null }
+  const point = decodeGeographicPoint(capture.start_geometry)
+  if (!resolved || !point) throw new ApiError(503, 'ADDRESS_UNAVAILABLE', 'The address could not be verified precisely. Check the full building address or try again when address verification is available. Your draft can still be saved.')
+  const distance = distanceMetersWgs84(point, resolved)
+  if (distance > SPATIAL_TOLERANCE_METERS) throw new ApiError(409, 'ADDRESS_MISMATCH', 'The entered address does not match the location locked when this walkthrough was recorded. Correct the address or record a new take at the asset.')
+  return { capture, distance, hash: addressFingerprint(address) }
+}
+
+async function recordAddressMatch(tx: Prisma.TransactionClient, listingId: string, captureId: string, match: { distance: number; hash: string }) {
+  await tx.listingVerification.upsert({ where: { listing_id: listingId }, create: { listing_id: listingId, capture_id: captureId, address_hash: match.hash, spatial_status: 'matched', distance_meters: match.distance },
+    update: { capture_id: captureId, address_hash: match.hash, spatial_status: 'matched', distance_meters: match.distance, checked_at: new Date() } })
 }
 
 // These services receive the actor only from trusted cookie/bearer adapters.
@@ -77,7 +93,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
     const alreadySaved = await committedMutation(command)
     if (alreadySaved) return { success: true, listingId: alreadySaved }
     if (muxEnabled() && !muxConfigured()) return { success: false, error: 'Video processing is temporarily unavailable. Save your draft and try again later.' }
-    const { category, address, basePrice, draftId, lat, lng, accuracy, videoPath, posterPath, documentPath } =
+    const { category, address, basePrice, draftId, captureId, videoPath, posterPath, documentPath } =
       parsed.data
 
     const metadata = METADATA_SCHEMAS[category].safeParse(parsed.data.metadata)
@@ -89,17 +105,16 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       return { success: false, error: 'Uploaded files could not be verified. Please try again.' }
     }
 
-    // Coordinates come either from a fresh recording in this session, or from
-    // the draft row where an earlier session stored them (they never round-trip
-    // through the client — spatial privacy invariant). Stored coordinates are
-    // only trusted when video_path is UNCHANGED from what they were recorded
-    // against — otherwise a caller could swap in unrelated footage while
-    // riding an earlier take's GPS lock, defeating the spatial-integrity gate.
-    const hasFreshCoords = lat !== undefined && lng !== undefined
-    if (!hasFreshCoords && !draftId) {
-      return { success: false, error: 'Your walkthrough is missing its GPS lock. Go back and re-record it.' }
-    }
+    const observedDraft = draftId ? await prisma.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true, revision: true } }) : null
+    if (draftId && !observedDraft) throw new DraftNotFoundError()
+    if (observedDraft && parsed.data.expectedRevision !== undefined && observedDraft.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
+
+    // Only server-sealed recording evidence can supply this point. Geocoder I/O
+    // precedes the transaction; exact capture/video binding is checked again in it.
+    const addressMatch = await resolveCaptureAddress(userId, captureId, videoPath, address)
     const storedObjects = await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
+    const storedVideo = storedObjects.find(object => object.path === videoPath)
+    if (!storedVideo) throw new ApiError(409, 'CAPTURE_REQUIRED', 'Upload and seal the walkthrough before submitting it.')
 
     const listingData = {
       category,
@@ -109,6 +124,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       video_path: videoPath,
       poster_path: posterPath ?? null,
       document_path: documentPath,
+      capture_id: captureId,
       wizard_step: null,
     }
 
@@ -122,13 +138,10 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
         // Serialize draft publication with edits so ownership, status, footage
         // and its stored GPS are checked against the exact row being published.
         const owned = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true, revision: true } })
-        if (owned && parsed.data.expectedRevision !== undefined && owned.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
+        if (owned && owned.revision !== observedDraft?.revision) throw new ListingRevisionError()
         if (!owned || !await lockRecord(tx, 'listing', draftId)) throw new DraftNotFoundError()
-        const current = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { video_path: true, privateLocation: { select: { id: true } } } })
+        const current = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { video_path: true } })
         if (!current) throw new DraftNotFoundError()
-        if (!hasFreshCoords && (!current.privateLocation || current.video_path !== videoPath)) {
-          throw new MissingCoordinatesError()
-        }
       }
       await claimStorageObjects(tx, userId, storedObjects)
       const row = draftId
@@ -142,9 +155,10 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
             select: { id: true, lister: { select: { username: true } } },
           })
 
-      if (hasFreshCoords) {
-        await setListingCoordinates(tx, row.id, lng, lat)
-      }
+      const capture = await bindCaptureToListing(tx, userId, captureId, row.id, storedVideo)
+      if (capture.begin_hash !== addressMatch.capture.begin_hash || capture.video_digest !== addressMatch.capture.video_digest) throw new ListingRevisionError()
+      await setListingCapture(tx, row.id, capture)
+      await recordAddressMatch(tx, row.id, captureId, addressMatch)
 
       await tx.listing.update({
         where: { id: row.id },
@@ -167,7 +181,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
     after(() =>
       captureServerEvent(userId, 'listing_created', {
         category,
-        gps_accuracy_meters: accuracy,
+        gps_accuracy_meters: addressMatch.capture.start_accuracy,
         from_draft: Boolean(draftId),
       })
     )
@@ -181,6 +195,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
 
     return { success: true, listingId: listing.id }
   } catch (error) {
+    if (error instanceof ApiError) return { success: false, code: error.code, status: error.status, error: error.message }
     if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
     if (error instanceof MutationConflictError) return { success: false, code: 'INVALID_RETRY', error: error.message }
     if (error instanceof ListingRevisionError) return { success: false, code: 'STALE_LISTING', error: 'This listing changed on another screen. Reload it before saving your changes.' }
@@ -195,9 +210,6 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       return { success: true, listingId: committedListingId }
     }
     if (error instanceof DraftNotFoundError) return { success: false, error: 'Draft not found or already submitted.' }
-    if (error instanceof MissingCoordinatesError) {
-      return { success: false, error: 'Your walkthrough is missing its GPS lock. Go back and re-record it.' }
-    }
     if (error instanceof StorageError && error.status < 500) return { success: false, error: error.message }
     console.error('[listings] Submission failed:', error instanceof Error ? error.name : 'UnknownError')
     return { success: false, uncertain: true, error: 'The save could not be confirmed. Check Your Listings before submitting again.' }
@@ -215,12 +227,13 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
     command = mutationCommand(userId, 'listing_draft_save', parsed.data.clientId, parsed.data)
     const alreadySaved = await committedMutation(command)
     if (alreadySaved) return { success: true, draftId: alreadySaved }
-    const { draftId, category, wizardStep, address, basePrice, lat, lng, videoPath, posterPath, documentPath } =
+    const { draftId, category, wizardStep, address, basePrice, captureId, videoPath, posterPath, documentPath } =
       parsed.data
 
     if (!ownsPaths(userId, [videoPath, posterPath, documentPath])) {
       return { success: false, error: 'Uploaded files could not be verified. Please try again.' }
     }
+    if (captureId && !videoPath) throw new ApiError(400, 'CAPTURE_REQUIRED', 'Attach the uploaded walkthrough belonging to this recording before saving its lock.')
     const storedObjects = await prepareListingStorage(userId, { videoPath, posterPath, documentPath })
 
     // Whole-naira prices of at most ten digits are exact IEEE-754 integers.
@@ -235,9 +248,8 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
       video_path: videoPath ?? null,
       poster_path: posterPath ?? null,
       document_path: documentPath ?? null,
+      capture_id: captureId ?? null,
     }
-
-    const hasFreshCoords = lat !== undefined && lng !== undefined
 
     const row = await withTransaction(async (tx) => {
       await assertActiveAccounts(tx, [userId])
@@ -276,8 +288,11 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
       }
 
       if (!id) throw new DraftNotFoundError()
-      if (hasFreshCoords && videoPath) {
-        await setListingCoordinates(tx, id, lng, lat)
+      if (captureId && videoPath) {
+        const video = storedObjects.find(object => object.path === videoPath)
+        if (!video) throw new ApiError(409, 'CAPTURE_REQUIRED', 'Upload and seal the walkthrough before saving it.')
+        const capture = await bindCaptureToListing(tx, userId, captureId, id, video)
+        await setListingCapture(tx, id, capture)
       } else if (videoChanged) {
         // The video changed with no fresh GPS fix in this call — clear any
         // coordinates inherited from the previous take so a later saveListing
@@ -297,6 +312,7 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
 
     return { success: true, draftId: row.id }
   } catch (error) {
+    if (error instanceof ApiError) return { success: false, code: error.code, status: error.status, error: error.message }
     if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
     if (error instanceof MutationConflictError) return { success: false, code: 'INVALID_RETRY', error: error.message }
     if (error instanceof ListingRevisionError) return { success: false, code: 'STALE_LISTING', error: 'This draft changed on another screen. Reload it before saving your changes.' }
@@ -364,7 +380,7 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
 
     const row = await prisma.listing.findFirst({
       where: { id: listingId, lister_id: userId },
-      select: { id: true, category: true, listing_status: true, archived_at: true, lister: { select: { username: true } } },
+      select: { id: true, revision: true, category: true, listing_status: true, archived_at: true, text_address: true, capture_id: true, video_path: true, lister: { select: { username: true } } },
     })
     if (!row) {
       return { success: false, error: 'Listing not found.' }
@@ -373,26 +389,30 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
     if (row.listing_status === LISTING_STATUS.DRAFT) {
       return { success: false, error: 'Drafts are edited from the listing wizard.' }
     }
+    if (parsed.data.expectedRevision !== undefined && row.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
 
     const categorySchema = METADATA_SCHEMAS[row.category as keyof typeof METADATA_SCHEMAS]
     const metadata = categorySchema?.safeParse(parsed.data.metadata)
     if (!metadata?.success) {
       return { success: false, error: 'Asset details are incomplete. Check each field.' }
     }
+    const addressMatch = addressFingerprint(row.text_address ?? '') !== addressFingerprint(address)
+      ? await resolveCaptureAddress(userId, row.capture_id ?? '', row.video_path ?? '', address) : null
 
     // Category, video, GPS, and documents are padlocked (Item 11) — only the
     // describable attributes are editable.
     await withTransaction(async tx => {
       await assertActiveAccounts(tx, [userId])
-      if (parsed.data.expectedRevision !== undefined) {
+      if (parsed.data.expectedRevision !== undefined || addressMatch) {
         const version = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId }, select: { revision: true } })
-        if (!version || version.revision !== parsed.data.expectedRevision) throw new ListingRevisionError()
+        if (!version || version.revision !== row.revision) throw new ListingRevisionError()
       }
       if (!await lockRecord(tx, 'listing', row.id)) throw new Error('Listing is no longer editable.')
       const current = await tx.listing.findFirst({ where: { id: row.id, lister_id: userId, listing_status: { not: LISTING_STATUS.DRAFT } },
-        select: { text_address: true, archived_at: true } })
+        select: { text_address: true, archived_at: true, capture_id: true, video_path: true } })
       if (!current || current.archived_at) throw new Error('Listing is no longer editable.')
       const addressChanged = addressFingerprint(current.text_address ?? '') !== addressFingerprint(address)
+      if (addressChanged && (!addressMatch || current.capture_id !== addressMatch.capture.id || current.video_path !== addressMatch.capture.video_path)) throw new ListingRevisionError()
       if (addressChanged && platformEnabled()) {
         const reservations = await tx.booking.count({ where: { listing_id: row.id, status: { in: ['confirmed', 'completed', 'disputed'] } } })
         if (reservations) throw new Error('Address changes are unavailable after a confirmed booking.')
@@ -406,6 +426,7 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
           ...(addressChanged ? { listing_status: LISTING_STATUS.PENDING_VERIFICATION } : {}),
         },
       })
+      if (addressChanged && addressMatch) await recordAddressMatch(tx, row.id, addressMatch.capture.id, addressMatch)
     })
 
     committed = true
@@ -419,6 +440,7 @@ export async function updateListingForUser(userId: string, input: unknown): Prom
     return { success: true }
   } catch (error) {
     if (committed) return { success: true }
+    if (error instanceof ApiError) return { success: false, code: error.code, status: error.status, error: error.message }
     if (error instanceof AccountUnavailableError) return { success: false, code: 'ACCOUNT_UNAVAILABLE', error: error.message }
     if (error instanceof ListingRevisionError) return { success: false, code: 'STALE_LISTING', error: 'This listing changed on another screen. Reload it before saving your changes.' }
     console.error('[listings] Update failed:', error instanceof Error ? error.name : 'UnknownError')

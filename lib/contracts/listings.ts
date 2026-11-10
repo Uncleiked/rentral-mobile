@@ -72,7 +72,7 @@ export const boatMetadataSchema = z.object({
 })
 
 export const listingDetailsSchema = z.object({
-  address: z.string().min(5, "Address is required"),
+  address: z.string().trim().min(5, "Address is required").max(300),
   basePrice: basePriceField,
 })
 
@@ -81,21 +81,19 @@ const listingCategoryField = z.enum(LISTING_CATEGORIES)
 // Full payload for the saveListing server action (Item 06). Extends
 // listingDetailsSchema (address + basePrice) so the field rules can't drift
 // from the wizard form. `metadata` stays unknown here — the action re-parses
-// it against the category schema above. Coordinates are optional only when
-// posting a draft whose coordinates were already stored server-side.
+// it against the category schema above. Only a sealed recording identifier can
+// supply location evidence; fresh mutable coordinates are never accepted here.
 export const saveListingInputSchema = listingDetailsSchema.extend({
   clientId: z.string().uuid().optional(),
   expectedRevision: z.number().int().nonnegative().optional(),
   category: listingCategoryField,
   draftId: z.string().uuid().optional(),
-  lat: z.number().gte(-90).lte(90).optional(),
-  lng: z.number().gte(-180).lte(180).optional(),
-  accuracy: z.number().nonnegative().optional(),
+  captureId: z.string().uuid(),
   videoPath: z.string().min(1),
   posterPath: z.string().min(1).optional(),
   documentPath: z.string().min(1),
   metadata: z.unknown(),
-})
+}).strict()
 
 // Draft saves accept partial everything except the category — required fields
 // are only enforced when the draft is finally posted.
@@ -108,12 +106,11 @@ export const saveDraftInputSchema = z.object({
   address: z.string().max(300).optional(),
   basePrice: z.string().max(20).optional(),
   metadata: z.unknown(),
-  lat: z.number().gte(-90).lte(90).optional(),
-  lng: z.number().gte(-180).lte(180).optional(),
+  captureId: z.string().uuid().optional(),
   videoPath: z.string().min(1).optional(),
   posterPath: z.string().min(1).optional(),
   documentPath: z.string().min(1).optional(),
-})
+}).strict()
 
 // Editing a posted listing: metadata/address/price only — category, video,
 // GPS, and documents are the trust anchors and stay padlocked (Item 11).
@@ -141,7 +138,7 @@ export const ownerVaultPageSchema = z.object({ items: z.array(ownerVaultItemSche
 export const ownerListingDetailSchema = z.object({ id: z.string().uuid(), revision: z.number().int().nonnegative(), category: z.enum(LISTING_CATEGORIES), status: z.string().min(1).max(80),
   address: z.string().max(300), basePrice: z.string().max(20), metadata: z.record(z.string().max(80), z.union([z.string().max(1500), z.boolean(), z.number().finite(), z.null()])),
   wizardStep: z.enum(DRAFT_WIZARD_STEPS).nullable(), videoPath: z.string().max(500).nullable(), posterPath: z.string().max(500).nullable(), documentPath: z.string().max(500).nullable(), documentName: z.string().max(300).nullable(),
-  hasCoords: z.boolean(), createdAt: listingTimestamp, updatedAt: listingTimestamp, archivedAt: listingTimestamp.nullable().optional().default(null),
+  hasCoords: z.boolean(), captureId: z.string().uuid().nullable().optional().default(null), createdAt: listingTimestamp, updatedAt: listingTimestamp, archivedAt: listingTimestamp.nullable().optional().default(null),
   actions: z.object({ edit: z.boolean(), resume: z.boolean(), archive: z.boolean(), restore: z.boolean() }).strict(),
 }).strict()
 export const listingMutationResultSchema = z.object({ id: z.string().uuid(), status: z.string().min(1).max(80) }).strict()

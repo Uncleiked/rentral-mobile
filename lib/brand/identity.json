@@ -1,0 +1,12 @@
+{
+  "mark": {
+    "viewBox": "0 0 64 64",
+    "path": "M16 52V29C16 17.4 23.8 10 35 10H49V23H36C31.4 23 29 25.8 29 30V52H16Z"
+  },
+  "colors": {
+    "background": "rgb(10, 10, 10)",
+    "backgroundHex": "#0a0a0a",
+    "ink": "rgb(255, 255, 255)",
+    "accent": "rgb(16, 185, 129)"
+  }
+}

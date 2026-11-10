@@ -25,11 +25,14 @@ export async function getDraftForOwner(draftId: string): Promise<DraftPayload | 
   if (!userId) return null
 
   const row = await prisma.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: {
-    id: true, category: true, text_address: true, base_rent_amount: true, asset_metadata: true,
+    id: true, revision: true, capture_id: true, category: true, text_address: true, base_rent_amount: true, asset_metadata: true,
     wizard_step: true, video_path: true, poster_path: true, document_path: true,
-    privateLocation: { select: { id: true } },
+    privateLocation: { select: { id: true, capture_id: true } },
   } })
   if (!row || !LISTING_CATEGORIES.includes(row.category as ListingCategory)) return null
+  const capture = row.capture_id && row.privateLocation?.capture_id === row.capture_id ? await prisma.listingCapture.findFirst({
+    where: { id: row.capture_id, owner_id: userId, state: 'sealed', listing_id: row.id, video_path: row.video_path }, select: { id: true },
+  }) : null
 
   const wizardStep = (DRAFT_WIZARD_STEPS as readonly string[]).includes(row.wizard_step ?? '')
     ? (row.wizard_step as DraftPayload['wizardStep'])
@@ -37,6 +40,8 @@ export async function getDraftForOwner(draftId: string): Promise<DraftPayload | 
 
   return {
     id: row.id,
+    revision: row.revision,
+    captureId: capture?.id ?? null,
     category: row.category as ListingCategory,
     address: row.text_address ?? '',
     basePrice: row.base_rent_amount ? String(Number(row.base_rent_amount)) : '',
@@ -46,7 +51,7 @@ export async function getDraftForOwner(draftId: string): Promise<DraftPayload | 
     posterPath: row.poster_path,
     documentPath: row.document_path,
     documentName: originalNameFromPath(row.document_path),
-    hasCoords: Boolean(row.privateLocation),
+    hasCoords: Boolean(capture),
   }
 }
 

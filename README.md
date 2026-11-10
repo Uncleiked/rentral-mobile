@@ -4,6 +4,12 @@ Expo Android/iOS app with a local Next.js backend, MongoDB, JWT email/password
 accounts and private filesystem storage. Members enter Explore directly after
 sign-in; personal KYC onboarding and mandatory profile completion are removed.
 
+Recording-location matching now uses a server-acknowledged GPS capture, immutable
+video upload/digest binding and a required Geoapify address check before submission.
+The minimalist Rentral identity includes generated icon assets and an accessible
+native launch reveal. Follow [location setup](context/recording-location-setup.md)
+and [Mux credential/local webhook setup](context/mux-local-setup.md).
+
 Source and local validation are complete, including native owner publication-fee
 checkout, status and reconciliation with durable recovery. See
 [current status](context/completion-status.md) for verified results and the

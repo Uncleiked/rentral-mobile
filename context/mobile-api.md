@@ -8,6 +8,30 @@ Current aggregate, export, browser and real HTTP evidence is recorded separately
 from actual-provider/device acceptance.
 See [current status](completion-status.md) and [Paystack](paystack-integration.md).
 
+## Recording location and address admission (2026-11-10)
+
+`lib/contracts/capture.ts` defines these owner-scoped private/no-store routes:
+
+| Method and path | Purpose |
+| --- | --- |
+| `POST /api/v1/captures` | `{id, reading}` starts a server-persisted GPS lock before recording; reading contains latitude/longitude/accuracy/capturedAt and optional mocked signal |
+| `GET /api/v1/captures/:id` | Read state without returning GPS; recover an unconfirmed acknowledgment |
+| `POST /api/v1/captures/:id/finish` | `{reading, durationSeconds}` checks fresh end evidence and bounded recording timing |
+| `POST /api/v1/captures/:id/seal` | `{videoPath}` binds the recorded capture to the actual validated owned object/digest |
+| `POST /api/v1/captures/:id/check-address` | `{address}` returns exact capture ID/address hash plus matched/mismatch/unavailable; no precise GPS |
+| `GET /api/v1/my-listings/requests/:clientId?mode=draft\|submit` | Read original owner mutation receipt only; supports legacy uncertain commands without replaying old coordinate payloads |
+
+Start/finish/seal require the same current AuthSession. Captures expose
+recording/recorded/sealed/expired status and bounded timing metadata, not location
+samples or signing credentials. Recorded/sealed captures support address preflight.
+New draft/submit payloads accept `captureId` and reject free-form coordinate
+overrides. Submit requires a sealed capture and a precise Nigerian building/amenity
+geocode within100metres, independently of preflight UI state. It atomically binds
+the exact video/capture/current address verification. Retakes use a new capture;
+old recordings are not retroactively attested. Provider failure preserves drafts.
+Posted address changes repeat this rule; staff publication checks the exact current
+capture/location/video/verification identities. See [setup](recording-location-setup.md).
+
 ## Authentication, transport and recovery
 
 Native uses `Authorization: Bearer <access JWT>`; web can use HttpOnly

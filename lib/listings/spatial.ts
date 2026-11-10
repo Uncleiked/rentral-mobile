@@ -22,7 +22,7 @@ export function distanceMetersWgs84(from: GeographicPoint, to: GeographicPoint):
   return 2 * EARTH_MEAN_RADIUS_METERS * Math.asin(Math.sqrt(Math.min(1, Math.max(0, halfChord))))
 }
 
-function decodePoint(value: unknown): GeographicPoint | null {
+export function decodeGeographicPoint(value: unknown): GeographicPoint | null {
   const parsed = storedPoint.safeParse(value)
   return parsed.success ? { longitude: parsed.data.coordinates[0], latitude: parsed.data.coordinates[1] } : null
 }
@@ -31,7 +31,7 @@ export async function listingProximity(tx: Prisma.TransactionClient, listingId: 
   const caller = geographicPoint.safeParse({ longitude, latitude })
   if (!caller.success || !Number.isFinite(maxMeters) || maxMeters < 0) return false
   const location = await tx.listingLocation.findUnique({ where: { listing_id: listingId }, select: { geometry: true } })
-  const recorded = decodePoint(location?.geometry)
+  const recorded = decodeGeographicPoint(location?.geometry)
   return recorded !== null && distanceMetersWgs84(recorded, caller.data) <= maxMeters
 }
 export function addressFingerprint(address: string): string {
@@ -47,10 +47,36 @@ export async function verifyListingAddress(listingId: string): Promise<'matched'
   const listing = await prisma.listing.findUniqueOrThrow({ where: { id: listingId }, select: { text_address: true } })
   if (!listing.text_address) return 'unavailable'
   const hash = addressFingerprint(listing.text_address)
-  const key = process.env.GEOAPIFY_API_KEY
-  if (!key) return 'unavailable'
+  const resolved = await geocodeListingAddress(listing.text_address)
+  if (!resolved) return 'unavailable'
+  const { longitude, latitude } = resolved
+  return withTransaction(async tx => {
+    if (!await lockRecord(tx, 'listing', listingId)) return 'unavailable'
+    const current = await tx.listing.findUnique({ where: { id: listingId }, select: { text_address: true, capture_id: true, video_path: true, lister_id: true } })
+    // A delayed geocoder response cannot approve an address edited meanwhile.
+    if (!current?.text_address || addressFingerprint(current.text_address) !== hash) return 'unavailable'
+    const location = await tx.listingLocation.findUnique({ where: { listing_id: listingId }, select: { geometry: true, capture_id: true } })
+    const recorded = decodeGeographicPoint(location?.geometry)
+    if (current.capture_id) {
+      const capture = await tx.listingCapture.findFirst({ where: { id: current.capture_id, owner_id: current.lister_id, state: 'sealed', listing_id: listingId, video_path: current.video_path } })
+      const sealedPoint = decodeGeographicPoint(capture?.start_geometry)
+      if (!capture || location?.capture_id !== capture.id || !recorded || !sealedPoint || distanceMetersWgs84(recorded, sealedPoint) > 0.001) return 'unavailable'
+    }
+    const distance = recorded ? distanceMetersWgs84(recorded, { longitude, latitude }) : null
+    const status = distance === null ? 'unavailable' : distance <= SPATIAL_TOLERANCE_METERS ? 'matched' : 'mismatch'
+    await tx.listingVerification.upsert({ where: { listing_id: listingId },
+      create: { listing_id: listingId, capture_id: current.capture_id ?? null, address_hash: hash, spatial_status: status, distance_meters: distance },
+      update: { capture_id: current.capture_id ?? null, address_hash: hash, spatial_status: status, distance_meters: distance, checked_at: new Date() } })
+    return status
+  })
+}
+
+/** Geocode typed text only; precise recording GPS never goes to the provider. */
+export async function geocodeListingAddress(address: string): Promise<GeographicPoint | null> {
+  const key = process.env.GEOAPIFY_API_KEY?.trim()
+  if (!key) return null
   const url = new URL('https://api.geoapify.com/v1/geocode/search')
-  url.searchParams.set('text', listing.text_address)
+  url.searchParams.set('text', address)
   url.searchParams.set('filter', 'countrycode:ng')
   url.searchParams.set('limit', '1')
   url.searchParams.set('apiKey', key)
@@ -58,20 +84,7 @@ export async function verifyListingAddress(listingId: string): Promise<'matched'
   try { result = geocodeResponse.parse(await fetchBoundedProviderJson(url, { headers: { Accept: 'application/json' } }, { maximumBytes: 64 * 1024, timeoutMs: 10000 })).features[0] }
   catch { throw new Error('GEOCODER_UNAVAILABLE') }
   // A city/district centroid cannot verify an individual asset address.
-  if (!result || (result.properties.country_code && result.properties.country_code.toLowerCase() !== 'ng') || result.properties.rank.confidence < 0.8 || !['building', 'amenity'].includes(result.properties.result_type)) return 'unavailable'
+  if (!result || result.properties.country_code?.toLowerCase() !== 'ng' || result.properties.rank.confidence < 0.8 || !['building', 'amenity'].includes(result.properties.result_type)) return null
   const [longitude, latitude] = result.geometry.coordinates
-  return withTransaction(async tx => {
-    if (!await lockRecord(tx, 'listing', listingId)) return 'unavailable'
-    const current = await tx.listing.findUnique({ where: { id: listingId }, select: { text_address: true } })
-    // A delayed geocoder response cannot approve an address edited meanwhile.
-    if (!current?.text_address || addressFingerprint(current.text_address) !== hash) return 'unavailable'
-    const location = await tx.listingLocation.findUnique({ where: { listing_id: listingId }, select: { geometry: true } })
-    const recorded = decodePoint(location?.geometry)
-    const distance = recorded ? distanceMetersWgs84(recorded, { longitude, latitude }) : null
-    const status = distance === null ? 'unavailable' : distance <= SPATIAL_TOLERANCE_METERS ? 'matched' : 'mismatch'
-    await tx.listingVerification.upsert({ where: { listing_id: listingId },
-      create: { listing_id: listingId, address_hash: hash, spatial_status: status, distance_meters: distance },
-      update: { address_hash: hash, spatial_status: status, distance_meters: distance, checked_at: new Date() } })
-    return status
-  })
+  return { longitude, latitude }
 }

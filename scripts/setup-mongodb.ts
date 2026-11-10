@@ -7,7 +7,9 @@ config({ path: '.env.local', quiet: true })
 config({ quiet: true })
 const allowRemote = process.argv.includes('--allow-remote')
 const uri = (allowRemote ? mongoUrl : localMongoUrl)(process.env.MONGODB_URL ?? process.env.DATABASE_URL)
-const client = new MongoClient(uri, { serverSelectionTimeoutMS: 3000, connectTimeoutMS: 3000 })
+// Match runtime's bounded cold Atlas discovery allowance; observed DNS/TLS
+// startup on this development network can exceed three seconds.
+const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 })
 try {
   await client.connect()
   const hello = await client.db('admin').command({ hello: 1 })

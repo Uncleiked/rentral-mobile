@@ -1,6 +1,42 @@
 # Rentral current completion matrix
 
-Updated 2026-11-10. This matrix maps all 31 historical tracker areas to the
+## Current capture/location/brand increment — 2026-11-10
+
+The [approved increment](capture-location-brand-blueprint.md) is implemented and
+locally verified: private server recording locks, exact uploaded-video binding,
+and Geoapify admission within **100 metres** for owner submission and staff
+publication. Native/web capture, address checking and uncertain-command recovery,
+shared minimal branding, bounded accessible launch motion and the RGBA favicon
+repair are complete. Old drafts/history remain preserved. See the
+[increment review](capture-location-brand-review.md) and [progress](progress-tracker.md).
+
+Current results: **1,792 unit checks passed**, global lint passed, final owned
+Mongo core **55 passed** plus separate financial/auth/backup **40 passed**,
+Android/iOS exports passed, native capture preview **8 checks / 21 intercepted API
+calls / 0 errors or outbound requests**, dependency audit **0 vulnerabilities**.
+The final build generated **99 static pages**; all **8 production browser journeys
+passed in 30.7s**, plus **8 HTTP fixture checks**, after fixing the real 320px
+stepper overflow without weakening its assertion. Atlas additive setup verified
+**52 application collections / 156 indexes**, preserving **52 existing collections
+and 4 non-marker documents** unchanged. These supersede corresponding baseline
+counts below; separate fixture runs are not one new aggregate execution.
+
+The delivery revision is recorded in Git history; remote verification belongs
+to the final handback. The source/public secret scan found zero matches across
+1,140 files against 8 actual private values.
+Runtime handback passed: existing backend 3000, Metro 8090 and read-only Atlas
+capture readiness were verified, preserving the user's working server.
+Physical-device and real-provider acceptance is separate. The
+[location guide](recording-location-setup.md) explains keys, GPS limits and
+recovery. The [Windows Mux guide](mux-local-setup.md) covers the CLI platform
+limitation and remaining webhook secret. A full Vercel launch still needs object
+storage and deliberate worker/webhook hosting.
+
+## Whole-app baseline — delivered as `6f2af2f`
+
+The following evidence records the previous whole-app delivery. Its original
+pre-push handoff wording is historical; current increment results are above.
+This matrix maps all 31 historical tracker areas to the
 user-approved [completion blueprint](remaining-work-blueprint.md). It records
 implemented source and known acceptance separately. **Source implementation and
 local validation are complete, including native publication-fee overview,

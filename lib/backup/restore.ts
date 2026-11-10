@@ -72,6 +72,14 @@ async function verifyStorageClaims(db: Db, storage: string): Promise<number> {
       await verifyFile('listings-media', asset.source_path, listing.lister_id)
     }
   } finally { await media.close() }
+  const captures = db.collection('ListingCapture').find({ state: 'sealed' }, { batchSize: 50 })
+  try {
+    for await (const capture of captures) {
+      if (typeof capture.video_path !== 'string' || typeof capture.video_digest !== 'string') throw new BackupError('CAPTURE_VIDEO_UNAVAILABLE')
+      const info = await verifyFile('listings-media', capture.video_path, capture.owner_id)
+      if (info.digest !== capture.video_digest) throw new BackupError('CAPTURE_VIDEO_DIGEST_MISMATCH')
+    }
+  } finally { await captures.close() }
   return count
 }
 

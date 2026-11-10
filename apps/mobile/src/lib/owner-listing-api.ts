@@ -2,14 +2,21 @@ import { z } from 'zod'
 import { listingMutationResultSchema, ownerDocumentSchema, ownerListingDetailSchema, saveDraftInputSchema, saveListingInputSchema, updateListingInputSchema, uploadedObjectInfoSchema } from '../../../../lib/contracts/listings'
 import { api, ApiError } from './api'
 import { memberResponse } from './member-api'
+import { isLegacyDraftCommand } from './native-draft-workflow'
+import type { NativeDraftCommand } from './native-draft-store'
 
 export type OwnerSaveCommand = { mode: 'draft'; listing: z.infer<typeof saveDraftInputSchema> } | { mode: 'submit'; listing: z.infer<typeof saveListingInputSchema> }
-export async function saveOwnerListing(input: OwnerSaveCommand, actorId: string) {
+export async function saveOwnerListing(input: NativeDraftCommand, actorId: string) {
+  if (isLegacyDraftCommand(input)) throw new Error('This saved request uses the earlier recording format. Check its saved result in My listings; it cannot be replayed as a new listing.')
   const command = input.mode === 'draft' ? { mode: input.mode, listing: saveDraftInputSchema.strict().parse(input.listing) } : { mode: input.mode, listing: saveListingInputSchema.strict().parse(input.listing) }
   if (!command.listing.clientId) throw new Error('Save this request identifier before sending your listing.')
   const result = memberResponse(listingMutationResultSchema, await api<unknown>('/my-listings', { method: 'POST', body: command, expectedUserId: actorId }))
   if (command.listing.draftId && result.id !== command.listing.draftId) throw new ApiError('This listing save could not be confirmed. Keep the original request and check My listings.', 'INVALID_RESPONSE', 200)
   return result
+}
+export async function readOwnerListingRequest(clientId: string, mode: 'draft' | 'submit', actorId: string) {
+  z.string().uuid().parse(clientId)
+  return memberResponse(listingMutationResultSchema, await api<unknown>(`/my-listings/requests/${clientId}?mode=${mode}`, { expectedUserId: actorId }))
 }
 export async function editOwnerListing(id: string, input: z.infer<typeof updateListingInputSchema>, actorId: string) {
   const { listingId, ...listing } = updateListingInputSchema.strict().parse(input)

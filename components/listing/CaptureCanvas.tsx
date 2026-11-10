@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { RotateCcw, Video, VideoOff } from 'lucide-react'
 import { listingMediaUrl, VIDEO_MIME_CANDIDATES } from '@/lib/storage'
-import { useRentralStore } from '@/store/useRentralStore'
+import { isWizardCurrent, useRentralStore } from '@/store/useRentralStore'
+import { captureStatusSchema } from '@/lib/contracts/capture'
+import { browserCaptureReading, browserPosition, CaptureRequestError, listingRequest } from '@/lib/listings/capture-client'
 
 const WALKTHROUGH_SECONDS = 120
 
@@ -13,17 +15,18 @@ const GPS_REQUIRED_COPY =
 // Browsers block camera AND geolocation on non-HTTPS origins (localhost is the
 // only exception) — the most common dev trap is opening the LAN IP over http.
 const INSECURE_CONTEXT_COPY =
-  "Your connection isn't secure, so the browser blocks the camera and GPS. On this computer open http://localhost:3000 — on a phone run `pnpm dev:https` and open the https:// address it prints."
+  "Camera and GPS require a secure connection. On this computer open http://localhost:3000. On your phone use the Rentral Android or iOS app."
 
 const GPS_ERROR_COPY: Record<number, string> = {
   1: 'Location permission was denied. Allow location for this site (padlock icon → Site settings), then retry.', // PERMISSION_DENIED
   2: "Your device couldn't determine its position. Turn on Location Services (Mac: System Settings → Privacy & Security → Location Services), then retry.", // POSITION_UNAVAILABLE
-  3: "Couldn't get a GPS fix in time — retry and we'll use a faster, lower-accuracy mode.", // TIMEOUT
+  3: 'A precise GPS fix is taking too long. Try outdoors with precise location enabled.', // TIMEOUT
 }
 
 // window.isSecureContext never changes for a loaded page; the SSR snapshot
 // assumes secure so the server renders the normal UI and the client corrects it.
 const subscribeToNothing = () => () => {}
+function pageIsHidden(): boolean { return document.visibilityState === 'hidden' }
 function useIsSecureContext(): boolean {
   return useSyncExternalStore(
     subscribeToNothing,
@@ -32,12 +35,24 @@ function useIsSecureContext(): boolean {
   )
 }
 
-export function CaptureCanvas() {
+export function CaptureCanvas({ actorId }: { actorId: string }) {
+  const generation = useRentralStore(state => state.generation)
+  return <CaptureSession key={`${actorId}:${generation}`} actorId={actorId} generation={generation} />
+}
+
+function CaptureSession({ actorId, generation }: { actorId: string; generation: number }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const alive = useRef(true)
+  const busy = useRef(false)
+  const interrupted = useRef(false)
+  const [needsRetake, setNeedsRetake] = useState(() => {
+    const store = useRentralStore.getState()
+    return store.capture.hasStarted && !store.capture.isComplete && !store.capturePending
+  })
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState(false)
   const [gpsError, setGpsError] = useState<string | null>(null)
@@ -50,26 +65,35 @@ export function CaptureCanvas() {
   const remoteVideoPath = useRentralStore((state) => state.remoteVideoPath)
   const draftListingId = useRentralStore((state) => state.draftListingId)
   const hasRemoteCoords = useRentralStore((state) => state.hasRemoteCoords)
+  const captureId = useRentralStore((state) => state.captureId)
+  const capturePending = useRentralStore((state) => state.capturePending)
+  const unconfirmed = capturePending !== null
   const updateCapture = useRentralStore((state) => state.updateCapture)
   const setRecordedVideo = useRentralStore((state) => state.setRecordedVideo)
   const setCoords = useRentralStore((state) => state.setCoords)
   const resetCapture = useRentralStore((state) => state.resetCapture)
   const goNext = useRentralStore((state) => state.goNext)
   const goBack = useRentralStore((state) => state.goBack)
+  const isCurrent = useCallback(() => alive.current && isWizardCurrent(actorId, generation), [actorId, generation])
+  const pendingMatches = (id: string, phase: 'begin' | 'finish') => {
+    const saved = useRentralStore.getState().capturePending
+    return isCurrent() && saved?.id === id && saved.phase === phase
+  }
 
   // Track browser-level geolocation permission so a hard "denied" is shown
   // proactively (the browser will never re-prompt on its own) and clears
   // itself the moment the user unblocks the site.
   useEffect(() => {
+    alive.current = true
     let status: PermissionStatus | null = null
     let cancelled = false
     const onChange = () => {
-      if (!cancelled && status) setGpsPermission(status.state)
+      if (!cancelled && isCurrent() && status) setGpsPermission(status.state)
     }
     navigator.permissions
       ?.query({ name: 'geolocation' })
       .then((permissionStatus) => {
-        if (cancelled) return
+        if (cancelled || !isCurrent()) return
         status = permissionStatus
         setGpsPermission(permissionStatus.state)
         permissionStatus.addEventListener('change', onChange)
@@ -78,10 +102,11 @@ export function CaptureCanvas() {
         // Older Safari can't query geolocation permission — stay 'unknown'.
       })
     return () => {
+      alive.current = false
       cancelled = true
       status?.removeEventListener('change', onChange)
     }
-  }, [])
+  }, [isCurrent])
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -99,7 +124,7 @@ export function CaptureCanvas() {
         // The permission prompt can outlive this mount (Strict Mode remount,
         // user navigating away) — a stream that arrives late must be stopped
         // here or the camera stays on with no owner.
-        if (cancelled) {
+        if (cancelled || !isCurrent()) {
           mediaStream.getTracks().forEach((track) => track.stop())
           return
         }
@@ -110,35 +135,46 @@ export function CaptureCanvas() {
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && isCurrent()) {
           setCameraError("We couldn't access your camera. Check permissions and try again.")
         }
       })
 
     return () => {
       cancelled = true
-      // Leaving mid-recording discards the take: silence onstop so no
-      // half-assembled blob lands in the store, and clear the stale
-      // isRecording flag so the countdown doesn't resume on re-entry.
-      if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-        recorderRef.current.onstop = null
-        recorderRef.current.stop()
+      // Stop hardware owned by this mount. Keep any uncertain command and its
+      // in-memory finished Blob in the actor-scoped store for explicit readback.
+      const recorder = recorderRef.current
+      if (recorder) {
+        recorder.onstop = null
+        recorder.ondataavailable = null
+        if (recorder.state !== 'inactive') { try { recorder.stop() } catch { /* Hardware already stopped. */ } }
       }
-      const store = useRentralStore.getState()
-      if (store.capture.isRecording) {
-        store.resetCapture()
-      }
+      if (isWizardCurrent(actorId, generation)) useRentralStore.getState().updateCapture({ isRecording: false })
       stream?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
-  }, [])
+  }, [actorId, generation, isCurrent])
+
+  useEffect(() => {
+    const visibility = () => {
+      if (!isCurrent() || document.visibilityState !== 'hidden') return
+      const state = useRentralStore.getState().capture
+      if (state.hasStarted && !state.isComplete) {
+        interrupted.current = true
+        if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
+      }
+    }
+    document.addEventListener('visibilitychange', visibility)
+    return () => document.removeEventListener('visibilitychange', visibility)
+  }, [isCurrent])
 
   // A resumed draft has its take in Storage rather than in memory — preview it
   // through an authorized route; a GPS lock recorded in an earlier session lives only
   // server-side and is represented by hasRemoteCoords.
   const remoteVideoUrl = remoteVideoPath && draftListingId ? listingMediaUrl(draftListingId, 'video') : null
   const showPreview = capture.isComplete && (videoBlob !== null || remoteVideoUrl !== null)
-  const gpsLocked = coords !== null || hasRemoteCoords
+  const gpsLocked = captureId !== null && (coords !== null || hasRemoteCoords)
 
   // The recorded take is previewed from an object URL tied to the store blob,
   // so it survives leaving and re-entering this step. Cleanup revokes the URL
@@ -167,18 +203,20 @@ export function CaptureCanvas() {
     if (!capture.isRecording) return
 
     const tick = setInterval(() => {
+      if (!isCurrent() || !useRentralStore.getState().capture.isRecording) return
       updateCapture({ countdown: Math.max(0, useRentralStore.getState().capture.countdown - 1) })
     }, 1000)
 
     return () => clearInterval(tick)
-  }, [capture.isRecording, updateCapture])
+  }, [capture.isRecording, updateCapture, isCurrent])
 
   const stopRecording = useCallback(() => {
+    if (!isCurrent()) return
     const recorder = recorderRef.current
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop()
     }
-  }, [])
+  }, [isCurrent])
 
   useEffect(() => {
     if (capture.isRecording && capture.countdown === 0) {
@@ -198,7 +236,9 @@ export function CaptureCanvas() {
     return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8))
   }
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    const initial = useRentralStore.getState()
+    if (!isCurrent() || busy.current || initial.capturePending || initial.capture.isRecording || initial.mutationBusy || initial.pendingCommand || initial.recoveryError) return
     setGpsError(null)
     const stream = streamRef.current
     if (!stream) return
@@ -216,69 +256,152 @@ export function CaptureCanvas() {
       return
     }
 
-    const startRecordingWithFix = (position: GeolocationPosition) => {
-      setIsAcquiringGps(false)
-      setCoords({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-      })
-
+    busy.current = true
+    setIsAcquiringGps(true); setNeedsRetake(false); interrupted.current = false
+    updateCapture({ hasStarted: true, isRecording: false, isComplete: false })
+    try {
+      const reading = browserCaptureReading(await browserPosition())
+      if (!isCurrent()) return
+      if (pageIsHidden()) throw new CaptureRequestError('Keep Rentral open while obtaining the recording location, then try again.', 400, 'CAPTURE_INTERRUPTED')
+      const state = useRentralStore.getState()
+      if (state.mutationBusy || state.pendingCommand || state.recoveryError) throw new CaptureRequestError('Finish checking the saved listing request before recording a walkthrough.', 409, 'REQUEST_IN_PROGRESS')
+      const id = crypto.randomUUID()
+      // Persist the actor-scoped marker before the first request. If storage is
+      // unavailable this throws, and no untracked begin command is sent.
+      useRentralStore.getState().setCapturePending({ id, phase: 'begin' })
+      if (!isCurrent()) return
+      useRentralStore.getState().setCaptureId(id)
+      if (!isCurrent()) return
+      updateCapture({ hasStarted: true, isComplete: false })
+      if (!pendingMatches(id, 'begin')) return
+      const locked = await listingRequest(actorId, '/api/v1/captures', captureStatusSchema, { id, reading })
+      if (!pendingMatches(id, 'begin')) return
+      if (locked.id !== id || !['recording', 'expired'].includes(locked.status)) throw new CaptureRequestError('The recording location response could not be confirmed. Check its saved status.', 0, 'INVALID_RESPONSE')
+      if (locked.status !== 'recording' || pageIsHidden() || interrupted.current) throw new CaptureRequestError('The location lock is no longer ready. Record a fresh walkthrough.', 409, 'CAPTURE_CHANGED')
+      useRentralStore.getState().clearCapturePending()
+      if (!isCurrent()) return
+      setCoords({ lat: reading.latitude, lng: reading.longitude, accuracy: reading.accuracy })
       const mimeType = VIDEO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate))
-      let recorder: MediaRecorder
-      try {
-        recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      } catch {
-        setCameraError("Recording isn't supported in this browser.")
-        return
-      }
-
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      const started = performance.now()
       chunksRef.current = []
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data)
+        if (isCurrent() && event.data.size > 0) chunksRef.current.push(event.data)
       }
       recorder.onstop = async () => {
+        if (!isCurrent()) return
+        updateCapture({ isRecording: false })
+        setIsAcquiringGps(true)
         const baseMime = (recorder.mimeType || mimeType || 'video/webm').split(';')[0]
         const blob = new Blob(chunksRef.current, { type: baseMime })
         chunksRef.current = []
-        const poster = await capturePosterFrame()
-        setRecordedVideo(blob, baseMime, poster)
-        updateCapture({ isRecording: false, isComplete: true })
+        const durationSeconds = Math.min(120, (performance.now() - started) / 1000)
+        try {
+          if (pageIsHidden() || interrupted.current || !blob.size || durationSeconds < 1) throw new CaptureRequestError('The recording was interrupted or too short. Record a fresh walkthrough.', 400, 'CAPTURE_INTERRUPTED')
+          // Keep the finished bytes in the shared store before any further
+          // await, so a step unmount cannot strand an acknowledged finish.
+          useRentralStore.getState().setCapturePending({ id, phase: 'finish', blob, mime: baseMime, poster: null })
+          const poster = await capturePosterFrame()
+          if (!pendingMatches(id, 'finish')) return
+          useRentralStore.getState().setCapturePending({ id, phase: 'finish', blob, mime: baseMime, poster })
+          const endReading = browserCaptureReading(await browserPosition())
+          if (!pendingMatches(id, 'finish')) return
+          if (pageIsHidden() || interrupted.current) throw new CaptureRequestError('Keep Rentral open and record a fresh walkthrough.', 400, 'CAPTURE_INTERRUPTED')
+          const finished = await listingRequest(actorId, `/api/v1/captures/${id}/finish`, captureStatusSchema, { reading: endReading, durationSeconds })
+          if (!pendingMatches(id, 'finish')) return
+          if (finished.id !== id || finished.status !== 'recorded') throw new CaptureRequestError('The recording finish could not be confirmed.')
+          setRecordedVideo(blob, baseMime, poster)
+          if (!isCurrent()) return
+          updateCapture({ isComplete: true })
+          if (!isCurrent()) return
+          useRentralStore.getState().clearCapturePending()
+          setGpsError(null)
+        } catch (reason) {
+          if (!isCurrent()) return
+          setGpsError(reason instanceof Error ? reason.message : 'The recording location could not be confirmed.')
+          const saved = useRentralStore.getState().capturePending
+          if (!saved || reason instanceof CaptureRequestError && reason.status > 0 && reason.status < 500 && reason.code !== 'INVALID_RESPONSE') {
+            try { if (saved) useRentralStore.getState().clearCapturePending(); setNeedsRetake(true) }
+            catch { setGpsError('The recovery record could not be cleared. Allow this site to save local data, then check recording status again.') }
+          }
+        } finally { if (isCurrent()) { busy.current = false; setIsAcquiringGps(false) } }
       }
 
       recorderRef.current = recorder
       recorder.start(1000)
+      setIsAcquiringGps(false)
       updateCapture({
         hasStarted: true,
         isRecording: true,
         countdown: WALKTHROUGH_SECONDS,
         isComplete: false,
       })
+    } catch (reason) {
+      if (!isCurrent()) return
+      setGpsError(reason instanceof Error ? reason.message : 'Your recording location could not be locked. Try outdoors with precise location enabled.')
+      const saved = useRentralStore.getState().capturePending
+      if (!saved || reason instanceof CaptureRequestError && reason.status > 0 && reason.status < 500 && reason.code !== 'INVALID_RESPONSE') {
+        try {
+          if (saved) useRentralStore.getState().clearCapturePending()
+          if (!isCurrent()) return
+          if (!useRentralStore.getState().captureId) updateCapture({ hasStarted: false, isRecording: false, isComplete: false })
+          setNeedsRetake(useRentralStore.getState().capture.hasStarted)
+        }
+        catch { setGpsError('The recovery record could not be cleared. Allow this site to save local data, then check recording status again.') }
+      }
+    } finally {
+      if (isCurrent() && !useRentralStore.getState().capture.isRecording) { busy.current = false; setIsAcquiringGps(false) }
     }
+  }
 
-    const requestFix = (highAccuracy: boolean) => {
-      navigator.geolocation.getCurrentPosition(
-        startRecordingWithFix,
-        (error) => {
-          // Desktops rarely produce a high-accuracy fix (no GPS hardware) —
-          // fall back once to network/Wi-Fi location before giving up.
-          if (highAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
-            requestFix(false)
-            return
-          }
-          setIsAcquiringGps(false)
-          setGpsError(GPS_ERROR_COPY[error.code] ?? GPS_REQUIRED_COPY)
-        },
-        highAccuracy
-          ? { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-          : { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
-      )
-    }
-
-    // Spatial invariant (build-plan Item 06): recording starts only after a
-    // real GPS fix. Denied/unavailable location blocks capture entirely.
+  const checkPending = async () => {
+    const saved = useRentralStore.getState().capturePending
+    if (!isCurrent() || !saved || busy.current) return
+    busy.current = true
     setIsAcquiringGps(true)
-    requestFix(true)
+    try {
+      const current = await listingRequest(actorId, `/api/v1/captures/${saved.id}`, captureStatusSchema)
+      if (!pendingMatches(saved.id, saved.phase)) return
+      if (current.id !== saved.id) throw new CaptureRequestError('The server returned another recording. Check the saved recording again.', 0, 'INVALID_RESPONSE')
+      if (saved.phase === 'finish' && ['recorded', 'sealed'].includes(current.status) && saved.blob && saved.mime) {
+        setRecordedVideo(saved.blob, saved.mime, saved.poster ?? null)
+        if (!isCurrent()) return
+        useRentralStore.getState().setCaptureId(saved.id)
+        if (!isCurrent()) return
+        updateCapture({ hasStarted: true, isRecording: false, isComplete: true })
+        if (!isCurrent()) return
+        useRentralStore.getState().clearCapturePending()
+        setNeedsRetake(false); setGpsError(null)
+      } else {
+        useRentralStore.getState().clearCapturePending()
+        if (!isCurrent()) return
+        updateCapture({ hasStarted: true, isRecording: false, isComplete: false })
+        setNeedsRetake(true)
+        setGpsError(saved.phase === 'finish' && ['recorded', 'sealed'].includes(current.status)
+          ? 'The backend recorded this take, but this page no longer has its video. Reloading cannot restore unsaved footage. Record a fresh walkthrough.'
+          : 'The location record was checked. Record a fresh walkthrough to complete recording safely.')
+      }
+    } catch (reason) {
+      if (!pendingMatches(saved.id, saved.phase)) return
+      if (reason instanceof CaptureRequestError && reason.status === 404) {
+        try {
+          useRentralStore.getState().clearCapturePending()
+          if (!isCurrent()) return
+          useRentralStore.getState().setCaptureId(null)
+          if (!isCurrent()) return
+          setCoords(null)
+          if (!isCurrent()) return
+          updateCapture({ hasStarted: true, isRecording: false, isComplete: false })
+          setNeedsRetake(true); setGpsError('No recording lock was saved. Record a fresh walkthrough.')
+        } catch { setGpsError('The recovery record could not be cleared. Allow this site to save local data, then check recording status again.') }
+      } else setGpsError(reason instanceof Error ? reason.message : 'Recording status is unavailable. Check again before starting another.')
+    } finally { if (isCurrent()) { busy.current = false; setIsAcquiringGps(false) } }
+  }
+
+  const recordingBusy = isAcquiringGps || capture.isRecording || unconfirmed
+  const retake = () => {
+    if (!isCurrent() || busy.current || useRentralStore.getState().capturePending || useRentralStore.getState().capture.isRecording) return
+    resetCapture()
   }
 
   return (
@@ -288,7 +411,7 @@ export function CaptureCanvas() {
           Record your walkthrough
         </h2>
         <p className="text-sm text-text-secondary">
-          Keep the camera moving through the entire space. Coordinates lock automatically.
+          Keep Rentral open and stay at the space. Recording starts after the backend locks your GPS; a fresh location is checked again when you finish.
         </p>
       </div>
 
@@ -358,11 +481,11 @@ export function CaptureCanvas() {
             </p>
           )}
 
-          {isSecure && !capture.hasStarted && !capture.isComplete && (
+          {isSecure && !capture.hasStarted && !capture.isComplete && !unconfirmed && (
             <button
               type="button"
               onClick={handleStart}
-              disabled={!!cameraError || isAcquiringGps}
+              disabled={!!cameraError || recordingBusy}
               className="glass-btn flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Video className="h-4 w-4" />
@@ -387,8 +510,9 @@ export function CaptureCanvas() {
               </p>
               <button
                 type="button"
-                onClick={resetCapture}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+                onClick={retake}
+                disabled={recordingBusy}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <RotateCcw className="h-4 w-4" />
                 Retake Walkthrough
@@ -398,18 +522,22 @@ export function CaptureCanvas() {
         </div>
       </div>
 
+      {unconfirmed ? <div className="mt-4 text-sm text-text-secondary"><p role="status">A recording request still needs confirmation. Check its saved status before recording another take.</p><button type="button" disabled={isAcquiringGps} onClick={() => { void checkPending() }} className="mt-3 min-h-11 w-full rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-40">{isAcquiringGps ? 'Checking recording…' : 'Check recording status'}</button></div> : null}
+      {needsRetake || (showPreview && !captureId) ? <div className="mt-4 text-sm text-text-secondary"><p>This recording has no completed backend location lock. Keep your draft details and record a new walkthrough before submitting.</p><button type="button" disabled={recordingBusy} className="mt-2 min-h-11 text-accent-primary disabled:cursor-not-allowed disabled:opacity-40" onClick={retake}>Record a new walkthrough</button></div> : null}
+
       <div className="mt-6 flex gap-3">
         <button
           type="button"
-          onClick={goBack}
-          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+          onClick={() => { if (isCurrent() && !busy.current && !recordingBusy) goBack() }}
+          disabled={recordingBusy}
+          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Back
         </button>
         <button
           type="button"
-          onClick={goNext}
-          disabled={!capture.isComplete}
+          onClick={() => { if (isCurrent() && !busy.current && !recordingBusy && !needsRetake) goNext() }}
+          disabled={!capture.isComplete || !captureId || recordingBusy || needsRetake}
           className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Continue

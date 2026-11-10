@@ -1,5 +1,5 @@
 import type { CreateIndexesOptions, Db, Document, IndexDirection } from 'mongodb'
-import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION } from './metadata.ts'
+import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION } from './metadata.ts'
 
 type IndexPlan = { collection: string; keys: Record<string, IndexDirection>; options: CreateIndexesOptions }
 const plan = (collection: string, keys: Record<string, IndexDirection>, unique = false): IndexPlan => ({
@@ -18,6 +18,8 @@ export const MONGO_INDEXES: readonly IndexPlan[] = [
   plan('Listing', { lister_id: 1, createdAt: -1 }), plan('Listing', { listing_status: 1, createdAt: -1, _id: -1 }),
   plan('Listing', { listing_status: 1, category: 1, createdAt: -1, _id: -1 }),
   plan('ListingLocation', { listing_id: 1 }, true), plan('ListingLocation', { geometry: '2dsphere' }),
+  plan('ListingCapture', { owner_id: 1, started_at: -1 }), plan('ListingCapture', { listing_id: 1 }), partialUnique('ListingCapture', 'video_object_id'),
+  { ...plan('ListingCapture', { owner_id: 1, video_digest: 1 }, true), options: { name: 'ListingCapture_owner_video_digest_key', unique: true, partialFilterExpression: { video_digest: { $type: 'string' } } } },
   plan('MediaAsset', { listing_id: 1 }, true), partialUnique('MediaAsset', 'mux_asset_id'), partialUnique('MediaAsset', 'playback_id'),
   plan('MediaAsset', { status: 1, updatedAt: 1 }), plan('MediaWebhookReceipt', { media_id: 1 }),
   partialUnique('MediaAsset', 'mux_upload_id'), plan('MediaAsset', { status: 1, upload_lease_expires_at: 1, updatedAt: 1 }),
@@ -100,7 +102,7 @@ export const MONGO_INDEXES: readonly IndexPlan[] = [
 ]
 
 export const MONGO_COLLECTIONS = [
-  'User', 'Listing', 'ListingLocation', 'MediaAsset', 'MediaWebhookReceipt', 'IndividualProfile', 'OrganizationProfile',
+  'User', 'Listing', 'ListingLocation', 'ListingCapture', 'MediaAsset', 'MediaWebhookReceipt', 'IndividualProfile', 'OrganizationProfile',
   'WebhookLog', 'SavedListing', 'Booking', 'PaymentIntent', 'PaymentEvent', 'LedgerTransaction', 'LedgerEntry',
   'Conversation', 'Message', 'Review', 'Dispute', 'Notification', 'AdminAudit', 'DocumentReview', 'Renewal',
   'MarketEvent', 'ListingVerification', 'SafetyNotice', 'SafetyAppeal', 'HoldCreditAllocation', 'AuthSession', 'PasswordReset', 'StorageObject',
@@ -134,6 +136,15 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
   }),
   Listing: jsonSchema(['lister_id', 'category', 'listing_status'], { lister_id: id, category: { enum: ['house', 'car', 'boat'] }, listing_status: { enum: ['draft', 'pending_verification', 'active', 'suspended'] }, base_rent_amount: { bsonType: ['double', 'int', 'long', 'null'], minimum: 1, maximum: 9999999999 } }),
   ListingLocation: jsonSchema(['listing_id', 'geometry'], { listing_id: id, geometry: { bsonType: 'object', required: ['type', 'coordinates'], properties: { type: { enum: ['Point'] }, coordinates: { bsonType: 'array', minItems: 2, maxItems: 2, items: { bsonType: ['double', 'int', 'long'] } } } } }),
+  ListingCapture: jsonSchema(['owner_id', 'session_id', 'begin_hash', 'state', 'start_geometry', 'start_accuracy', 'start_sample_at', 'started_at', 'finish_by'], {
+    owner_id: id, session_id: id, begin_hash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, state: { enum: ['recording', 'recorded', 'sealed'] },
+    start_geometry: { bsonType: 'object' }, end_geometry: { bsonType: ['object', 'null'] },
+    start_accuracy: { bsonType: ['double', 'int', 'long'], minimum: 0.000001, maximum: 100 },
+    end_accuracy: { bsonType: ['double', 'int', 'long', 'null'], minimum: 0.000001, maximum: 100 },
+    start_sample_at: { bsonType: 'date' }, started_at: { bsonType: 'date' }, finish_by: { bsonType: 'date' }, end_sample_at: nullableDate, finished_at: nullableDate, sealed_at: nullableDate, seal_by: nullableDate,
+    duration_seconds: { bsonType: ['double', 'int', 'long', 'null'], minimum: 0.000001, maximum: 120 },
+    video_path: { bsonType: ['string', 'null'], maxLength: 500 }, video_digest: { bsonType: ['string', 'null'], pattern: '^[a-f0-9]{64}$' },
+  }),
   MediaAsset: jsonSchema(['listing_id', 'source_path', 'status'], { listing_id: id, source_path: { bsonType: 'string', minLength: 1, maxLength: 500 },
     status: { enum: ['queued', 'submitting', 'uploading', 'uncertain', 'processing', 'ready', 'errored'] },
     mux_asset_id: { bsonType: ['string', 'null'] }, mux_upload_id: { bsonType: ['string', 'null'] },
@@ -197,6 +208,7 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
     content_type: { bsonType: ['string', 'null'], maxLength: 128 },
     operation_token: { bsonType: ['string', 'null'], maxLength: 128 },
     lease_expires_at: { bsonType: ['date', 'null'] },
+    upload_completed_at: nullableDate,
   }),
   Renewal: jsonSchema(['booking_id', 'user_id', 'reference', 'recipient_route', 'status'], {
     booking_id: id, user_id: id, reference: id, recipient_route: { enum: ['direct_landlord', 'original_agent'] },
@@ -304,10 +316,10 @@ export async function ensureMongoIndexes(db: Db): Promise<{ collections: number;
     await payments.dropIndex('PaymentIntent_provider_transaction_id_key')
   }
   // Commit readiness last: a partial or failed setup must not enable unindexed writes.
-  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
+  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
     { _id: MONGO_SETUP_ID }, { $set: { schemaVersion: MONGO_SCHEMA_VERSION, storageClaimsVersion: STORAGE_CLAIMS_VERSION,
       financialVersion: FINANCIAL_VERSION, lifecycleVersion: LIFECYCLE_VERSION, mutationVersion: MUTATION_VERSION, authSecurityVersion: AUTH_SECURITY_VERSION,
-      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, completedAt: new Date() } }, { upsert: true },
+      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, completedAt: new Date() } }, { upsert: true },
   )
   return { collections: MONGO_COLLECTIONS.length, indexes: MONGO_INDEXES.length }
 }

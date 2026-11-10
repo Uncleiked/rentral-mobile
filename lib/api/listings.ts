@@ -31,14 +31,17 @@ export async function ownListingPage(userId: string, query: ArchiveQuery, vault 
   return (vault ? ownerVaultPageSchema : ownerListingPageSchema).parse({ items, nextCursor: nextArchiveCursor(rows, query.limit), limit: query.limit })
 }
 export async function ownListingDetail(userId: string, listingId: string) {
-  const row = await prisma.listing.findFirst({ where: { id: listingId, lister_id: userId }, select: { ...summarySelect, revision: true, text_address: true, wizard_step: true, poster_path: true, updatedAt: true,
-    privateLocation: { select: { id: true } } } })
+  const row = await prisma.listing.findFirst({ where: { id: listingId, lister_id: userId }, select: { ...summarySelect, revision: true, text_address: true, wizard_step: true, poster_path: true, updatedAt: true, capture_id: true,
+    privateLocation: { select: { id: true, capture_id: true } } } })
   if (!row) throw new ApiError(404, 'NOT_FOUND', 'This listing is unavailable to your account.')
   const category = categoryValue(row.category)
   const isDraft = row.listing_status === 'draft'
+  const capture = row.capture_id && row.privateLocation?.capture_id === row.capture_id ? await prisma.listingCapture.findFirst({
+    where: { id: row.capture_id, owner_id: userId, state: 'sealed', listing_id: row.id, video_path: row.video_path }, select: { id: true },
+  }) : null
   return ownerListingDetailSchema.parse({ id: row.id, revision: row.revision, category, status: row.listing_status, address: row.text_address ?? '', basePrice: row.base_rent_amount === null ? '' : String(row.base_rent_amount),
     metadata: metadataObject(row.asset_metadata, category), wizardStep: (DRAFT_WIZARD_STEPS as readonly string[]).includes(row.wizard_step ?? '') ? row.wizard_step : null,
-    videoPath: row.video_path, documentPath: row.document_path, posterPath: row.poster_path, documentName: originalNameFromPath(row.document_path), hasCoords: Boolean(row.privateLocation),
+    videoPath: row.video_path, documentPath: row.document_path, posterPath: row.poster_path, documentName: originalNameFromPath(row.document_path), hasCoords: Boolean(capture), captureId: capture?.id ?? null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), archivedAt: row.archived_at?.toISOString() ?? null,
     actions: { edit: !isDraft && !row.archived_at, resume: isDraft && !row.archived_at, archive: !row.archived_at, restore: Boolean(row.archived_at) } })
 }

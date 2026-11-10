@@ -1,10 +1,10 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Bell, MessageCircle, Plus, ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { RentralLogo } from '@/components/brand/RentralLogo'
 
 const navigation = [
   { label: 'Discover', href: '/marketplace' },
@@ -21,8 +21,7 @@ export function MarketplaceSidebar() {
     <header className="sticky top-0 z-50 border-b border-border-subtle bg-background-app/95 backdrop-blur-xl">
       <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
         <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Rentral home">
-          <Image src="/Rentral.svg" alt="" width={30} height={32} className="h-8 w-auto brightness-0 invert" />
-          <span className="text-xl font-bold tracking-tight">rentral<span className="text-accent-hover">.</span></span>
+          <RentralLogo className="text-xl" />
         </Link>
         <nav aria-label="Main navigation" className="hidden items-center gap-1 lg:flex">
           {navigation.map(item => {

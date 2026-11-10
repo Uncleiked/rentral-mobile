@@ -28,11 +28,11 @@ export async function POST(request: Request): Promise<Response> {
     if (!await ensureAccountHandle(identity.userId)) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Your account is unavailable. Please sign in again.')
     if (input.mode === 'draft') {
       const result = await saveDraftForUser(identity.userId, input.listing)
-      if (!result.success) throw new ApiError(result.uncertain ? 503 : result.code ? 409 : 400, result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
+      if (!result.success) throw new ApiError(result.status ?? (result.uncertain ? 503 : result.code ? 409 : 400), result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
       return apiSuccess({ id: result.draftId, status: 'draft' }, 201)
     }
     const result = await saveListingForUser(identity.userId, input.listing)
-    if (!result.success) throw new ApiError(result.uncertain ? 503 : result.code ? 409 : 400, result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
+    if (!result.success) throw new ApiError(result.status ?? (result.uncertain ? 503 : result.code ? 409 : 400), result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
     return apiSuccess({ id: result.listingId, status: 'pending_verification' }, 201)
   } catch (error) { return apiFailure(error, 'my-listings') }
 }

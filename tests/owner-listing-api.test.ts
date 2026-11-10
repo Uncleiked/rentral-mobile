@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const fixture = vi.hoisted(() => ({ identity: vi.fn(), find: vi.fn(), many: vi.fn(), storageRecord: vi.fn(), info: vi.fn(), sign: vi.fn(), edit: vi.fn(), archive: vi.fn(), ready: vi.fn() }))
+const fixture = vi.hoisted(() => ({ identity: vi.fn(), find: vi.fn(), many: vi.fn(), storageRecord: vi.fn(), info: vi.fn(), sign: vi.fn(), edit: vi.fn(), archive: vi.fn(), ready: vi.fn(), capture: vi.fn() }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: fixture.identity }))
-vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: fixture.find, findMany: fixture.many }, storageObject: { findFirst: fixture.storageRecord } } }))
+vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: fixture.find, findMany: fixture.many }, storageObject: { findFirst: fixture.storageRecord }, listingCapture: { findFirst: fixture.capture } } }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: () => ({ createSignedUrl: fixture.sign }) } }) }))
 vi.mock('@/lib/listings/service', () => ({ updateListingForUser: fixture.edit, setListingArchivedForUser: fixture.archive }))
 vi.mock('@/lib/local-storage/core', () => ({ defaultStorageDirectory: () => 'ignored-fixture-directory', createLocalStorage: () => ({ info: fixture.info }) }))
@@ -36,13 +36,20 @@ beforeEach(() => {
   fixture.storageRecord.mockResolvedValue({ digest: 'a'.repeat(64), size_bytes: 100, content_type: 'video/mp4' })
   fixture.info.mockResolvedValue({ digest: 'a'.repeat(64), size: 100, contentType: 'video/mp4', createdAt: date.toISOString() })
 })
-it('returns an owner draft with revision and coordinate-presence only, never raw GPS or unknown metadata', async () => {
+it('returns a legacy owner draft without inventing a recording-time lock or revealing raw GPS', async () => {
   const response = await read(request(`/my-listings/${id}`),context)
   expect(response.status).toBe(200)
   const body = await response.json()
-  expect(body.data).toMatchObject({ id, revision: 8, hasCoords: true, status: 'draft', actions: { resume: true, edit: false } })
+  expect(body.data).toMatchObject({ id, revision: 8, hasCoords: false, captureId: null, status: 'draft', actions: { resume: true, edit: false } })
   expect(JSON.stringify(body)).not.toMatch(/coordinates|geometry|hardware_coordinates|private metadata|secret/)
-  expect(fixture.find).toHaveBeenCalledWith(expect.objectContaining({ where: { id, lister_id: actor }, select: expect.objectContaining({ privateLocation: { select: { id: true } } }) }))
+  expect(fixture.find).toHaveBeenCalledWith(expect.objectContaining({ where: { id, lister_id: actor }, select: expect.objectContaining({ privateLocation: { select: { id: true, capture_id: true } } }) }))
+})
+it('exposes only a capture identifier and boolean for an exact owner video-bound sealed capture', async () => {
+  fixture.find.mockResolvedValue({ ...row, capture_id: other, privateLocation: { ...row.privateLocation, capture_id: other } })
+  fixture.capture.mockResolvedValue({ id: other })
+  const response = await read(request(`/my-listings/${id}`), context)
+  expect((await response.json()).data).toMatchObject({ captureId: other, hasCoords: true })
+  expect(fixture.capture).toHaveBeenCalledWith(expect.objectContaining({ where: { id: other, owner_id: actor, state: 'sealed', listing_id: id, video_path: row.video_path } }))
 })
 it('does not fall back to public access for another owner or a missing draft', async () => {
   fixture.find.mockResolvedValue(null)

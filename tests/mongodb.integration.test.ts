@@ -11,7 +11,8 @@ import { ensureMongoIndexes } from '@/lib/database/indexes'
 import { lockRecord, withTransaction } from '@/lib/database/transactions'
 import { closeMongoReadiness } from '@/lib/database/readiness'
 import { changeBookingStatus, requestBooking } from '@/lib/bookings/service'
-import { saveDraftForUser } from '@/lib/listings/service'
+import { saveDraftForUser, saveListingForUser } from '@/lib/listings/service'
+import { beginCaptureForOwner, finishCaptureForOwner, sealCaptureForOwner, getCaptureForOwner } from '@/lib/listings/capture'
 import { committedMutation, mutationCommand } from '@/lib/database/mutations'
 import { holdCreditCanConfirm } from '@/lib/bookings/hold-credit'
 import { recordVerifiedPayment, startBookingPayment, startListingFeePayment } from '@/lib/payments/service'
@@ -105,6 +106,130 @@ fixture('owned isolated MongoDB replica fixture', () => {
   const movie = new Uint8Array(64)
   movie.set([0, 0, 0, 24, ...Buffer.from('ftypqt  ')])
   const movieStream = () => new Blob([new Uint8Array(movie)]).stream()
+  async function sealedRecording(actorId: string) {
+    const session = await prisma.authSession.create({ data: { user_id: actorId, refresh_hash: randomUUID(), expires_at: new Date(Date.now() + 3600000) } })
+    const id = randomUUID(), reading = () => ({ latitude: 6.45, longitude: 3.4, accuracy: 8, capturedAt: new Date().toISOString(), mocked: false })
+    await beginCaptureForOwner(actorId, session.id, { id, reading: reading() })
+    await finishCaptureForOwner(actorId, session.id, id, { reading: reading(), durationSeconds: 0.01 })
+    const bytes = new Uint8Array(movie); bytes.set(Buffer.from(randomUUID().replaceAll('-', '')), 24)
+    const videoPath = `${actorId}/${randomUUID()}/recording.mov`
+    await uploadStoredObject(actorId, 'listings-media', videoPath, new Blob([bytes]).stream(), 'video/quicktime')
+    const capture = await sealCaptureForOwner(actorId, session.id, id, { videoPath })
+    return { id, sessionId: session.id, capture, videoPath }
+  }
+
+  it('stores private recording-time evidence once and refuses later coordinate rewrites', async () => {
+    const recording = await sealedRecording(hostId)
+    const before = await prisma.listingCapture.findUniqueOrThrow({ where: { id: recording.id } })
+    expect(before.start_geometry).toEqual({ type: 'Point', coordinates: [3.4, 6.45] })
+    expect(before.state).toBe('sealed'); expect(before.video_digest).toMatch(/^[a-f0-9]{64}$/)
+    await expect(prisma.listingCapture.update({ where: { id: recording.id }, data: { start_geometry: { type: 'Point', coordinates: [3.4, 6.5] } } })).rejects.toThrow('IMMUTABLE_CAPTURE')
+    expect((await prisma.listingCapture.findUniqueOrThrow({ where: { id: recording.id } })).start_geometry).toEqual(before.start_geometry)
+    expect(JSON.stringify(await getCaptureForOwner(hostId, recording.id))).not.toMatch(/geometry|latitude|longitude|accuracy|video_digest|session_id/)
+    await expect(removeStoredObjects(hostId, 'listings-media', [recording.videoPath])).rejects.toMatchObject({ code: 'FILE_IN_USE' })
+  })
+  it('never adopts legacy video bytes to fabricate completion evidence for a new recording', async () => {
+    const videoPath = `${hostId}/${randomUUID()}/legacy.mov`
+    await createLocalStorage(storageRoot).upload('listings-media', videoPath, movieStream(), 'video/quicktime')
+    const bytesBefore = await createLocalStorage(storageRoot).info('listings-media', videoPath)
+    const session = await prisma.authSession.create({ data: { user_id: hostId, refresh_hash: randomUUID(), expires_at: new Date(Date.now() + 3600000) } })
+    const id = randomUUID(), reading = () => ({ latitude: 6.45, longitude: 3.4, accuracy: 8, capturedAt: new Date().toISOString() })
+    await beginCaptureForOwner(hostId, session.id, { id, reading: reading() })
+    await finishCaptureForOwner(hostId, session.id, id, { reading: reading(), durationSeconds: 0.01 })
+    await expect(sealCaptureForOwner(hostId, session.id, id, { videoPath })).rejects.toMatchObject({ code: 'CAPTURE_VIDEO_REJECTED' })
+    expect(await prisma.storageObject.findUnique({ where: { id: storageObjectId('listings-media', videoPath) } })).toBeNull()
+    await prepareListingStorage(hostId, { videoPath })
+    const adopted = await prisma.storageObject.findUniqueOrThrow({ where: { id: storageObjectId('listings-media', videoPath) } })
+    expect(adopted.upload_completed_at).toBeNull()
+    await expect(sealCaptureForOwner(hostId, session.id, id, { videoPath })).rejects.toMatchObject({ code: 'CAPTURE_VIDEO_REJECTED' })
+    expect((await createLocalStorage(storageRoot).info('listings-media', videoPath)).digest).toBe(bytesBefore.digest)
+    expect((await prisma.listingCapture.findUniqueOrThrow({ where: { id } })).state).toBe('recorded')
+  })
+
+  it('denies foreign-owner and changed-session capture commands without touching the capture revision', async () => {
+    const recording = await sealedRecording(hostId)
+    const otherSession = await prisma.authSession.create({ data: { user_id: renterId, refresh_hash: randomUUID(), expires_at: new Date(Date.now() + 3600000) } })
+    const sameOwnerSession = await prisma.authSession.create({ data: { user_id: hostId, refresh_hash: randomUUID(), expires_at: new Date(Date.now() + 3600000) } })
+    const before = await prisma.listingCapture.findUniqueOrThrow({ where: { id: recording.id } })
+    const input = { reading: { latitude: 6.45, longitude: 3.4, accuracy: 8, capturedAt: new Date().toISOString() }, durationSeconds: 0.01 }
+    await expect(finishCaptureForOwner(renterId, otherSession.id, recording.id, input)).rejects.toMatchObject({ code: 'CAPTURE_NOT_FOUND' })
+    await expect(finishCaptureForOwner(hostId, sameOwnerSession.id, recording.id, input)).rejects.toMatchObject({ code: 'CAPTURE_NOT_FOUND' })
+    for (const state of [{ revoked_at: new Date(), expires_at: new Date(Date.now() + 3600000) }, { revoked_at: null, expires_at: new Date(Date.now() - 1000) }]) {
+      const invalid = await prisma.authSession.create({ data: { user_id: hostId, refresh_hash: randomUUID(), ...state } })
+      await expect(beginCaptureForOwner(hostId, invalid.id, { id: randomUUID(), reading: input.reading })).rejects.toMatchObject({ code: 'SESSION_REQUIRED' })
+    }
+    expect((await prisma.listingCapture.findUniqueOrThrow({ where: { id: recording.id } })).revision).toBe(before.revision)
+  })
+
+  it('atomically permits one listing to claim a sealed recording despite concurrent different draft requests', async () => {
+    const recording = await sealedRecording(hostId)
+    const before = await prisma.listing.count({ where: { lister_id: hostId } })
+    const input = { category: 'car', wizardStep: 'details', metadata: {}, captureId: recording.id, videoPath: recording.videoPath }
+    const results = await Promise.all([saveDraftForUser(hostId, { ...input, clientId: randomUUID() }), saveDraftForUser(hostId, { ...input, clientId: randomUUID() })])
+    expect(results.filter(result => result.success)).toHaveLength(1)
+    expect(results.filter(result => !result.success)).toMatchObject([{ success: false, code: 'CAPTURE_REQUIRED' }])
+    expect(await prisma.listing.count({ where: { lister_id: hostId } })).toBe(before + 1)
+    const winner = results.find(result => result.success)!
+    if (!winner.success) throw new Error('Expected one winning capture attachment')
+    expect(await prisma.listingCapture.findUniqueOrThrow({ where: { id: recording.id } })).toMatchObject({ listing_id: winner.draftId })
+    expect(await prisma.listingLocation.findUniqueOrThrow({ where: { listing_id: winner.draftId } })).toMatchObject({ capture_id: recording.id })
+  })
+
+  it('blocks mismatched submission and immutable-coordinate injection, then submits an exact matched capture', async () => {
+    const recording = await sealedRecording(hostId)
+    const draft = await saveDraftForUser(hostId, { category: 'car', wizardStep: 'details', metadata: {}, captureId: recording.id, videoPath: recording.videoPath })
+    if (!draft.success) throw new Error('Expected a retained capture draft')
+    const documentPath = `${hostId}/${randomUUID()}/proof.pdf`
+    await uploadStoredObject(hostId, 'compliance-docs', documentPath, new Blob(['%PDF-1.7\nOwned capture proof\n%%EOF']).stream(), 'application/pdf')
+    const input = { clientId: randomUUID(), draftId: draft.draftId, category: 'car', captureId: recording.id, videoPath: recording.videoPath, documentPath,
+      address: 'Owned synthetic building address, Lagos, Nigeria', basePrice: '10000', metadata: { transmission: 'automatic', mileageKm: '0', seats: '4', fuelType: 'petrol' } }
+    const previousKey = process.env.GEOAPIFY_API_KEY, previousMux = process.env.MUX_ENABLED
+    process.env.GEOAPIFY_API_KEY = 'owned-not-a-real-provider-key'; process.env.MUX_ENABLED = 'false'
+    let latitude = 6.5
+    const network = vi.spyOn(globalThis, 'fetch').mockImplementation(async url => {
+      if (!(url instanceof URL) || url.origin !== 'https://api.geoapify.com') throw new Error('Unexpected network request in isolated capture test')
+      return Response.json({ features: [{ geometry: { coordinates: [3.4, latitude] }, properties: { result_type: 'building', country_code: 'ng', rank: { confidence: 0.95 } } }] })
+    })
+    try {
+      expect(await saveListingForUser(hostId, { ...input, lat: 6.45, lng: 3.4 })).toMatchObject({ success: false })
+      expect(network).not.toHaveBeenCalled()
+      expect(await saveListingForUser(hostId, input)).toMatchObject({ success: false, code: 'ADDRESS_MISMATCH' })
+      expect((await prisma.listing.findUniqueOrThrow({ where: { id: draft.draftId } })).listing_status).toBe('draft')
+      latitude = 6.45
+      let reached!: () => void, release!: () => void
+      const geocoderReached = new Promise<void>(resolveWait => { reached = resolveWait })
+      const geocoderRelease = new Promise<void>(resolveWait => { release = resolveWait })
+      network.mockImplementationOnce(async () => {
+        reached(); await geocoderRelease
+        return Response.json({ features: [{ geometry: { coordinates: [3.4, 6.45] }, properties: { result_type: 'building', country_code: 'ng', rank: { confidence: 0.95 } } }] })
+      })
+      const delayedSubmission = saveListingForUser(hostId, input)
+      await geocoderReached
+      const newerAddress = 'A newer draft address saved while geocoding, Lagos'
+      expect(await saveDraftForUser(hostId, { category: 'car', wizardStep: 'details', draftId: draft.draftId, metadata: input.metadata, captureId: recording.id, videoPath: recording.videoPath, address: newerAddress })).toMatchObject({ success: true })
+      release()
+      expect(await delayedSubmission).toMatchObject({ success: false, code: 'STALE_LISTING' })
+      expect((await prisma.listing.findUniqueOrThrow({ where: { id: draft.draftId } })).text_address).toBe(newerAddress)
+      expect(await prisma.listingVerification.findUnique({ where: { listing_id: draft.draftId } })).toBeNull()
+      expect(await saveListingForUser(hostId, input)).toMatchObject({ success: true, listingId: draft.draftId })
+      expect(await prisma.listingVerification.findUniqueOrThrow({ where: { listing_id: draft.draftId } })).toMatchObject({ capture_id: recording.id, address_hash: addressFingerprint(input.address), spatial_status: 'matched', distance_meters: 0 })
+      expect((await prisma.listing.findUniqueOrThrow({ where: { id: draft.draftId } })).listing_status).toBe('pending_verification')
+    } finally {
+      network.mockRestore()
+      if (previousKey === undefined) delete process.env.GEOAPIFY_API_KEY; else process.env.GEOAPIFY_API_KEY = previousKey
+      if (previousMux === undefined) delete process.env.MUX_ENABLED; else process.env.MUX_ENABLED = previousMux
+    }
+  })
+
+  it('refuses stale or mocked capture readings before persisting a new capture', async () => {
+    const session = await prisma.authSession.create({ data: { user_id: hostId, refresh_hash: randomUUID(), expires_at: new Date(Date.now() + 3600000) } })
+    const before = await prisma.listingCapture.count({ where: { owner_id: hostId } })
+    for (const sample of [ { latitude: 6.45, longitude: 3.4, accuracy: 8, capturedAt: new Date(Date.now() - 20000).toISOString() },
+      { latitude: 6.45, longitude: 3.4, accuracy: 8, capturedAt: new Date().toISOString(), mocked: true } ]) {
+      await expect(beginCaptureForOwner(hostId, session.id, { id: randomUUID(), reading: sample })).rejects.toMatchObject({ code: 'GPS_READING_REJECTED' })
+    }
+    expect(await prisma.listingCapture.count({ where: { owner_id: hostId } })).toBe(before)
+  })
   it('commits one draft and immutable receipt for concurrent retries, and never overwrites a later edit', async () => {
     const clientId = randomUUID()
     const input = { clientId, category: 'car', wizardStep: 'category', metadata: {} }
@@ -1044,10 +1169,13 @@ fixture('owned isolated MongoDB replica fixture', () => {
     const actor = await prisma.user.create({ data: { email: `${randomUUID()}@fixture.invalid` } })
     const staff = await prisma.user.create({ data: { email: `${randomUUID()}@fixture.invalid`, staff_role: 'admin' } })
     const address = 'An owned synthetic address for publication mode acceptance'
-    const listing = await prisma.listing.create({ data: { lister_id: actor.id, category: 'car', listing_status: 'pending_verification', text_address: address, document_path: `${actor.id}/${randomUUID()}/owned-proof.pdf` } })
+    const recording = await sealedRecording(actor.id)
+    const draft = await saveDraftForUser(actor.id, { category: 'car', wizardStep: 'details', metadata: {}, captureId: recording.id, videoPath: recording.videoPath })
+    if (!draft.success) throw new Error('Expected capture-bound publication fixture')
+    const listing = await prisma.listing.update({ where: { id: draft.draftId }, data: { listing_status: 'pending_verification', text_address: address, document_path: `${actor.id}/${randomUUID()}/owned-proof.pdf` } })
     await prisma.documentReview.create({ data: { listing_id: listing.id, status: 'approved', reviewed_by: staff.id, findings: {} } })
-    await prisma.listingVerification.create({ data: { listing_id: listing.id, address_hash: addressFingerprint(address), spatial_status: 'matched', distance_meters: 5 } })
-    await prisma.mediaAsset.create({ data: { listing_id: listing.id, source_path: `${actor.id}/${randomUUID()}/owned.mov`, status: 'ready' } })
+    await prisma.listingVerification.create({ data: { listing_id: listing.id, capture_id: recording.id, address_hash: addressFingerprint(address), spatial_status: 'matched', distance_meters: 5 } })
+    await prisma.mediaAsset.create({ data: { listing_id: listing.id, source_path: recording.videoPath, status: 'ready' } })
     process.env.MUX_ENABLED = 'true'
     const collection = async (environment: 'test' | 'live') => {
       const payment = await prisma.paymentIntent.create({ data: { user_id: actor.id, listing_id: listing.id, kind: 'listing_fee', amount_kobo: BigInt(PUBLICATION_FEE_KOBO), currency: 'NGN',

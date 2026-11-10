@@ -16,7 +16,7 @@ vi.mock('@/lib/database/config', () => ({
   mongoDatabaseName: () => 'owned_readiness_fixture',
 }))
 
-import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared } from '@/lib/database/readiness'
+import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared } from '@/lib/database/readiness'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -43,6 +43,16 @@ describe('Mongo readiness recovery', () => {
     await assertStorageClaimsReady()
     expect(state.clients).toHaveLength(1)
     expect(state.clients[0].findOne).toHaveBeenCalledTimes(2)
+  })
+  it('requires explicit additive capture preparation while keeping core accounts available', async () => {
+    vi.useFakeTimers(); await assertMongoReady()
+    expect(await capturePrepared()).toBe(false)
+    await expect(assertCaptureReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, captureVersion: 1 })
+    // A deletion reference check must see newly enabled captures immediately,
+    // including inside the otherwise five-second readiness cache window.
+    expect(await capturePrepared()).toBe(true)
+    await assertCaptureReady()
   })
 
   it('rejects an incompatible storage feature version without disabling core authentication', async () => {

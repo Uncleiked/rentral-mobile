@@ -1,7 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client'
 import { assertAppendOnlyOperation, type RelationGraph } from './database/append-only'
 import { mongoUrl } from './database/config'
-import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, assertMutationReady, assertAuthSecurityReady, assertMatchingReady } from './database/readiness'
+import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, assertMutationReady, assertAuthSecurityReady, assertMatchingReady, assertCaptureReady } from './database/readiness'
 
 const modelNames = new Set<string>(Prisma.dmmf.datamodel.models.map(model => model.name))
 const relations: RelationGraph = Object.fromEntries(Prisma.dmmf.datamodel.models.map(model => [
@@ -15,6 +15,7 @@ const prismaClientSingleton = () => new PrismaClient({
     async $allOperations({ model, operation, args, query }) {
       if (model) assertAppendOnlyOperation(model, operation, args, relations)
       if (model === 'StorageObject') await assertStorageClaimsReady()
+      else if (model === 'ListingCapture') await assertCaptureReady()
       else if (model === 'MutationReceipt') await assertMutationReady()
       else if (model && ['EmailChange', 'AuthEmailDelivery'].includes(model)) await assertAuthSecurityReady()
       else if (model && ['MatchProfile', 'MatchConnection', 'MatchMessage', 'MatchBlock', 'MatchReport'].includes(model)) await assertMatchingReady()

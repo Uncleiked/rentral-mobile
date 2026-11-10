@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma, StorageObject } from '@prisma/client'
 import prisma from '@/lib/db'
-import { assertStorageClaimsReady, lifecyclePrepared } from '@/lib/database/readiness'
+import { assertStorageClaimsReady, lifecyclePrepared, capturePrepared } from '@/lib/database/readiness'
 import { withTransaction } from '@/lib/database/transactions'
 import { createLocalStorage, defaultStorageDirectory, type ObjectMetadata } from '@/lib/local-storage/core'
 import { verifiedAvatarReference } from '@/lib/local-storage/avatars'
@@ -132,7 +132,7 @@ export async function uploadStoredObject(ownerId: string, bucket: StorageBucket,
   try {
     const info = await storage.info(bucket, path)
     const finished = await prisma.storageObject.updateMany({ where: { id, owner_id: ownerId, state: 'uploading', operation_token: token },
-      data: { state: 'available', ...metadataFields(info), operation_token: null, lease_expires_at: null, revision: { increment: 1 } } })
+      data: { state: 'available', ...metadataFields(info), upload_completed_at: new Date(), operation_token: null, lease_expires_at: null, revision: { increment: 1 } } })
     if (finished.count === 1) return result
     const current = await prisma.storageObject.findUniqueOrThrow({ where: { id } })
     if (current.state === 'available' && current.digest === info.digest && current.size_bytes === info.size && current.content_type === info.contentType) return result
@@ -156,6 +156,7 @@ async function referenced(tx: Prisma.TransactionClient, bucket: StorageBucket, p
   const match = { equals: path, mode: 'insensitive' as const }
   if (bucket === 'listings-media') {
     if (await tx.listing.findFirst({ where: { OR: [{ video_path: match }, { poster_path: match }] }, select: { id: true } })) return true
+    if (await capturePrepared() && await tx.listingCapture.findFirst({ where: { state: 'sealed', video_path: match }, select: { id: true } })) return true
     return Boolean(await tx.mediaAsset.findFirst({ where: { source_path: match }, select: { id: true } }))
   }
   if (bucket === 'compliance-docs') {

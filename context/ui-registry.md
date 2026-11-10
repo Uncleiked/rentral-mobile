@@ -1,5 +1,40 @@
 # UI Registry
 
+### Rentral identity and native launch — 2026-11-10
+
+Files: components/brand/RentralLogo.tsx, apps/mobile/src/components/BrandLogo.tsx,
+LaunchIntro.tsx; canonical geometry/palette: lib/brand/identity.json.
+
+| Property | Pattern |
+| --- | --- |
+| Mark | One geometric emerald lowercase-r/open doorway; no gradients or tiny details |
+| Wordmark | Lowercase rentral, Inter semibold, restrained negative tracking |
+| Native sizes | Compact mark36/wordmark25; standard44/30; launch128/36 |
+| Surfaces/text | Existing charcoal background, white primary text, emerald semantic accent |
+| Native spacing | space.xs inline gap; launch wordmark space.sm below mark |
+| Motion | One720ms launch; cubicBezier(0.23,1,0.32,1), opacity/0.96→1 scale;180ms reduced-motion path without scale |
+| Fallback | Font4s budget; intro1.5s safety; error/retry fallback releases native splash |
+
+The SVG/native PNG/ICO assets come from one deterministic generator. ICO's
+embedded PNG must remain RGBA/32-bit; the iOS icon separately stays opaque RGB.
+The intro is outside actor-keyed navigation and cannot wait for backend readiness.
+
+### Capture address and uncertain request recovery — 2026-11-10
+
+Native CaptureAddressCheck uses existing text/muted/accentBright/warning tokens,
+17px semibold headings,13px regular explanatory text with21px line height and
+13px medium status text with22px line height, separated by space.lg. A displayed
+match belongs to the exact current capture/address; edits invalidate it. Unknown
+recording/upload/save outcomes have explicit status readback and preserve input.
+
+Web ListingRequestRecovery uses bg-surface-card, border-border-subtle,
+rounded-2xl,p-5,gap-3; semantic primary/secondary/muted/flagged text and existing
+accent buttons with44px minimum targets. Pending exact commands survive reload
+per actor, block competing form commands, and require GET readback before an
+explicit same-command retry. Capture marker IDs survive reload; an unsaved
+browser Blob survives SPA navigation only, so missing footage asks for a retake.
+Live typed fields feed draft saves; actor+wizard generations protect delayed work.
+
 Account-bound workspaces: the marketplace server layout supplies ApiActorScope.
 Commerce and matching controls use memoized scoped request hooks. The captured
 account restricts existing authentication; it never grants identity or a role.

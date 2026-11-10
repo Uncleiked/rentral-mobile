@@ -4,6 +4,17 @@ Expo SDK 58 / Expo Router app for Android and iOS. It uses the local Rentral API
 
 ## Start
 
+The recording-time GPS lock requires online backend acknowledgment, a completed
+take and exact uploaded-video binding. Address preflight and final submission
+compare a precise geocoded address with the private capture within100metres. Old
+recordings without this evidence require a new take. Follow
+[location setup](../../context/recording-location-setup.md) and
+[Mux setup](../../context/mux-local-setup.md).
+
+The new logo and opening reveal need no public key. Native OS splash/launcher
+icons need a new native binary; Expo Go shows the JavaScript intro. The intro is
+720ms, or180ms without scale for reduced motion, and cannot wait on the backend.
+
 Use Node 24.x and npm 11.19.1. First complete [backend/database setup](../../README.md).
 It preserves the saved MongoDB connection. Atlas needs the backend computer's
 public IP access and explicit `npm run db:setup -- --allow-remote` preparation;

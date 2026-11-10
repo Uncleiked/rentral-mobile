@@ -39,6 +39,8 @@ export function inspectEnvironment(backend, mobile) {
   if (mobile.EXPO_PUBLIC_EAS_PROJECT_ID && !uuid.test(mobile.EXPO_PUBLIC_EAS_PROJECT_ID)) fail('EXPO_PUBLIC_EAS_PROJECT_ID', 'Use the EAS project UUID; it is optional until device push is configured.')
   if (!enabled('RENTRAL_PLATFORM_ENABLED')) notes.push('Marketplace features are disabled; set RENTRAL_PLATFORM_ENABLED=true after database setup.')
   if (!enabled('RENTRAL_SAFETY_ENABLED')) notes.push('Reports and appeals are disabled; set RENTRAL_SAFETY_ENABLED=true after database setup.')
+  if (!backend.GEOAPIFY_API_KEY?.trim()) notes.push('GEOAPIFY_API_KEY is missing: drafts can be kept, but listing address verification and submission need this backend-only geocoding key. See context/environment-setup.md.')
+  else if (/[\s*]/.test(backend.GEOAPIFY_API_KEY.trim()) || /^https?:/i.test(backend.GEOAPIFY_API_KEY.trim())) fail('GEOAPIFY_API_KEY', 'Paste only the full unmasked project API key, not the masked dropdown value or an example request URL.')
   if (enabled('PAYMENTS_ENABLED') || enabled('COMMERCIAL_ENABLED') || enabled('SETTLEMENT_ENABLED')) {
     required('PAYSTACK_SECRET_KEY')
     const key = backend.PAYSTACK_SECRET_KEY ?? ''

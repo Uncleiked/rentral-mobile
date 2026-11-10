@@ -1,6 +1,6 @@
 import prisma from '@/lib/db'
 import { muxConfigured, muxEnabled } from '@/lib/media/config'
-import { addressFingerprint, SPATIAL_TOLERANCE_METERS } from '@/lib/listings/spatial'
+import { addressFingerprint, decodeGeographicPoint, distanceMetersWgs84, SPATIAL_TOLERANCE_METERS } from '@/lib/listings/spatial'
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { assertStaffPermission, staffPermissions } from '@/lib/auth/roles'
 import { resolveBookingDispute } from '@/lib/lifecycle/disputes'
@@ -33,13 +33,18 @@ export async function moderateListing(actorId: string, listingId: string, operat
     await assertStaffPermission(tx, actorId, 'listing:review')
     const listing = await tx.listing.findUniqueOrThrow({ where: { id: listingId },
       include: { lister: { select: { id: true, kyc_verified: true, username: true } }, documentReview: true,
-        verification: true, media: true, payments: { where: { kind: 'listing_fee', status: 'succeeded' } } } })
+        verification: true, privateLocation: true, media: true, payments: { where: { kind: 'listing_fee', status: 'succeeded' } } } })
     await lockRecord(tx, 'user', listing.lister_id)
     if (listing.lister_id === actorId) throw new Error('Staff cannot moderate their own listing.')
     if (operation === 'publish') {
       const environment = paymentsEnabled() ? paystackEnvironment(process.env.PAYSTACK_SECRET_KEY?.trim() ?? '', process.env.PAYSTACK_ENVIRONMENT?.trim()) : null
       await assertActiveAccounts(tx, [listing.lister_id])
+      const capture = listing.capture_id ? await tx.listingCapture.findFirst({ where: { id: listing.capture_id, owner_id: listing.lister_id, state: 'sealed', listing_id: listing.id, video_path: listing.video_path } }) : null
+      const capturePoint = decodeGeographicPoint(capture?.start_geometry), storedPoint = decodeGeographicPoint(listing.privateLocation?.geometry)
+      const storedVideo = capture?.video_object_id ? await tx.storageObject.findFirst({ where: { id: capture.video_object_id, owner_id: listing.lister_id, state: 'available', digest: capture.video_digest, path: listing.video_path ?? '' }, select: { id: true } }) : null
       if (listing.listing_status !== 'pending_verification' || listing.archived_at || !listing.lister.id ||
+        !capture || !capturePoint || !storedPoint || !storedVideo || listing.privateLocation?.capture_id !== capture.id ||
+        distanceMetersWgs84(capturePoint, storedPoint) > 0.001 || listing.verification?.capture_id !== capture.id ||
         !listing.document_path || listing.documentReview?.status !== 'approved' || !listing.documentReview.reviewed_by ||
         listing.verification?.spatial_status !== 'matched' || !listing.text_address ||
         listing.verification.address_hash !== addressFingerprint(listing.text_address) ||

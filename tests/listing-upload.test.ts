@@ -37,4 +37,13 @@ describe('upload cleanup', () => {
     expect(videoExtensionForMime('video/mp4;codecs=avc1')).toBe('mp4')
     expect(videoExtensionForMime('video/quicktime')).toBe('mov')
   })
+  it('reuses an already uploaded current take after a declined save rather than invalidating its sealed video path', async () => {
+    const upload = vi.fn()
+    const client = { storage: { from: () => ({ upload }) } } as unknown as Parameters<typeof uploadListingMedia>[0]
+    const result = await uploadListingMedia(client, 'owner', 'folder', {
+      videoBlob: new Blob(['same take']), videoMimeType: 'video/mp4', posterBlob: null, documentFile: null,
+      remoteVideoPath: 'owner/folder/sealed.mp4', remotePosterPath: null, remoteDocumentPath: null,
+    })
+    expect(result.videoPath).toBe('owner/folder/sealed.mp4'); expect(result.newUploads).toEqual([]); expect(upload).not.toHaveBeenCalled()
+  })
 })

@@ -27,6 +27,7 @@ beforeEach(async () => {
   mocks.upsert.mockImplementation(({ create }: { create: Prisma.StorageObjectCreateInput }): StorageObject => ({
     revision: 0, digest: null, size_bytes: null, content_type: null, operation_token: null, ...create,
     createdAt: new Date(), updatedAt: new Date(), lease_expires_at: null,
+    upload_completed_at: typeof create.upload_completed_at === 'string' ? new Date(create.upload_completed_at) : create.upload_completed_at ?? null,
   }))
 })
 afterEach(async () => {
@@ -51,7 +52,7 @@ it('records verified immutable metadata before making an upload available', asyn
   expect(mocks.create).toHaveBeenCalledWith({ data: expect.objectContaining({ id: storageObjectId('listings-media', path), owner_id: 'owner', state: 'uploading', operation_token: expect.any(String) }) })
   const info = await createLocalStorage(root).info('listings-media', path)
   expect(mocks.updateMany).toHaveBeenCalledWith({ where: expect.objectContaining({ state: 'uploading', operation_token: expect.any(String) }),
-    data: expect.objectContaining({ state: 'available', digest: info.digest, size_bytes: movie.length, content_type: 'video/quicktime' }) })
+    data: expect.objectContaining({ state: 'available', digest: info.digest, size_bytes: movie.length, content_type: 'video/quicktime', upload_completed_at: expect.any(Date) }) })
 })
 
 it('retains file bytes after an ambiguous database acknowledgement', async () => {

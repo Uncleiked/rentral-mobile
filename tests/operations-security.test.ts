@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), activeOwner: vi.fn(), user: vi.fn(), findListing: vi.fn(), updateListing: vi.fn(), review: vi.fn(), audit: vi.fn(), notify: vi.fn(), report: vi.fn(), booking: vi.fn(), updateReport: vi.fn(), automatedListing: vi.fn(), geocode: vi.fn(), analyze: vi.fn() }))
+const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), activeOwner: vi.fn(), user: vi.fn(), findListing: vi.fn(), updateListing: vi.fn(), review: vi.fn(), audit: vi.fn(), notify: vi.fn(), report: vi.fn(), booking: vi.fn(), updateReport: vi.fn(), automatedListing: vi.fn(), geocode: vi.fn(), analyze: vi.fn(), capture: vi.fn(), storedVideo: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, user: { findUnique: mocks.user }, listing: { findUnique: mocks.automatedListing }, adminAudit: { create: mocks.audit } } }))
@@ -16,10 +16,12 @@ import { adminOperationAction } from '@/app/actions/adminActions'
 import { hasStaffPermission } from '@/lib/auth/roles'
 
 const listingId = '11111111-1111-4111-8111-111111111111'
+const captureId = '22222222-2222-4222-8222-222222222222'
 function eligibleListing() {
   return { id: listingId, lister_id: 'host', listing_status: 'pending_verification', text_address: 'Synthetic Yaba address', document_path: 'host/folder/title.pdf',
     lister: { id: 'host', kyc_verified: true, username: 'host' }, documentReview: { status: 'approved', reviewed_by: 'other-staff', findings: {} },
-    verification: { spatial_status: 'matched', address_hash: addressFingerprint('Synthetic Yaba address'), distance_meters: 25 },
+    capture_id: captureId, video_path: 'host/folder/video.mp4', privateLocation: { capture_id: captureId, geometry: { type: 'Point', coordinates: [3.4, 6.45] } },
+    verification: { capture_id: captureId, spatial_status: 'matched', address_hash: addressFingerprint('Synthetic Yaba address'), distance_meters: 25 },
     media: { status: 'ready' }, payments: [{ amount_kobo: BigInt(100000), currency: 'NGN', user_id: 'host', provider_environment: 'test' as string | null }] }
 }
 
@@ -28,12 +30,14 @@ beforeEach(() => {
   vi.stubEnv('PAYMENTS_ENABLED', 'true'); vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_owned_fixture'); vi.stubEnv('PAYSTACK_ENVIRONMENT', 'test')
   vi.stubEnv('MUX_ENABLED', 'true'); for (const name of ['MUX_TOKEN_ID', 'MUX_TOKEN_SECRET', 'MUX_WEBHOOK_SECRET', 'MUX_SIGNING_KEY_ID', 'MUX_SIGNING_PRIVATE_KEY']) vi.stubEnv(name, 'configured-test-value')
   mocks.findListing.mockResolvedValue(eligibleListing())
+  mocks.capture.mockResolvedValue({ id: captureId, video_object_id: 'object', video_digest: 'a'.repeat(64), start_geometry: { type: 'Point', coordinates: [3.4, 6.45] } })
+  mocks.storedVideo.mockResolvedValue({ id: 'object' })
   mocks.activeOwner.mockResolvedValue({ count: 1 })
   mocks.booking.mockResolvedValue({ listing_id: listingId })
   mocks.report.mockResolvedValue({ id: 'report', booking_id: listingId, status: 'open', booking: { seeker_id: 'renter', lister_id: 'host', status: 'disputed' } })
   mocks.user.mockImplementation(async ({ where }: { where: { id: string } }) => ({ staff_role: ['staff', 'second-staff'].includes(where.id) ? 'admin' : where.id === 'analyst' ? 'analyst' : null }))
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({ $queryRaw: mocks.lock,
-    user: { findUnique: mocks.user, updateMany: mocks.activeOwner }, listing: { findUnique: mocks.automatedListing, findUniqueOrThrow: mocks.findListing, update: mocks.updateListing }, documentReview: { upsert: mocks.review },
+    user: { findUnique: mocks.user, updateMany: mocks.activeOwner }, listing: { findUnique: mocks.automatedListing, findUniqueOrThrow: mocks.findListing, update: mocks.updateListing }, documentReview: { upsert: mocks.review }, listingCapture: { findFirst: mocks.capture }, storageObject: { findFirst: mocks.storedVideo },
     adminAudit: { create: mocks.audit }, notification: { create: mocks.notify, createMany: mocks.notify }, booking: { findUnique: mocks.booking },
     dispute: { findUnique: mocks.report, findUniqueOrThrow: mocks.report, updateMany: mocks.updateReport } }))
 })
@@ -106,6 +110,17 @@ describe('server-owned staff access and publication', () => {
   it('fails closed on new publication when payment configuration is disabled', async () => {
     vi.stubEnv('PAYMENTS_ENABLED', 'false')
     await expect(moderateListing('staff', listingId, 'publish', 'Reviewed existing historical fee')).rejects.toThrow('Publication requires')
+    expect(mocks.updateListing).not.toHaveBeenCalled()
+  })
+  it('does not publish a legacy listing without a sealed recording-time capture', async () => {
+    mocks.findListing.mockResolvedValue({ ...eligibleListing(), capture_id: null })
+    await expect(moderateListing('staff', listingId, 'publish', 'Reviewed legacy recording evidence')).rejects.toThrow('Publication requires')
+    expect(mocks.updateListing).not.toHaveBeenCalled()
+  })
+  it('requires verification and private location to bind the same sealed capture', async () => {
+    const listing = eligibleListing(); listing.verification.capture_id = listingId
+    mocks.findListing.mockResolvedValue(listing)
+    await expect(moderateListing('staff', listingId, 'publish', 'Reviewed changed capture evidence')).rejects.toThrow('Publication requires')
     expect(mocks.updateListing).not.toHaveBeenCalled()
   })
   it('prevents self moderation, draft document approval and self dispute resolution', async () => {

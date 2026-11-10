@@ -64,8 +64,12 @@ async function captureGenerated() {
 
 async function runFinancialBrowser(db, origin, session) {
   await db.collection('User').updateOne({ _id: session.user.id }, { $set: { staff_role: 'admin' } })
+  const draftId = randomUUID()
+  await db.collection('Listing').insertOne({ _id: draftId, revision: 0, lister_id: session.user.id, category: 'house', listing_status: 'draft', wizard_step: 'details',
+    text_address: 'Initial owned fixture address', base_rent_amount: 500000, asset_metadata: { listingTitle: 'Owned draft before editing', bedrooms: '2', bathrooms: '2', sizeSqm: '80', amenities: '' },
+    video_path: null, poster_path: null, document_path: null, capture_id: null, archived_at: null, archived_status: null, createdAt: new Date(), updatedAt: new Date() })
   const browserFixture = path.join(artifactRoot, 'finance-browser-session.json')
-  await writeFile(browserFixture, JSON.stringify({ origin, accessToken: session.access_token, refreshToken: session.refresh_token, actorId: session.user.id, email: session.user.email }), { mode: 0o600 })
+  await writeFile(browserFixture, JSON.stringify({ origin, accessToken: session.access_token, refreshToken: session.refresh_token, actorId: session.user.id, email: session.user.email, draftId }), { mode: 0o600 })
   // Keep the parent event loop draining the owned Next stdout/stderr pipes
   // during compilation and browser work. A synchronous wait can fill them.
   const status = await new Promise((resolveStatus, rejectStatus) => {

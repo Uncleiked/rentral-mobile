@@ -52,7 +52,10 @@ authenticates an owned ciphertext snapshot before decompression, restores only
 to a fresh owned local target, and quarantines credentials/providers; it must not
 alter the source or claim automatic cutover/account recovery is safe.
 
-Private GPS belongs in ListingLocation only. Return allowlisted public data and
+Private GPS belongs in private ListingCapture recording evidence and its bound
+ListingLocation only. The accepted start geometry is immutable; ordinary listing
+inputs use captureId instead of caller-supplied coordinates. Never infer a match
+from UI state, an unavailable geocoder or an old address/video proof. Return allowlisted public data and
 coarse neighborhoods. Files must pass ownership, actual byte/type/magic, path and
 link checks; private files need scoped short-lived signed URLs. Never serve the
 development email outbox, metadata or tombstone markers.

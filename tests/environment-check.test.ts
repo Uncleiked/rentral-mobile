@@ -30,6 +30,14 @@ describe('private environment file inspection', () => {
     expect(result.errors.map(item => item.key)).toEqual(expect.arrayContaining(['JWT_SECRET', 'EXPO_PUBLIC_API_URL']))
     expect(JSON.stringify(result)).not.toContain('YOUR_EXISTING_PRIVATE_SIGNING_SECRET')
   })
+  it('recognizes masked Geoapify values and copied request URLs without exposing the key', () => {
+    for (const key of ['masked**project', 'https://api.geoapify.com/v1/geocode/search?apiKey=private-fixture', 'invalid key']) {
+      const result = inspectEnvironment({ ...backend, GEOAPIFY_API_KEY: key }, mobile)
+      expect(result.errors).toContainEqual(expect.objectContaining({ key: 'GEOAPIFY_API_KEY' }))
+      expect(JSON.stringify(result)).not.toContain(key)
+    }
+    expect(inspectEnvironment({ ...backend, GEOAPIFY_API_KEY: 'synthetic-project-key' }, mobile).ok).toBe(true)
+  })
   it('rejects mismatched Paystack environments and public collection keys', () => {
     expect(inspectEnvironment({ ...backend, PAYMENTS_ENABLED: 'true', PAYSTACK_SECRET_KEY: 'sk_test_fixture', PAYSTACK_ENVIRONMENT: 'live' }, mobile).errors).toContainEqual(expect.objectContaining({ key: 'PAYSTACK_ENVIRONMENT' }))
     expect(inspectEnvironment({ ...backend, PAYMENTS_ENABLED: 'true', PAYSTACK_SECRET_KEY: 'pk_test_fixture', PAYSTACK_ENVIRONMENT: 'test' }, mobile).ok).toBe(false)

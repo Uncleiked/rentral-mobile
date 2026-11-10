@@ -34,6 +34,20 @@ function inspectData(model: string, data: unknown, relations: RelationGraph): vo
 /** Server-client guard. Collection access outside Prisma still requires restricted database credentials. */
 export function assertAppendOnlyOperation(model: string, operation: string, args?: unknown, relations: RelationGraph = {}): void {
   if (appendOnlyModels.has(model) && prohibitedOperations.has(operation)) throw new Error('APPEND_ONLY_RECORD')
+  if (model === 'StorageObject' && ['update', 'updateMany'].includes(operation) && record(args) && record(args.data) && 'upload_completed_at' in args.data &&
+    (!record(args.where) || args.where.state !== 'uploading' || typeof args.where.operation_token !== 'string' || args.data.state !== 'available')) throw new Error('IMMUTABLE_UPLOAD_PROVENANCE')
+  if (model === 'ListingCapture' && prohibitedOperations.has(operation)) {
+    if (['delete', 'deleteMany', 'upsert'].includes(operation) || !record(args) || !record(args.data) || !record(args.where)) throw new Error('IMMUTABLE_CAPTURE')
+    const data = args.data, where = args.where
+    const immutable = ['id', 'owner_id', 'session_id', 'begin_hash', 'start_geometry', 'start_accuracy', 'start_sample_at', 'started_at', 'finish_by']
+    if (immutable.some(field => field in data)) throw new Error('IMMUTABLE_CAPTURE')
+    const endFields = ['finish_hash', 'end_geometry', 'end_accuracy', 'end_sample_at', 'finished_at', 'seal_by', 'duration_seconds']
+    const videoFields = ['video_path', 'video_object_id', 'video_digest', 'sealed_at']
+    if (endFields.some(field => field in data) && (where.state !== 'recording' || data.state !== 'recorded')) throw new Error('IMMUTABLE_CAPTURE')
+    if (videoFields.some(field => field in data) && (where.state !== 'recorded' || data.state !== 'sealed')) throw new Error('IMMUTABLE_CAPTURE')
+    if ('state' in data && !((where.state === 'recording' && data.state === 'recorded') || (where.state === 'recorded' && data.state === 'sealed'))) throw new Error('IMMUTABLE_CAPTURE')
+    if ('listing_id' in data && where.state !== 'sealed') throw new Error('IMMUTABLE_CAPTURE')
+  }
   if (!dataOperations.has(operation) || !record(args)) return
   if (operation === 'upsert') { inspectData(model, args.create, relations); inspectData(model, args.update, relations) }
   else inspectData(model, args.data, relations)

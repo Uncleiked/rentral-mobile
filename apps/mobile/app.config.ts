@@ -1,4 +1,5 @@
 import type { ExpoConfig } from 'expo/config'
+import brandIdentity from '../../lib/brand/identity.json'
 
 // Stop before Expo substitutes EXPO_PUBLIC values into the JavaScript bundle.
 if (Object.keys(process.env).some(key => key.startsWith('EXPO_PUBLIC_') && /JWT|MONGODB|DATABASE|SECRET|PASSWORD|PRIVATE_KEY|ACCESS_TOKEN|API_KEY/.test(key))) {
@@ -15,8 +16,9 @@ const config: ExpoConfig = {
   orientation: 'portrait', userInterfaceStyle: 'dark',
   icon: './assets/icon.png',
   ios: { supportsTablet: true, bundleIdentifier: 'com.rentral.mobile' },
-  android: { package: 'com.rentral.mobile' },
+  android: { package: 'com.rentral.mobile', adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: brandIdentity.colors.backgroundHex } },
   plugins: ['expo-router', 'expo-font', 'expo-secure-store',
+    ['expo-splash-screen', { image: './assets/brand-mark.png', imageWidth: 128, backgroundColor: brandIdentity.colors.backgroundHex, resizeMode: 'contain' }],
     ['expo-camera', { cameraPermission: 'Allow Rentral to record a walkthrough of your listing.', microphonePermission: false, recordAudioAndroid: false }],
     ['expo-location', { locationWhenInUsePermission: 'Allow Rentral to record the location of your listing while you capture its walkthrough.' }],
     'expo-document-picker',

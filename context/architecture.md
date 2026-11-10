@@ -23,13 +23,27 @@
   checks. Bounded conflict retries contain database work only. Rental/hold overlap
   protection, balanced immutable ledger inserts and one-use paid-hold allocation
   are enforced in shared services. Provider HTTP never runs inside retry callbacks.
-- Capture GPS is private ListingLocation geometry, not a public Listing scalar.
-  Bounded Haversine checks replace PostGIS distance SQL; public projections never
-  return raw coordinates. Monthly Insights count distinct contributors and hide
+- Capture GPS is private ListingCapture start/end evidence plus the associated
+  ListingLocation geometry, never a public Listing scalar. A session-bound online
+  begin/finish lifecycle precedes immutable digest-bound video sealing. Submission
+  and changed posted addresses require a precise backend Geoapify match within
+  100 metres; address/capture/video proofs are rechecked under write locks. Ordinary
+  metadata saves cannot change accepted capture GPS. Additive captureVersion1 setup
+  enables these operations; missing setup does not disable unrelated auth.
+  Bounded Haversine checks replace PostGIS distance SQL; public/owner projections
+  never return raw coordinates. Monthly Insights count distinct contributors and hide
   cohorts below ten people.
 - Central Prisma guards reject direct/nested mutation of ledger/audit/allocation
   records; cross-document balance/allocation constraints remain service-owned.
   This is not protection against privileged raw database administration.
+
+The 2026-11-10 recording/branding increment is described in
+[the approved blueprint](capture-location-brand-blueprint.md) and
+[recording environment guide](recording-location-setup.md). Brand geometry/palette
+is canonical in `lib/brand/identity.json`, with deterministic SVG/native/ICO assets.
+Native launch is bounded, reduced-motion aware and independent of backend readiness;
+error fallbacks release the operating-system splash. The favicon PNG frame remains
+RGBA/32-bit even though the iOS launcher PNG must be opaque RGB.
 
 The app/backend run locally; the user subsequently selected the saved Atlas
 database. Setup preserves existing nonempty environment values. Initial isolated

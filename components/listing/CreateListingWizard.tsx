@@ -9,6 +9,7 @@ import { MetadataForm } from '@/components/listing/MetadataForm'
 import { DocumentUploadZone } from '@/components/listing/DocumentUploadZone'
 import { CheckoutPrompt } from '@/components/listing/CheckoutPrompt'
 import { SaveDraftButton } from '@/components/listing/SaveDraftButton'
+import { ListingRequestRecovery } from '@/components/listing/ListingRequestRecovery'
 import { useRentralStore, WIZARD_STEPS, type DraftPayload } from '@/store/useRentralStore'
 
 const STEP_LABELS: Record<(typeof WIZARD_STEPS)[number], string> = {
@@ -26,10 +27,10 @@ function WizardStepper() {
   const currentIndex = step === 'done' ? visibleSteps.length : visibleSteps.indexOf(step)
 
   return (
-    <div className="mx-auto mb-10 flex w-full max-w-md items-center justify-between">
+    <div className="mx-auto mb-10 grid w-full max-w-md grid-cols-5 gap-1">
       {visibleSteps.map((s, index) => (
-        <div key={s} className="flex flex-1 items-center">
-          <div className="flex flex-col items-center gap-1.5">
+        <div key={s} className="relative flex min-w-0 justify-center">
+          <div className="flex min-w-0 max-w-full flex-col items-center gap-1.5">
             <span
               className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                 index <= currentIndex
@@ -39,13 +40,13 @@ function WizardStepper() {
             >
               {index + 1}
             </span>
-            <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+            <span className="min-h-6 w-full wrap-anywhere text-center text-[9px] leading-tight font-medium uppercase tracking-normal text-text-muted sm:text-[10px]">
               {STEP_LABELS[s]}
             </span>
           </div>
           {index < visibleSteps.length - 1 && (
             <span
-              className={`mx-2 h-px flex-1 ${index < currentIndex ? 'bg-accent-primary' : 'bg-border-subtle'}`}
+              className={`absolute top-3.5 left-[calc(50%+16px)] h-px w-[calc(100%-32px)] ${index < currentIndex ? 'bg-accent-primary' : 'bg-border-subtle'}`}
             />
           )}
         </div>
@@ -85,8 +86,14 @@ function DoneScreen() {
   )
 }
 
-export function CreateListingWizard({ draft }: { draft: DraftPayload | null }) {
+export function CreateListingWizard({ draft, actorId }: { draft: DraftPayload | null; actorId: string }) {
   const step = useRentralStore((state) => state.step)
+  const storedActor = useRentralStore((state) => state.actorId)
+  const generation = useRentralStore(state => state.generation)
+  const mutationBusy = useRentralStore((state) => state.mutationBusy)
+  const pendingCommand = useRentralStore(state => state.pendingCommand)
+  const capturePending = useRentralStore(state => state.capturePending)
+  const recoveryError = useRentralStore(state => state.recoveryError)
   const loadDraft = useRentralStore((state) => state.loadDraft)
   const reset = useRentralStore((state) => state.reset)
 
@@ -96,30 +103,39 @@ export function CreateListingWizard({ draft }: { draft: DraftPayload | null }) {
   useEffect(() => {
     if (hydratedRef.current) return
     hydratedRef.current = true
+    useRentralStore.getState().setActorId(actorId)
+    useRentralStore.getState().advanceGeneration()
+    const current = useRentralStore.getState()
+    if (current.pendingCommand || current.capturePending || current.recoveryError) return
     if (draft) {
       loadDraft(draft)
     } else if (useRentralStore.getState().draftListingId) {
       reset()
     }
-  }, [draft, loadDraft, reset])
+  }, [draft, loadDraft, reset, actorId])
+
+  if (storedActor !== actorId) return <p role="status" className="px-4 py-10 text-sm text-text-muted">Opening your listing draft…</p>
 
   return (
     <div className="min-h-screen bg-background-app px-4 py-10 sm:px-6">
-      <div className="mx-auto mb-7 w-full max-w-md"><Link href="/marketplace/vault" className="inline-flex min-h-11 items-center gap-2 text-xs text-text-muted transition-colors hover:text-text-primary"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your Media Vault</Link></div>
+      <div className="mx-auto mb-7 w-full max-w-md"><Link href="/marketplace/vault" aria-disabled={mutationBusy || Boolean(pendingCommand || capturePending)} onClick={event => { if (mutationBusy || pendingCommand || capturePending) event.preventDefault() }} className="inline-flex min-h-11 items-center gap-2 text-xs text-text-muted transition-colors hover:text-text-primary"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your Media Vault</Link></div>
       <WizardStepper />
+      <ListingRequestRecovery actorId={actorId} />
 
+      <fieldset disabled={mutationBusy || Boolean(pendingCommand || recoveryError)} aria-busy={mutationBusy}>
       {step !== 'done' && (
         <div className="mx-auto mb-6 flex w-full max-w-md justify-end">
-          <SaveDraftButton />
+          <SaveDraftButton actorId={actorId} />
         </div>
       )}
 
       {step === 'category' && <CategorySelector />}
-      {step === 'capture' && <CaptureCanvas />}
-      {step === 'details' && <MetadataForm />}
+      {step === 'capture' && <CaptureCanvas actorId={actorId} />}
+      {step === 'details' && <MetadataForm key={`${actorId}:${generation}`} actorId={actorId} />}
       {step === 'documents' && <DocumentUploadZone />}
-      {step === 'checkout' && <CheckoutPrompt />}
+      {step === 'checkout' && <CheckoutPrompt actorId={actorId} />}
       {step === 'done' && <DoneScreen />}
+      </fieldset>
     </div>
   )
 }

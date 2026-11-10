@@ -1,5 +1,21 @@
 # Rentral UI Registry
 
+### Rentral identity, opening reveal and recording recovery — 2026-11-10
+
+Canonical patterns: context/ui-registry.md entries of the same date. Reuse
+components/brand/RentralLogo.tsx and native BrandLogo/BrandMark rather than
+independent wordmarks. Artwork/palette lives in lib/brand/identity.json; generate
+icons using scripts/generate-brand-assets.mjs. Keep lowercase Inter semibold,
+charcoal/white/emerald and generous mark negative space. Native launch720ms,
+reduced180ms without scale; bounded fallbacks and no backend wait/foreground replay.
+
+CaptureAddressCheck uses native existing semantic text/status colors,17px heading,
+13px explanatory/status text and space.lg. ListingRequestRecovery uses web
+surface-card/border-subtle/rounded-2xl/p-5/gap-3, semantic text and44px actions.
+Known match, mismatch, unavailable and unconfirmed are distinct states. Preserve
+exact pending commands/nonce per actor; read before explicit retry. Browser-camera
+Blob recovery is memory-only across SPA navigation, never claimed after reload.
+
 ### Member dashboard activity
 
 Files: components/account/MemberActivityCards.tsx, apps/mobile/app/dashboard.tsx.

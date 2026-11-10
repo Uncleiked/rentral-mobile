@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/client'
 import { COMPLIANCE_DOCS_BUCKET, LISTINGS_MEDIA_BUCKET, videoExtensionForMime } from '@/lib/storage'
+import { isWizardCurrent } from '@/store/useRentralStore'
 
 // Client-side upload orchestration shared by "Save Draft" and the final post.
 // Local blobs win over already-uploaded draft media; filenames are timestamped
@@ -44,7 +45,7 @@ export async function uploadListingMedia(
   const pending: Promise<{ error: unknown } | { error: null }>[] = []
 
   let videoPath = media.remoteVideoPath
-  if (media.videoBlob && media.videoMimeType) {
+  if (media.videoBlob && media.videoMimeType && !media.remoteVideoPath) {
     videoPath = `${uid}/${folderId}/${stamp}_video.${videoExtensionForMime(media.videoMimeType)}`
     newUploads.push({ bucket: LISTINGS_MEDIA_BUCKET, path: videoPath })
     pending.push(
@@ -55,7 +56,7 @@ export async function uploadListingMedia(
   }
 
   let posterPath = media.remotePosterPath
-  if (media.posterBlob) {
+  if (media.posterBlob && !media.remotePosterPath) {
     posterPath = `${uid}/${folderId}/${stamp}_poster.jpg`
     newUploads.push({ bucket: LISTINGS_MEDIA_BUCKET, path: posterPath })
     pending.push(
@@ -66,7 +67,7 @@ export async function uploadListingMedia(
   }
 
   let documentPath = media.remoteDocumentPath
-  if (media.documentFile) {
+  if (media.documentFile && !media.remoteDocumentPath) {
     const safeName = media.documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     documentPath = `${uid}/${folderId}/${stamp}_${safeName}`
     newUploads.push({ bucket: COMPLIANCE_DOCS_BUCKET, path: documentPath })
@@ -98,14 +99,21 @@ export type SessionUpload =
 // action, and both show the same two failure messages.
 export async function resolveSessionAndUpload(
   folderId: string,
-  media: ListingMediaSnapshot
+  media: ListingMediaSnapshot,
+  expectedActor?: string,
+  expectedGeneration?: number,
 ): Promise<SessionUpload> {
   try {
+    const current = () => expectedGeneration === undefined || Boolean(expectedActor && isWizardCurrent(expectedActor, expectedGeneration))
+    if (!current()) return { ok: false, error: 'This listing draft changed. Reopen it before continuing.' }
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user.id
+    if (!current()) return { ok: false, error: 'This listing draft changed. Reopen it before continuing.' }
     if (!uid) return { ok: false, error: 'You are signed out. Sign in and try again.' }
+    if (expectedActor && uid !== expectedActor) return { ok: false, error: 'The signed-in account changed. Reload this page before continuing.' }
     const uploaded = await uploadListingMedia(supabase, uid, folderId, media)
+    if (!current()) return { ok: false, error: 'This listing draft changed. Reopen it before continuing.' }
     return { ok: true, supabase, uid, media: uploaded }
   } catch {
     return { ok: false, error: 'Uploading your walkthrough failed. Check your connection and try again.' }

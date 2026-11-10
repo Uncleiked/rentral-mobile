@@ -1,32 +1,32 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
-import { saveListing } from '@/app/actions/listingActions'
-import { removeUploads, resolveSessionAndUpload } from '@/lib/listing-upload'
+import { resolveSessionAndUpload } from '@/lib/listing-upload'
 import { useRentralStore } from '@/store/useRentralStore'
+import { assertWizardCurrent, executeWebListingCommand } from '@/lib/listings/capture-client'
 
 type Phase = 'idle' | 'uploading' | 'saving'
 
-export function CheckoutPrompt() {
+export function CheckoutPrompt({ actorId }: { actorId: string }) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
-  const [uncertain, setUncertain] = useState(false)
-  const goNext = useRentralStore((state) => state.goNext)
+  const active = useRef(true)
+  useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const goBack = useRentralStore((state) => state.goBack)
 
   const handleConfirm = async () => {
-    setError(null)
-
     // Snapshot everything the earlier steps collected. Media is either an
     // in-memory blob from this session or a Storage path from a saved draft;
     // a mid-wizard refresh with no draft leaves gaps we must catch here.
     const store = useRentralStore.getState()
-    const { category, videoBlob, coords, metadata, address, basePrice } = store
+    if (store.actorId !== actorId || store.mutationBusy || store.pendingCommand || store.capturePending || store.recoveryError) return
+    const identity = { actorId, generation: store.generation, isActive: () => active.current }
+    setError(null)
+    const { category, videoBlob, captureId, metadata, address, basePrice } = store
 
     const hasVideo = videoBlob !== null || store.remoteVideoPath !== null
-    const hasGps = coords !== null || store.hasRemoteCoords
+    const hasGps = captureId !== null
     const hasDocument = store.documentFile !== null || store.remoteDocumentPath !== null
     if (!category || !hasVideo || !hasGps || !hasDocument) {
       setError('Your walkthrough or document was lost (page refresh?). Go back and redo that step.')
@@ -34,46 +34,37 @@ export function CheckoutPrompt() {
     }
 
     setPhase('uploading')
-    // Local session read is enough for path construction — the storage RLS
-    // policies and saveListing's ownership check are the real gatekeepers.
-    const resolved = await resolveSessionAndUpload(store.ensureMediaFolderId(), store)
-    if (!resolved.ok) {
-      setError(resolved.error)
-      setPhase('idle')
-      return
-    }
-    const { supabase, media } = resolved
-
+    store.setMutationBusy(true)
     try {
+      const resolved = await resolveSessionAndUpload(store.ensureMediaFolderId(), store, actorId, identity.generation)
+      assertWizardCurrent(identity)
+      if (!resolved.ok) { setError(resolved.error); return }
+      const { media } = resolved
+      store.rememberUploadedMedia(media)
       setPhase('saving')
-      const result = await saveListing({
+      const command = store.prepareListingCommand({ mode: 'submit', listing: {
+        clientId: crypto.randomUUID(),
+        captureId,
         category,
         draftId: store.draftListingId ?? undefined,
+        expectedRevision: store.draftRevision ?? undefined,
         metadata: metadata[category],
         address,
         basePrice,
-        lat: coords?.lat,
-        lng: coords?.lng,
-        accuracy: coords?.accuracy,
         videoPath: media.videoPath,
         posterPath: media.posterPath ?? undefined,
         documentPath: media.documentPath,
-      })
-
-      if (!result.success) {
-        if (result.uncertain) setUncertain(true)
-        else await removeUploads(supabase, media.newUploads)
-        setError(result.error)
-        return
-      }
-
-      goNext()
-    } catch {
-      // The server may have committed before the connection failed.
-      setUncertain(true)
-      setError('We could not confirm submission. Check Your Listings before submitting again.')
+      } })
+      await executeWebListingCommand(identity, command)
+      assertWizardCurrent(identity)
+      store.completeListingCommand(command.listing.clientId)
+      store.setMutationBusy(false)
+      store.setStep('done')
+    } catch (reason) {
+      if (active.current && useRentralStore.getState().actorId === actorId && useRentralStore.getState().generation === identity.generation) setError(reason instanceof Error ? reason.message : 'We could not confirm submission. Check the saved request before submitting again.')
     } finally {
-      setPhase('idle')
+      if (active.current) setPhase('idle')
+      if (active.current && useRentralStore.getState().actorId === actorId && useRentralStore.getState().generation === identity.generation) store.setMutationBusy(false)
     }
   }
 
@@ -99,15 +90,14 @@ export function CheckoutPrompt() {
             <ShieldCheck className="h-4 w-4 text-text-primary" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-text-primary">No payment collected</p>
-            <p className="mt-1 text-xs text-text-muted">Payments are not available yet.</p>
+            <p className="text-sm font-semibold text-text-primary">Recording location checked</p>
+            <p className="mt-1 text-xs text-text-muted">Submission rechecks your address against the locked video location. Document review and the publication fee remain separate.</p>
           </div>
         </div>
 
       </div>
 
       {error && <p className="mt-4 text-center text-xs font-semibold text-trust-flagged">{error}</p>}
-      {uncertain && <Link href="/marketplace/listing" className="mt-3 block text-center text-sm text-accent-primary underline">Check Your Listings</Link>}
 
       <div className="mt-6 flex gap-3">
         <button
@@ -121,7 +111,7 @@ export function CheckoutPrompt() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={phase !== 'idle' || uncertain}
+          disabled={phase !== 'idle'}
           className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {phase === 'uploading' ? 'Uploading walkthrough...' : phase === 'saving' ? 'Saving listing...' : 'Submit for Review'}

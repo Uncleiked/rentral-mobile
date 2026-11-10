@@ -2,32 +2,38 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
 const mocks = vi.hoisted(() => ({
-  userId: vi.fn(), transaction: vi.fn(), find: vi.fn(), lock: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), revalidate: vi.fn(), mediaCreate: vi.fn(), locationUpsert: vi.fn(), locationDelete: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(),
+  userId: vi.fn(), transaction: vi.fn(), find: vi.fn(), lock: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), revalidate: vi.fn(), mediaCreate: vi.fn(), locationUpsert: vi.fn(), locationDelete: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(), captureRead: vi.fn(), captureBind: vi.fn(), geocode: vi.fn(), verification: vi.fn(),
 }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.userId, revalidateProfilePaths: vi.fn() }))
-vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction } }))
+vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, listing: { findFirst: mocks.find } } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: mocks.lock }))
 vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepareStorage, claimStorageObjects: mocks.claimStorage }))
+vi.mock('@/lib/listings/capture', () => ({ readCaptureForSubmission: mocks.captureRead, bindCaptureToListing: mocks.captureBind }))
+vi.mock('@/lib/listings/spatial', async original => ({ ...await original<typeof import('@/lib/listings/spatial')>(), geocodeListingAddress: mocks.geocode }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
 vi.mock('next/server', () => ({ after: vi.fn() }))
 import { saveListing, saveDraft, updateListing } from '@/app/actions/listingActions'
 import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
+import { ApiError } from '@/lib/api/http'
 
 const input = {
   draftId: '27d5a2ee-62c1-4c5d-93de-7a0ee6d5728d', category: 'house',
   address: 'Test property address', basePrice: '500000',
   metadata: { bedrooms: '2', bathrooms: '2', sizeSqm: '80', amenities: '' },
   videoPath: 'user-1/folder/video.webm', documentPath: 'user-1/folder/deed.pdf',
+  captureId: '11111111-1111-4111-8111-111111111111',
 }
 
 beforeEach(() => {
   vi.resetAllMocks()
   vi.stubEnv('MUX_ENABLED', 'false')
   mocks.userId.mockResolvedValue('user-1')
-  mocks.prepareStorage.mockResolvedValue([])
+  mocks.prepareStorage.mockResolvedValue([{ path: input.videoPath, id: 'video', digest: 'a'.repeat(64), bucket: 'listings-media', sizeBytes: 100, contentType: 'video/webm' }])
+  const capture = { id: input.captureId, start_geometry: { type: 'Point', coordinates: [3.4, 6.45] }, begin_hash: 'begin', video_digest: 'a'.repeat(64), start_accuracy: 8 }
+  mocks.captureRead.mockResolvedValue(capture); mocks.captureBind.mockResolvedValue(capture); mocks.geocode.mockResolvedValue({ longitude: 3.4, latitude: 6.45 })
   mocks.claimStorage.mockResolvedValue(undefined)
-  const tx = { listing: { findFirst: mocks.find, update: mocks.update, updateMany: mocks.updateMany, create: mocks.create }, mediaAsset: { create: mocks.mediaCreate }, listingLocation: { upsert: mocks.locationUpsert, deleteMany: mocks.locationDelete } }
+  const tx = { listing: { findFirst: mocks.find, update: mocks.update, updateMany: mocks.updateMany, create: mocks.create }, mediaAsset: { create: mocks.mediaCreate }, listingLocation: { upsert: mocks.locationUpsert, deleteMany: mocks.locationDelete }, listingVerification: { upsert: mocks.verification } }
   mocks.transaction.mockImplementation(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx))
   mocks.update.mockResolvedValue({ id: input.draftId, lister: { username: 'renter' } })
   mocks.create.mockResolvedValue({ id: input.draftId, lister: { username: 'renter' } })
@@ -46,7 +52,7 @@ it.each([saveListing, saveDraft, updateListing])('blocks a direct mutation witho
 
 it.each([saveListing, saveDraft])('returns a definite closed-account rejection without ambiguous-save cleanup instructions', async action => {
   vi.mocked(assertActiveAccounts).mockRejectedValueOnce(new AccountUnavailableError())
-  const result = await action({ ...input, listingId: input.draftId, wizardStep: 'details' })
+  const result = await action(action === saveDraft ? { ...input, wizardStep: 'details' } : input)
   expect(result).toMatchObject({ success: false, code: 'ACCOUNT_UNAVAILABLE' })
   expect(result).not.toHaveProperty('uncertain', true)
   expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled()
@@ -63,8 +69,8 @@ it('rejects a missing or already submitted draft within the transaction', async 
   expect(mocks.update).not.toHaveBeenCalled()
 })
 
-it('refuses inherited GPS when the locked row contains different footage', async () => {
-  mocks.find.mockResolvedValue({ id: input.draftId, privateLocation: { id: input.draftId }, video_path: 'user-1/folder/replacement.webm' })
+it('refuses a capture that is not sealed against the exact submitted footage', async () => {
+  mocks.captureRead.mockRejectedValue(new ApiError(409, 'CAPTURE_REQUIRED', 'Record a new walkthrough.'))
   expect(await saveListing(input)).toMatchObject({ success: false })
   expect(mocks.update).not.toHaveBeenCalled()
 })
@@ -92,15 +98,14 @@ it('atomically queues media with a submitted listing when configured', async () 
   }
 })
 
-it('stores a fresh video GPS fix in the private collection in the same transaction', async () => {
-  expect(await saveListing({ ...input, draftId: undefined, lat: 6.45, lng: 3.4, accuracy: 8 })).toMatchObject({ success: true })
-  expect(mocks.locationUpsert).toHaveBeenCalledWith({ where: { listing_id: input.draftId }, create: { id: input.draftId, listing_id: input.draftId, geometry: { type: 'Point', coordinates: [3.4, 6.45] } }, update: { geometry: { type: 'Point', coordinates: [3.4, 6.45] } } })
+it('copies the sealed recording GPS privately in the same submission transaction', async () => {
+  expect(await saveListing({ ...input, draftId: undefined })).toMatchObject({ success: true })
+  expect(mocks.locationUpsert).toHaveBeenCalledWith({ where: { listing_id: input.draftId }, create: { id: input.draftId, listing_id: input.draftId, capture_id: input.captureId, geometry: { type: 'Point', coordinates: [3.4, 6.45] } }, update: { capture_id: input.captureId, geometry: { type: 'Point', coordinates: [3.4, 6.45] } } })
   expect(mocks.create.mock.calls[0][0].data).not.toHaveProperty('geometry')
 })
 
-it('cannot publish an existing draft with no private GPS record', async () => {
-  mocks.find.mockResolvedValue({ id: input.draftId, video_path: input.videoPath, privateLocation: null })
-  expect(await saveListing(input)).toMatchObject({ success: false })
+it('cannot submit a legacy draft without recording-time evidence', async () => {
+  expect(await saveListing({ ...input, captureId: undefined })).toMatchObject({ success: false })
   expect(mocks.update).not.toHaveBeenCalled()
 })
 
@@ -111,13 +116,13 @@ it('rejects a draft deleted during its revision lock', async () => {
 })
 
 it.each(['user-1/folder/retake.mp4', undefined])('clears inherited GPS when a draft replaces or removes its footage: %s', async videoPath => {
-  expect(await saveDraft({ ...input, wizardStep: 'details', videoPath })).toMatchObject({ success: true })
+  expect(await saveDraft({ ...input, wizardStep: 'details', videoPath, captureId: undefined })).toMatchObject({ success: true })
   expect(mocks.locationDelete).toHaveBeenCalledWith({ where: { listing_id: input.draftId } })
   expect(mocks.locationUpsert).not.toHaveBeenCalled()
 })
 
 it('does not attach a GPS record to a new draft with no recorded video', async () => {
-  expect(await saveDraft({ category: 'house', wizardStep: 'capture', metadata: {}, lat: 6.45, lng: 3.4 })).toMatchObject({ success: true })
+  expect(await saveDraft({ category: 'house', wizardStep: 'capture', metadata: {} })).toMatchObject({ success: true })
   expect(mocks.locationUpsert).not.toHaveBeenCalled()
 })
 
@@ -125,4 +130,30 @@ it('marks a transaction/commit failure uncertain so clients retain uploaded foot
   mocks.transaction.mockRejectedValue(new Error('commit result unknown'))
   expect(await saveListing(input)).toMatchObject({ success: false, uncertain: true })
   expect(await saveDraft({ ...input, wizardStep: 'details' })).toMatchObject({ success: false, uncertain: true })
+})
+
+it('blocks a mismatched address before creating or submitting any listing', async () => {
+  mocks.geocode.mockResolvedValue({ longitude: 3.4, latitude: 6.5 })
+  expect(await saveListing(input)).toMatchObject({ success: false, code: 'ADDRESS_MISMATCH', status: 409 })
+  expect(mocks.transaction).not.toHaveBeenCalled(); expect(mocks.prepareStorage).not.toHaveBeenCalled()
+})
+it.each([null, 'failure'])('fails closed when address resolution is unavailable: %s', async result => {
+  if (result === null) mocks.geocode.mockResolvedValue(null)
+  else mocks.geocode.mockRejectedValue(new Error('provider response unavailable'))
+  expect(await saveListing(input)).toMatchObject({ success: false, code: 'ADDRESS_UNAVAILABLE', status: 503 })
+  expect(mocks.transaction).not.toHaveBeenCalled()
+})
+it('does not let a new caller override sealed coordinates through an action payload', async () => {
+  expect(await saveListing({ ...input, lat: 6.45, lng: 3.4 })).toMatchObject({ success: false })
+  expect(mocks.geocode).not.toHaveBeenCalled(); expect(mocks.transaction).not.toHaveBeenCalled()
+})
+it('rejects changed capture bytes between geocoding and final transaction readback', async () => {
+  mocks.captureBind.mockResolvedValue({ id: input.captureId, begin_hash: 'begin', video_digest: 'b'.repeat(64) })
+  expect(await saveListing(input)).toMatchObject({ success: false, code: 'STALE_LISTING' })
+  expect(mocks.locationUpsert).not.toHaveBeenCalled(); expect(mocks.verification).not.toHaveBeenCalled()
+})
+it('rejects a delayed geocoder result after another screen changes the draft even without a client revision', async () => {
+  mocks.find.mockResolvedValueOnce({ id: input.draftId, revision: 1 }).mockResolvedValueOnce({ id: input.draftId, revision: 2 })
+  expect(await saveListing(input)).toMatchObject({ success: false, code: 'STALE_LISTING' })
+  expect(mocks.update).not.toHaveBeenCalled(); expect(mocks.verification).not.toHaveBeenCalled()
 })

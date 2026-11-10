@@ -1,6 +1,8 @@
 import { LISTING_FORM_SCHEMAS, LISTING_METADATA_SCHEMAS, type OwnerListingDetail } from '../../../../lib/contracts/listings'
 export type ListingCategory = 'house' | 'car' | 'boat'
-export type NativeCapture = { uri: string; lat: number; lng: number; accuracy: number; duration: number }
+// Legacy GPS fields remain readable only so existing device recovery is not lost.
+// New recordings send their readings directly to the backend and retain its id.
+export type NativeCapture = { uri: string; duration: number; captureId?: string; lat?: number; lng?: number; accuracy?: number }
 export type OwnerListing = { id: string; title: string; category: ListingCategory; status: string; price: string; pricePeriod: string; createdAt: string; hasVideo: boolean; hasDocument: boolean }
 export type ListingForm = { address: string; basePrice: string; listingTitle: string; description: string; pricePeriod: 'year' | 'month' | 'day' | 'trip'; rentalIntent: 'rent' | 'buy' | 'squat' | 'shortlet'; hostCapacity: 'owner' | 'agent' | 'tenant' | 'organization'; state: string; neighborhood: string;
   agencyFee: string; legalFee: string; cautionFee: string; serviceCharge: string; bedrooms: string; bathrooms: string; sizeSqm: string; amenities: string;

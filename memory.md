@@ -1,137 +1,118 @@
-# Memory — Rentral source and local validation complete
+# Memory — Recording location, branding and recovery
 
-Last updated: 2026-11-10 00:14 Africa/Lagos. **All approved source/local work is
-accepted, including native publication fee and clean first-request startup.
-Only root's authorized final staging/commit/push remains at this handoff.**
+Last updated: 2026-11-10 Africa/Lagos. Source and local verification are complete.
+The delivery revision is recorded in Git history; remote verification belongs to
+the final handback. Confirm actual Git/process state before further action.
 
 ## What was built
 
-The whole [approved blueprint](context/remaining-work-blueprint.md) is implemented.
-Use the [31-area matrix](context/completion-status.md),
-[final review](context/final-review.md), [progress](context/progress-tracker.md)
-and detailed [environment guide](context/environment-setup.md), not historical
-unchecked boxes or retired Supabase/PG instructions.
+The [approved capture/location/brand blueprint](context/capture-location-brand-blueprint.md)
+adds private backend recording locks, fresh start/end readings, exact completed-
+upload/video/digest binding and server address admission. Geoapify must resolve a
+confident Nigerian building/amenity within 100 metres for owner submission;
+staff publication independently checks current proof. Edits cannot replace
+recording GPS. Old drafts remain; unverified recordings need a new take.
 
-Expo member/host workflows include discovery/filter/feed, capture/drafts/edit/
-archive/vault, bookings/quotes/check-in/holds, own publication-fee checkout/status/
-reconcile, feedback/appeals, messages/shares/activity/read receipts, notifications,
-leases/dashboard, financial/security/privacy/export/closure, device saved searches
-and Squat-Mates. Staff review/finance/matching/lifecycle/campaign and manual paid
-Insights/sponsorship are web workspaces. Shared services enforce current actor/
-roles, private evidence, exact immutable journals, reservations/independent approval,
-durable request/media claims and explicit uncertain-outcome reconciliation.
-
-Native publication fee is fully accepted: owner GET overview plus strict empty
-checkout POST and exact-reference reconciliation reuse existing collection services.
-Fixed shared server policy is 100,000 kobo/NGN 1,000, never client/env price.
-Fresh intent/URL/mode binding, durable no-autoreplay, locked archive denial,
-callback preflight and current-mode proof for NEW publication passed. Historical
-mode remains factual; already-public assets/old journals are not rewritten.
-
-Optional source includes Paystack, encrypted Resend auth delivery/dual email
-confirmation, SID/consent-bound encrypted Expo push, resumable local-to-Mux recovery,
-bounded advisory Gemini/Geoapify, leased workers/retention and coordinated encrypted
-Mongo/private-storage backup with isolated quarantined restore verification.
+Native/web capture and address screens use owner-scoped status/receipt recovery.
+Original web commands/nonces persist per actor before mutation; navigation and
+late responses cannot affect another wizard. Shared emerald doorway/r branding,
+native icon/splash and bounded reduced-motion opening reveal are implemented.
+The RGBA ICO fix resolves Next's favicon-processing error. See the
+[increment review](context/capture-location-brand-review.md) and [progress](context/progress-tracker.md).
 
 ## Decisions made
 
-- User approved completing the whole blueprint, required skills, cleanup/testing/
-  guide and **commit/push to Uncleiked/rentral-mobile**. This persists; no routine
-  reconfirmation is needed. Do not reopen accepted implementation or add scope.
-- **Paystack ONLY**; Expo Android/iOS, Node 24.x/npm 11.19.1 workspaces, local
-  Next.js, saved Atlas through Prisma 6.19.3 Mongo connector, JWT email/password
-  and private local files. Personal KYC/profile onboarding stays removed.
-- Preserve keys/URI/accounts/files/financial/evidence/history and original PG.
-  No reset/import, role grant, real provider send/charge/transfer, deployment,
-  EAS/store build or store publication is implied. Staff roles come from DB.
-- Private env is ignored. Never print URI/host/credentials/private IDs or put
-  backend secrets in public bundles. Mobile public API origin/optional EAS UUID
-  only. Real public release needs HTTPS and approved provider/platform setup.
-- Windows workspace C:/Users/Mudian Consult/Documents/RentralMobile. Use npm.cmd/
-  npx.cmd or actual helper files; complex Node-e/PowerShell quoting has stripped
-  quotes/hung. One owned Next/Metro; leave other projects on 8081–8083 and unrelated
-  Docker resources untouched. Stop owned Next before Prisma generation/build on
-  Windows (DLL lock), and never build/generate during an owned fixture.
+- Preserve Expo Android/iOS, Node 24/npm 11.19.1 workspaces, local Next.js,
+  Prisma 6.19.3 MongoDB, JWT accounts, private filesystem storage, Paystack only
+  and no personal KYC. PostGIS is retired; the user approved this MongoDB plan.
+- User authorized whole-app completion and this blueprint, necessary additive
+  preparation, cleanup/testing/environment guidance and commit/push to
+  Uncleiked/rentral-mobile. Prior baseline **6f2af2f** is delivered. Do not
+  reopen approvals or add deployment/store release scope.
+- Preserve private env/keys/URI, operational files, original PG/history and
+  installed skills. User is actively configuring keys; this increment did not
+  edit private env. Never print values or add backend keys to native public env.
+- GPS is device-reported evidence, not rooted-device attestation, unit-level
+  address proof or ownership verification. Recording needs internet. Start,
+  finish and seal use one session; sealed owner drafts may resume in another.
 
 ## Problems solved
 
-Atlas IP drift/readiness recovery and cold startup were diagnosed without TLS
-bypass or URI replacement. Readiness's old 3s connection window was too short:
-sanitized temporary trace showed native discovery/marker about 8.5s, Prisma 2s
-and dummy scrypt 1.1s. The bounded window is now 10s. All traces/helper/imports/
-diagnostic-flag references were removed. Cross-module readiness errors now require
-Error name + exact 503 + one of two codes and always use trusted constant messages,
-never foreign error text. Clean diagnostic-OFF first request passed below.
+Capture sealing requires actual completed-upload provenance, preventing legacy
+file adoption from manufacturing a fresh video. Locked revision/address/capture
+rechecks reject stale Geoapify results after concurrent edits. Mongo sessions
+handle missing/null revoked_at correctly. Web uncertain commands retain original
+receipt identities; full refresh without the retained video requires retake.
 
-15s bounded transaction budgets/no P2028 replay, actor-bound commands/account
-headers, same-SID revocation-only expired proof, consent/SID push serialization,
-locally bundled Inter/shadcn CSS and supported Expo dependency reification are
-retained. Safe cleanup removed 23 retired files plus 7 SQL fixtures, fake UI/
-TrustSummary/PG-only deps, scratch and verified caches while preserving needed
-history, user operational data and installed skills.
+Production browser found a 320px stepper overflow: flex-child minimum widths
+made the page 379px wide. Shrinkable five-column grid/wrapped labels measured
+320px with zero overflow; the unchanged browser assertion now passes.
+
+Next's ICO decoder requires embedded RGBA PNG data; native iOS icon stays RGB.
+Intro/splash safety releases prevent font/image/error callbacks trapping entry.
+
+Installed @mux/cli 4.0.0 lacks a win32/x64 prebuilt executable; npm installation
+succeeds but login cannot run. The user installed cloudflared 2026.10.7. If the
+old terminal PATH cannot resolve it, use the verified executable directly:
+`C:\Program Files (x86)\cloudflared\cloudflared.exe`, or fully restart VS Code.
+No administrator shell is needed to run it. See [Windows Mux](context/mux-local-setup.md).
+No public tunnel was started by us.
 
 ## Current state
 
-- **Full unit 1,678 PASS**, with 89 ordinary fixture skips executed separately.
-  **Full actual owned Mongo 89 PASS in one serial sequence:** core49 + financial18
-  + auth20 + backup2. Actual wrapper PASS14 synthetic records/4 files/1 balanced
-  journal/1 claim. All owned Docker/browser/backup fixtures cleaned; no user DB.
-- Earlier old5s contention timeouts are superseded by the successful full run.
-  Owned integration default is bounded15s; explicit overrides remain. Unit
-  default stays5s; one deliberate five-KDF case explicitly15s with assertions/
-  password parameters unchanged. Final safe-error/CORS focused checks passed.
-- **Final production build14839 PASS:** compile49s, TypeScript108s,97 static
-  pages, no warnings after startup/safe-error/CORS fixes, including3 fee API routes.
-  Android1787/iOS1808 modules~4.8MB each; web1250 modules/45 chunks passed.
-  Late changes were server-only, so no additional native re-export was needed.
-- Final production web6 PASS57.5s +8 real HTTP fixture checks, including fee401/
-  409/404 scopes and ZERO PaymentIntent writes. Native fee8 checks/35 API mocks/
-  0 errors or outbound requests PASS320/390/768. Earlier sponsor6/54, push7/29,
-  dashboard4/4 accepted. Providers blocked; physical devices are not inferred.
-- Final root/mobile lint/type checks passed. Doctor20/20, full audit0 and backend/
-  mobile env checks remain valid; no late dependency/key change. Actual Atlas
-  setup51 collections/152 indexes preserved all31 pre-existing collections and
-  2 non-marker records with unchanged hashes. No fee schema/repreparation needed.
-- Final source/public scan1170 files against2 actual backend secret values found
-  0 matches. Private env remains untracked; local mobile API origin is not tracked.
-  Only the core Safety flag changed earlier; other parsed keys/gates preserved.
-- **Clean diagnostic-OFF runtime PASS:** /sign-in200 in10.8s, FIRST unique fake
-  login401 in12.6s, NO retry/account/session writes. This supersedes exploratory
-  503/aborted30s observations; the abort's default log200 never proved success.
-- **Current owned backend63491 runs3000; Metro73492 runs8090**, manifest confirmed
-  Rentral, one development server each. Revalidate IDs/ports before future action.
-  Other projects on8081–8083 untouched. No active build/fixture job remains.
-
-Browser verification is reproducible in tracked scripts/test-browser.mjs and
-playwright.fixture.config.mjs via `npm.cmd run build` then `npm.cmd run test:browser`,
-with Docker/installed Chrome. It uses synthetic users/owned loopback Mongo, blocks
-providers, avoids the saved user DB/env, preserves production build and cleans
-owned resources. Syntax/lint and six-test/four-file discovery passed. Keep runs
-sequential; artifacts stay ignored. No selected-Atlas backup/cutover was performed.
-
-Git was checked at this documentation handoff: main still had uncommitted final
-changes, with pre-delivery HEAD e26105f. Root is staging/reviewing/committing/pushing
-the already-authorized delivery now. If resuming after interruption, inspect
-actual status/log/tracking: delivery may have completed since this timestamp.
-Do not infer a pushed revision, or treat this pre-commit note as a new blocker.
+- **1,792 unit checks passed**, with 95 owned-fixture cases normally skipped.
+  Global ESLint passed. Final owned Mongo core **55/55** and separate financial/
+  auth/backup **40** passed; these are not one serial 95-case run. Actual backup
+  wrapper: 14 synthetic records, 4 files, 1 balanced journal, 1 claim; source
+  preserved, restore quarantined. Owned fixtures cleaned.
+- Final production rebuild passed **99 static pages**, compile 8.9s/TS 5.5s.
+  All **8 production browser journeys passed in 30.7s**, plus **8 HTTP checks**,
+  including listing lost-response/retry and unchanged 320px overflow assertions.
+  Fixture localhost-a9a64c420dd2 used only owned loopback Mongo, providers off,
+  and cleaned its server/database. No selected user DB was used for fixtures.
+- Final Android export: 2,094 modules/~5.8 MB; iOS: 2,115 modules/~5.8 MB. Native
+  intercepted preview: 8 checks/21 API calls/0 errors or outbound requests at
+  320/390/768 widths. Native TS/scoped lint, brand generator/9 asset-launch tests
+  and dependency audit 0 vulnerabilities passed. These do not prove hardware.
+- Actual local /help, /favicon.ico, /icon.svg returned 200. Warm nonexistent login
+  returned 401 without account/session writes. An aborted cold request is not
+  successful first-request evidence for this increment.
+- Additive Atlas setup verified **52 application collections / 156 indexes** and
+  captureVersion 1, preserving all 52 pre-existing collections and 4 non-marker
+  documents with unchanged hashes. No reset/import/role grant or data deletion.
+- Source/public secret scan: 1,140 files against 8 actual private values,
+  zero matches. Latest offline
+  env inspection found only MUX_WEBHOOK_SECRET still a template; other Mux/worker
+  fields and Geoapify are populated. Presence is not live-provider acceptance.
+- Runtime handback passed: user-owned Next process 20724 responds on 3000 and
+  serves /help, /favicon.ico and /icon.svg with 200. Metro 8090 reports its packager
+  running; read-only Atlas ping/capture marker confirm reachability/readiness.
+  No restart or public tunnel was performed. Verify
+  current ownership before action and preserve the user's working server. Leave
+  other projects on 8081–8083/unrelated Docker resources untouched. Windows Prisma
+  generation needs the owned backend stopped to avoid DLL locks. Never generate/
+  build during an owned fixture. No active test fixture remains.
 
 ## Next session starts with
 
-If root's Git delivery has not finished, complete only final staged secret/
-artifact review, commit and authorized push, and record the actual revision.
-Do not rerun heavy suites without a new change/failure or seek routine approval.
+Inspect actual Git/status/log/tracking and runtime. If interrupted before push,
+complete only remaining staged review and the already-authorized delivery;
+record the verified revision. Do not assume a new unpushed change from historical
+pre-commit wording in baseline documents.
+Do not repeat accepted native exports or broad suites without a new change/failure.
 
-For the user next: optional provider keys/permissions/policies using the guide,
-plus real Android/iOS capture/GPS/files/permissions/interruption/background/video/
-accessibility/push acceptance. Keep provider gates off until deliberate approval;
-Expo Go is not remote-push acceptance. A public HTTPS backend/origin, callbacks,
-platform credentials and separate deployment/store decisions are needed for a
-later public release. None was performed by source/local completion.
+For user setup, use [recording/location setup](context/recording-location-setup.md),
+[environment guide](context/environment-setup.md) and [Windows Mux guide](context/mux-local-setup.md).
+Finish the dashboard webhook and its secret privately. Keep existing configured
+keys; deliberate tunnel/provider tests are separate from source completion.
 
 ## Open questions
 
-No application implementation gap or user clarification blocks the approved local
-scope. Real merchant custody/fees/capabilities, actual provider delivery, physical
-devices, backup key custody and separately reviewed recovery/cutover remain
-external acceptance. No live money, production certification or store release is
-claimed from controlled fixtures or local exports.
+Physical Android/iOS camera/GPS/permissions/interruption/background/video/launch
+acceptance remains. Check whether copying a large video into persistent native
+draft storage consumes the 15-second fresh-end-reading budget on slow storage.
+Live Geoapify/Mux/Paystack/email/push acceptance and merchant/custody/fee policy
+remain separate. Full Vercel launch needs object-storage adaptation and worker/
+webhook hosting; root deployment does not publish native binaries. No real
+provider send/charge, deployment, EAS/store release, selected-Atlas backup or
+recovery cutover was performed by this increment.
