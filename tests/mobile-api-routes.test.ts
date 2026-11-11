@@ -59,7 +59,7 @@ it('bootstraps the authenticated identity and supports incomplete accounts witho
   expect(response.status).toBe(200)
   expect(mocks.account).toHaveBeenCalledWith({ id, email: account.email })
   expect(await response.json()).toMatchObject({ success: true, data: { id, email: account.email, username: 'member' } })
-  expect(mocks.identity).toHaveBeenCalledWith(expect.any(Request))
+  expect(mocks.identity).toHaveBeenCalledWith(expect.any(Request), { admission: false })
 })
 
 it('rejects client identity or privilege fields before any profile update', async () => {
@@ -74,7 +74,7 @@ it('normalizes edits and scopes the write to the authenticated identity', async 
   mocks.update.mockResolvedValue({ ...account, username: 'new_member', bio: 'Hello Lagos' })
   const response = await patchMe(request('/me', 'PATCH', { username: ' NEW_MEMBER ', bio: ' Hello Lagos ' }))
   expect(response.status).toBe(200)
-  expect(mocks.identity).toHaveBeenCalledWith(expect.any(Request), { mutation: true })
+  expect(mocks.identity).toHaveBeenCalledWith(expect.any(Request), { admission: false, mutation: true })
   expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id }, data: { username: 'new_member', bio: 'Hello Lagos' } }))
 })
 

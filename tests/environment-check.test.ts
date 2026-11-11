@@ -60,4 +60,15 @@ describe('private environment file inspection', () => {
     expect(inspectEnvironment({ ...commerce, INSIGHTS_PRICE_KOBO: '1.5', SPONSORSHIP_TERM_DAYS: '367' }, mobile).ok).toBe(false)
     expect(inspectEnvironment({ ...commerce, INSIGHTS_PRICE_KOBO: 'not-money' }, mobile).ok).toBe(false)
   })
+  it('requires private Google credentials only when enabled and rejects a public HTTP callback', () => {
+    const incomplete = inspectEnvironment({ ...backend, GOOGLE_AUTH_ENABLED: 'true' }, mobile)
+    expect(incomplete.errors.map(item => item.key)).toEqual(expect.arrayContaining(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']))
+    const configured = { ...backend, GOOGLE_AUTH_ENABLED: 'true', GOOGLE_CLIENT_ID: '12345.synthetic.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'synthetic-private-google-client-secret' }
+    expect(inspectEnvironment(configured, mobile).ok).toBe(true)
+    const insecure = inspectEnvironment({ ...configured, NEXT_PUBLIC_APP_URL: 'http://public.fixture.test' }, mobile)
+    expect(insecure.errors).toContainEqual(expect.objectContaining({ key: 'NEXT_PUBLIC_APP_URL' }))
+    expect(JSON.stringify(insecure)).not.toContain(configured.GOOGLE_CLIENT_SECRET)
+    expect(JSON.stringify(insecure)).not.toContain(configured.GOOGLE_CLIENT_ID)
+    expect(inspectEnvironment({ ...backend, GOOGLE_AUTH_ENABLED: 'TRUE' }, mobile).errors).toContainEqual(expect.objectContaining({ key: 'GOOGLE_AUTH_ENABLED' }))
+  })
 })

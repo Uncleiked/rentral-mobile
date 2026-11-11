@@ -86,6 +86,8 @@ describe('callback and proxy', () => {
     const form = new FormData()
     form.set('email', 'renter@example.test')
     form.set('password', 'test-password')
+    form.set('accountType', 'individual')
+    form.set('termsAccepted', 'on')
     expect(await signup(form)).toMatchObject({ success: true, redirectTo: '/marketplace' })
     expect(mocks.signup).toHaveBeenCalledWith(expect.objectContaining({ email: 'renter@example.test', password: 'test-password' }))
   })

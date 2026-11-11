@@ -4,11 +4,11 @@ import { join, resolve, sep } from 'node:path'
 import type { Prisma, StorageObject } from '@prisma/client'
 import { createLocalStorage } from '@/lib/local-storage/core'
 
-const mocks = vi.hoisted(() => ({ ready: vi.fn(), create: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), find: vi.fn(), deleteMany: vi.fn(), reference: vi.fn() }))
-vi.mock('@/lib/database/readiness', () => ({ assertStorageClaimsReady: mocks.ready, ownerAdminPrepared: async () => true, capturePrepared: async () => false, lifecyclePrepared: async () => false }))
+const mocks = vi.hoisted(() => ({ ready: vi.fn(), create: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), find: vi.fn(), deleteMany: vi.fn(), reference: vi.fn(), organizations: vi.fn(), organizationReference: vi.fn() }))
+vi.mock('@/lib/database/readiness', () => ({ assertStorageClaimsReady: mocks.ready, organizationsPrepared: mocks.organizations, ownerAdminPrepared: async () => true, capturePrepared: async () => false, lifecyclePrepared: async () => false }))
 vi.mock('@/lib/db', () => ({ default: { storageObject: { create: mocks.create, upsert: mocks.upsert, updateMany: mocks.updateMany,
   findUniqueOrThrow: mocks.find, deleteMany: mocks.deleteMany } } }))
-vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ storageObject: { updateMany: mocks.updateMany, findUniqueOrThrow: mocks.find }, listing: { findFirst: mocks.reference }, mediaAsset: { findFirst: mocks.reference } }) }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ storageObject: { updateMany: mocks.updateMany, findUniqueOrThrow: mocks.find }, listing: { findFirst: mocks.reference }, organizationApplication: { findFirst: mocks.organizationReference }, mediaAsset: { findFirst: mocks.reference } }) }))
 import { prepareGalleryPhotos, prepareListingStorage, claimStorageObjects, removeStoredObjects, uploadStoredObject, storageObjectId } from '@/lib/storage-claims/service'
 
 let root: string
@@ -22,6 +22,7 @@ beforeEach(async () => {
   const base = resolve('test-results'); await mkdir(base, { recursive: true }); root = await mkdtemp(join(base, 'storage-claims-unit-'))
   vi.stubEnv('RENTRAL_STORAGE_DIR', root)
   mocks.ready.mockResolvedValue(undefined)
+  mocks.organizations.mockResolvedValue(false)
   mocks.create.mockResolvedValue(undefined)
   mocks.updateMany.mockResolvedValue({ count: 1 })
   mocks.deleteMany.mockResolvedValue({ count: 1 })
@@ -116,4 +117,17 @@ it('does not claim a file that another process already marked for deletion', asy
 it('rejects another account before adopting or claiming its file', async () => {
   await expect(prepareListingStorage('stranger', { videoPath: path })).rejects.toMatchObject({ status: 403 })
   expect(mocks.upsert).not.toHaveBeenCalled()
+})
+
+it('retains current and historical organization registration evidence when deletion is requested', async () => {
+  const storage = createLocalStorage(root), document = 'owner/previous/Registration.pdf'
+  await storage.upload('compliance-docs', document, stream(new Uint8Array(Buffer.from('%PDF-1.7\nSynthetic retained registration proof.'))), 'application/pdf')
+  const info = await storage.info('compliance-docs', document)
+  mocks.find.mockResolvedValue({ id: storageObjectId('compliance-docs', document), owner_id: 'owner', bucket: 'compliance-docs', path: document, state: 'available', digest: info.digest })
+  mocks.organizations.mockResolvedValue(true)
+  mocks.organizationReference.mockResolvedValue({ id: 'organization-application' })
+  await expect(removeStoredObjects('owner', 'compliance-docs', [document])).rejects.toMatchObject({ code: 'FILE_IN_USE' })
+  expect(mocks.organizationReference).toHaveBeenCalledExactlyOnceWith({ where: { evidence_paths: { has: document.toLowerCase() } }, select: { id: true } })
+  expect(await storage.info('compliance-docs', document)).toMatchObject({ digest: info.digest })
+  expect(mocks.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ state: 'deleting' }) }))
 })

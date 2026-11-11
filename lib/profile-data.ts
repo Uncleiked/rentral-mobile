@@ -2,7 +2,7 @@ import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
 import { listingMediaUrl, listingPhotoUrl } from '@/lib/storage'
 import { galleryIsPublic, galleryPhotoPaths, galleryListingSelect, galleryUserSelect } from '@/lib/listings/gallery'
-import { requireUserId } from '@/lib/action-helpers'
+import { requireSessionUserId } from '@/lib/action-helpers'
 import { ensureAccountHandle } from '@/lib/accounts/bootstrap'
 import { LISTING_STATUS, PUBLIC_LISTING_STATUSES } from '@/lib/listing-status'
 import type { User, IndividualProfile, OrganizationProfile } from '@prisma/client'
@@ -165,7 +165,7 @@ function toProfileRecord(dbUser: UserWithProfiles): ProfileRecord | null {
 }
 
 export async function getOwnProfile(): Promise<ProfileRecord | null> {
-  const userId = await requireUserId()
+  const userId = await requireSessionUserId()
   if (!userId) return null
   if (!await ensureAccountHandle(userId)) return null
 

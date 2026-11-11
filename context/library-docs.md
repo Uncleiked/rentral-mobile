@@ -10,7 +10,7 @@
 - npm 11.19.1 workspaces/Node 24.x replace pnpm. Next.js 16.4.5 includes the reviewed
   security update. Follow installed Next docs for cookies/proxy/route APIs.
 - Prisma 6.19.3 is pinned for MongoDB; Prisma 7 is not a supported Mongo upgrade.
-  npm build generates the client before Next. Setup creates reviewed partial
+  npm run build verifies a prior successful generated-client snapshot or runs standard generation before Next. Setup creates reviewed partial
   indexes, validators and readiness marker; do not use SQL migrations/db push.
 - Mongo transactions require a replica set. withTransaction retries only bounded
   conflicts; lockRecord performs actual revision writes. Shared services own

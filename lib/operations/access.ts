@@ -1,4 +1,4 @@
-import { requireUserId } from '@/lib/action-helpers'
+import { requireSessionUserId } from '@/lib/action-helpers'
 import { currentStaffRole, hasStaffPermission } from '@/lib/auth/roles'
 import type { StaffPermission } from '@/lib/auth/roles-policy'
 
@@ -8,7 +8,7 @@ export async function isAdminId(id: string): Promise<boolean> {
 }
 
 export async function requireStaffId(permission: StaffPermission = 'staff:workspace'): Promise<string | null> {
-  const id = await requireUserId()
+  const id = await requireSessionUserId()
   return id && await hasStaffPermission(id, permission) ? id : null
 }
 

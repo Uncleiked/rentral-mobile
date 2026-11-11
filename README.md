@@ -1,4 +1,15 @@
 # Rentral
+Current web update: /admin now has focused review tabs and explicit gallery grant/
+revoke controls. Email/password remains; direct Google sign-in is an optional
+alternative. New web accounts choose Individual or Organization, with CAC evidence
+and independent approval for organizations. Follow [the current setup audit](context/local-setup-audit.md)
+and [Google setup](context/google-sign-in-setup.md). The new Google/organization
+Mongo preparation has not been applied to the saved Atlas target. Do not follow
+the separate old rentral project's Supabase instructions for this application.
+
+Use npm.cmd run test:admin-ui for isolated responsive admin checks; ordinary
+npm.cmd run test:e2e now targets this app on localhost:3000 by default. Keep one
+backend process running from this folder to avoid serving an older build.
 
 Expo Android/iOS app with a local Next.js backend, MongoDB, JWT email/password
 accounts and private filesystem storage. Members enter Explore directly after
@@ -156,8 +167,9 @@ accessibility and real-provider acceptance require their own evidence.
 
 For reproducible production browser acceptance, start Docker Desktop and use an
 installed Chrome, then run `npm.cmd run build` followed by `npm.cmd run test:browser`.
-Stop this checkout's Next server before building on Windows to release the Prisma
-engine DLL. The tracked [wrapper](scripts/test-browser.mjs) and
+Ordinary builds reuse an unchanged, successfully generated Prisma client. If the
+schema or Prisma installation changed, stop this checkout's Next server before
+building on Windows so regeneration can replace its engine DLL. The tracked [wrapper](scripts/test-browser.mjs) and
 [fixture config](playwright.fixture.config.mjs) provision their own labeled
 loopback Mongo/synthetic accounts, block providers and clean owned resources;
 they do not use the saved application database or rewrite private env files.
@@ -168,3 +180,18 @@ Read [current architecture](context/architecture.md),
 [the approved completion blueprint](context/remaining-work-blueprint.md), and
 the context order in `AGENTS.md`. Historical design sections do not override the
 current stack or restore onboarding/provider assumptions.
+
+### Windows build preparation
+
+Run npm.cmd run build (or npm run build in a shell where npm is enabled).
+The build runner generates Prisma on a fresh installation or whenever schema,
+configuration, installed tools, generation flags or generated artifacts change.
+It reuses an unchanged client only after an earlier successful generation has
+recorded its inputs and every generated-file digest. This ignored proof lives in
+node_modules/.cache/rentral/prisma-build.json; deleting node_modules naturally
+invalidates it. Do not seed that file manually or disable native engine generation.
+
+Windows locks a Prisma DLL while a Next server uses it. If regeneration is needed,
+stop this checkout's dev/start terminal with Ctrl+C, build, then restart. Ordinary
+unchanged-schema builds can run alongside the development server. The build never
+kills processes, applies database setup or edits private environment values.

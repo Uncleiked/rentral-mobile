@@ -13,3 +13,7 @@ export const CAPTURE_VERSION = 1
 export const OWNER_ADMIN_VERSION = 1
 export const MONGO_SETUP_COLLECTION = '_RentralSetup'
 export const MONGO_SETUP_ID = 'rentral-schema'
+
+export const ORGANIZATION_VERSION = 1
+
+export const GOOGLE_AUTH_VERSION = 1

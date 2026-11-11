@@ -1,4 +1,7 @@
-﻿// JWT email/password accounts are local; no external identity provider is offered.
+import { googleConfiguration } from '@/lib/auth/google-config'
+import { googleAuthPrepared } from '@/lib/database/readiness'
+
 export async function getAuthProviders(): Promise<{ google: boolean; apple: boolean }> {
-  return { google: false, apple: false }
+  if (!googleConfiguration()) return { google: false, apple: false }
+  return { google: await googleAuthPrepared().catch(() => false), apple: false }
 }

@@ -114,8 +114,12 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     const first = await command(platformOwner, 'set_gallery_permission', host.user.id, { allowed: true })
     expect(first.response.status).toBe(200)
     const count = await prisma.adminAudit.count({ where: { action: 'set_gallery_permission', target_id: host.user.id } })
+    const notificationCount = await prisma.notification.count({ where: { user_id: host.user.id, kind: 'gallery_permission' } })
+    expect(notificationCount).toBe(1)
+    expect(await prisma.notification.findFirst({ where: { user_id: host.user.id, kind: 'gallery_permission' }, select: { title: true, href: true } })).toEqual({ title: 'Gallery uploads approved', href: '/marketplace/listing/create?gallery=1' })
     expect((await adminCommand(request(platformOwner, '/admin/commands', first.body))).status).toBe(200)
     expect(await prisma.adminAudit.count({ where: { action: 'set_gallery_permission', target_id: host.user.id } })).toBe(count)
+    expect(await prisma.notification.count({ where: { user_id: host.user.id, kind: 'gallery_permission' } })).toBe(notificationCount)
     const context = { params: Promise.resolve({ clientId: first.body.clientId }) }
     expect((await adminReceipt(request(platformOwner, `/admin/commands/${first.body.clientId}`), context)).status).toBe(200)
     expect((await adminReceipt(request(admin, `/admin/commands/${first.body.clientId}`), context)).status).toBe(404)

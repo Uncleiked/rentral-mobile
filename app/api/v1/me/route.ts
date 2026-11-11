@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const identity = await requireApiIdentity(request)
+    const identity = await requireApiIdentity(request, { admission: false })
     const account = await ensureAccount({ id: identity.userId, email: identity.email })
     if (!account) throw new ApiError(503, 'ACCOUNT_UNAVAILABLE', 'Your account is not ready yet. Please try again.')
     return apiSuccess(publicAccount(account))
@@ -19,7 +19,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function PATCH(request: Request): Promise<Response> {
   try {
-    const identity = await requireApiIdentity(request, { mutation: true })
+    const identity = await requireApiIdentity(request, { admission: false, mutation: true })
     const input = accountPatchSchema.parse(await readApiJson(request))
     const previous = await ensureAccount({ id: identity.userId, email: identity.email })
     if (!previous) throw new ApiError(503, 'ACCOUNT_UNAVAILABLE', 'Your account is not ready yet. Please try again.')

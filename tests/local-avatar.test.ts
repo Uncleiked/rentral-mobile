@@ -6,7 +6,7 @@ import { resolve, join, sep } from 'node:path'
 import { createLocalStorage } from '@/lib/local-storage/core'
 
 const mocks = vi.hoisted(() => ({ user: vi.fn(), update: vi.fn(), claim: vi.fn(), lock: vi.fn() }))
-vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.user, revalidateProfilePaths: vi.fn() }))
+vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.user, requireSessionUserId: mocks.user, revalidateProfilePaths: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { user: { update: mocks.update } } }))
 vi.mock('@/lib/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/posthog', () => ({ captureServerEvent: vi.fn() }))

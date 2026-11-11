@@ -55,6 +55,7 @@ model User {
   adminActions AdminAudit[]
   documentReviews DocumentReview[]
   renewals Renewal[]
+  googleIdentity GoogleIdentity?
   sessions AuthSession[]
   passwordResets PasswordReset[]
   emailChanges EmailChange[]
@@ -1016,4 +1017,39 @@ model MatchReport {
   @@index([status, createdAt, id])
   @@index([opened_by, createdAt])
   @@index([subject_id, createdAt])
+}
+
+model OrganizationApplication {
+  id String @id @map("_id") @default(uuid())
+  revision Int @default(0)
+  user_id String @unique
+  legal_name String
+  registration_type String
+  registration_number String
+  representative_name String
+  representative_role String
+  document_kind String
+  document_path String
+  document_proof Json
+  supporting_kind String?
+  supporting_path String?
+  supporting_proof Json?
+  evidence_paths String[] @default([])
+  status String @default("pending")
+  reviewed_by String?
+  reviewed_at DateTime?
+  review_reason String?
+  review_checklist Json?
+  submitted_at DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, submitted_at])
+}
+model GoogleIdentity {
+  id String @id @map("_id")
+  user_id String @unique
+  user User @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  email_at_link String
+  credential_fingerprint String
+  createdAt DateTime @default(now())
 }

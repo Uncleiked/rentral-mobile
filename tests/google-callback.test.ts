@@ -1,0 +1,41 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+const mocks = vi.hoisted(() => ({ read: vi.fn(), flow: vi.fn(), exchange: vi.fn(), complete: vi.fn(), seal: vi.fn() }))
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: mocks.read }) }))
+vi.mock('@/lib/auth/google-config', () => ({ requireGoogleConfiguration: () => ({ origin: 'http://localhost:3000' }) }))
+vi.mock('@/lib/auth/google-oauth', () => ({ GOOGLE_FLOW_COOKIE: 'rentral_google_flow', GOOGLE_FINISH_COOKIE: 'rentral_google_finish', GOOGLE_FINISH_SECONDS: 300, googleCookieOptions: { httpOnly: true, sameSite: 'lax', path: '/auth/google' }, googleCookieSecure: () => false, validateGoogleFlow: mocks.flow, exchangeGoogleCode: mocks.exchange, sealGoogleCookie: mocks.seal }))
+vi.mock('@/lib/auth/google-accounts', () => ({ completeVerifiedGoogle: mocks.complete }))
+import { GET } from '@/app/auth/google/callback/route'
+beforeEach(() => {
+  vi.resetAllMocks(); mocks.read.mockReturnValue({ value: 'encrypted-flow' }); mocks.flow.mockResolvedValue({ verifier: 'proof', nonce: 'nonce', intent: { mode: 'signin' } })
+  mocks.exchange.mockResolvedValue({ subject: 'subject', email: 'fixture@example.test' }); mocks.seal.mockResolvedValue('encrypted-finish')
+  mocks.complete.mockResolvedValue({ kind: 'session', session: { access_token: 'local-access-jwt', refresh_token: 'local-refresh', user: { id: 'user' } } })
+})
+afterEach(() => vi.restoreAllMocks())
+it('issues the existing local JWT cookies only after verified state and Google account resolution', async () => {
+  const response = await GET(new Request('http://localhost:3000/auth/google/callback?code=one-use&state=bound'))
+  expect(response.headers.get('location')).toBe('http://localhost:3000/marketplace')
+  expect(response.headers.get('cache-control')).toBe('private, no-store')
+  const cookies = response.headers.get('set-cookie')
+  expect(cookies).toContain('rentral_access=local-access-jwt'); expect(cookies).toContain('HttpOnly'); expect(cookies).toContain('rentral_google_flow=;')
+  expect(cookies).not.toContain('provider_token')
+})
+it('does not exchange tokens or create sessions for duplicate or invalid callback state', async () => {
+  let response = await GET(new Request('http://localhost:3000/auth/google/callback?code=a&code=b&state=bound'))
+  expect(response.headers.get('location')).toBe('http://localhost:3000/sign-in?google=failed')
+  expect(mocks.exchange).not.toHaveBeenCalled()
+  mocks.flow.mockRejectedValue(new Error('Invalid state'))
+  response = await GET(new Request('http://localhost:3000/auth/google/callback?code=a&state=wrong'))
+  expect(response.headers.get('set-cookie')).not.toContain('local-access-jwt'); expect(mocks.complete).not.toHaveBeenCalled()
+})
+it('uses an encrypted short-lived continuation for new-account choices and password-confirmed linking', async () => {
+  mocks.complete.mockResolvedValue({ kind: 'finish', challenge: { kind: 'link', identity: { subject: 'subject', email: 'fixture@example.test' } } })
+  const response = await GET(new Request('http://localhost:3000/auth/google/callback?code=a&state=bound'))
+  expect(response.headers.get('location')).toBe('http://localhost:3000/auth/google/finish')
+  expect(response.headers.get('set-cookie')).toContain('rentral_google_finish=encrypted-finish')
+  expect(response.headers.get('set-cookie')).not.toContain('local-access-jwt')
+})
+it('handles user cancellation without contacting Google or creating an account', async () => {
+  const response = await GET(new Request('http://localhost:3000/auth/google/callback?error=access_denied&state=bound'))
+  expect(response.headers.get('location')).toBe('http://localhost:3000/sign-in?google=cancelled')
+  expect(mocks.exchange).not.toHaveBeenCalled(); expect(mocks.complete).not.toHaveBeenCalled()
+})

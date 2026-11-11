@@ -6,7 +6,7 @@ import { AuthError } from '@/lib/auth/types'
 export const runtime = 'nodejs'
 export async function GET(request: Request): Promise<Response> {
   try {
-    const actor = await requireApiIdentity(request)
+    const actor = await requireApiIdentity(request, { admission: false })
     const params = new URL(request.url).searchParams
     if ([...params.keys()].some(key => !['resource', 'cursor', 'limit'].includes(key)) || [...params.keys()].some(key => params.getAll(key).length !== 1)) throw new ApiError(400, 'INVALID_REQUEST', 'Choose a valid export resource and page.')
     const result = await exportAccountPage(actor.userId, Object.fromEntries(params))

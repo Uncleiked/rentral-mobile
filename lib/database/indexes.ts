@@ -1,5 +1,5 @@
 import type { CreateIndexesOptions, Db, Document, IndexDirection } from 'mongodb'
-import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION, OWNER_ADMIN_VERSION } from './metadata.ts'
+import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION, OWNER_ADMIN_VERSION, ORGANIZATION_VERSION, GOOGLE_AUTH_VERSION } from './metadata.ts'
 
 type IndexPlan = { collection: string; keys: Record<string, IndexDirection>; options: CreateIndexesOptions }
 const plan = (collection: string, keys: Record<string, IndexDirection>, unique = false): IndexPlan => ({
@@ -12,6 +12,8 @@ const partialUnique = (collection: string, field: string): IndexPlan => ({
 
 // Never run prisma db push: it cannot describe these nullable unique indexes.
 export const MONGO_INDEXES: readonly IndexPlan[] = [
+  plan('GoogleIdentity', { user_id: 1 }, true),
+  plan('OrganizationApplication', { user_id: 1 }, true), plan('OrganizationApplication', { status: 1, submitted_at: 1 }), plan('OrganizationApplication', { evidence_paths: 1 }),
   plan('User', { email: 1 }, true), partialUnique('User', 'username'),
   plan('IndividualProfile', { userId: 1 }, true), plan('OrganizationProfile', { userId: 1 }, true),
   plan('WebhookLog', { event_id: 1 }, true), plan('WebhookLog', { session_id: 1, event_created_at: -1 }),
@@ -109,7 +111,7 @@ export const MONGO_COLLECTIONS = [
   'LeaseTermination', 'WorkerState', 'WorkerFailure', 'PaymentRecipient', 'FinancialOperation', 'FinancialAllocation', 'ProviderReceipt', 'MutationReceipt', 'EmailChange', 'AuthEmailDelivery',
   'MatchProfile', 'MatchConnection', 'MatchMessage', 'MatchBlock', 'MatchReport',
   'ConversationActivity', 'CommercialOrder', 'InsightEntitlement', 'SponsoredCampaign',
-  'PushDevice', 'PushDelivery',
+  'PushDevice', 'PushDelivery', 'OrganizationApplication', 'GoogleIdentity',
 ] as const
 
 const id = { bsonType: 'string', minLength: 1, maxLength: 256 }
@@ -123,6 +125,13 @@ const jsonSchema = (required: string[], properties: Document): Document => ({ $j
 
 // Cross-document balances, ownership and overlapping periods stay in transactional domain services.
 export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
+  GoogleIdentity: jsonSchema(['user_id', 'email_at_link', 'credential_fingerprint', 'createdAt'], { user_id: id, credential_fingerprint: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, email_at_link: { bsonType: 'string', minLength: 3, maxLength: 254 }, createdAt: { bsonType: 'date' } }),
+  OrganizationApplication: jsonSchema(['user_id', 'legal_name', 'registration_type', 'registration_number', 'representative_name', 'representative_role', 'document_kind', 'document_path', 'document_proof', 'status', 'submitted_at'], {
+    user_id: id, legal_name: { bsonType: 'string', minLength: 2, maxLength: 160 }, registration_type: { enum: ['company', 'business_name', 'llp', 'incorporated_trustees'] },
+    registration_number: { bsonType: 'string', minLength: 2, maxLength: 80 }, representative_name: { bsonType: 'string', minLength: 2, maxLength: 120 }, representative_role: { bsonType: 'string', minLength: 2, maxLength: 100 },
+    document_kind: { enum: ['cac_certificate', 'cac_status_report'] }, document_path: id, document_proof: { bsonType: 'object' }, supporting_kind: { enum: ['authority_letter', 'professional_licence', 'office_address', null] }, supporting_path: { bsonType: ['string', 'null'] }, supporting_proof: { bsonType: ['object', 'null'] },
+    evidence_paths: { bsonType: 'array', uniqueItems: true, items: id }, status: { enum: ['pending', 'changes_requested', 'rejected', 'approved'] }, reviewed_by: { bsonType: ['string', 'null'] }, reviewed_at: nullableDate, review_reason: { bsonType: ['string', 'null'], maxLength: 2000 }, submitted_at: { bsonType: 'date' },
+  }),
   User: jsonSchema(['email'], {
     email: { bsonType: 'string', minLength: 3 }, username: { bsonType: ['string', 'null'] },
     password_hash: { bsonType: ['string', 'null'] }, staff_role: { bsonType: ['string', 'null'] },
@@ -246,7 +255,7 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
   }),
   WorkerState: jsonSchema([], { lease_expires_at: nullableDate, last_started_at: nullableDate, last_completed_at: nullableDate }),
   MutationReceipt: jsonSchema(['actor_id', 'scope', 'client_id', 'input_hash', 'resource_id'], {
-    actor_id: id, scope: { enum: ['listing_submit', 'listing_draft_save', 'booking_create', 'admin_command', 'manual_inspection_request'] }, client_id: id, resource_id: id,
+    actor_id: id, scope: { enum: ['listing_submit', 'listing_draft_save', 'booking_create', 'admin_command', 'manual_inspection_request', 'organization_submit', 'organization_review'] }, client_id: id, resource_id: id,
     input_hash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
   }),
   AdminAudit: { $and: [jsonSchema(['action', 'target_type', 'target_id', 'reason'], {
@@ -338,10 +347,10 @@ export async function ensureMongoIndexes(db: Db): Promise<{ collections: number;
     await payments.dropIndex('PaymentIntent_provider_transaction_id_key')
   }
   // Commit readiness last: a partial or failed setup must not enable unindexed writes.
-  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; ownerAdminVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
+  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; ownerAdminVersion: number; organizationVersion: number; googleAuthVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
     { _id: MONGO_SETUP_ID }, { $set: { schemaVersion: MONGO_SCHEMA_VERSION, storageClaimsVersion: STORAGE_CLAIMS_VERSION,
       financialVersion: FINANCIAL_VERSION, lifecycleVersion: LIFECYCLE_VERSION, mutationVersion: MUTATION_VERSION, authSecurityVersion: AUTH_SECURITY_VERSION,
-      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, ownerAdminVersion: OWNER_ADMIN_VERSION, completedAt: new Date() } }, { upsert: true },
+      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, ownerAdminVersion: OWNER_ADMIN_VERSION, organizationVersion: ORGANIZATION_VERSION, googleAuthVersion: GOOGLE_AUTH_VERSION, completedAt: new Date() } }, { upsert: true },
   )
   return { collections: MONGO_COLLECTIONS.length, indexes: MONGO_INDEXES.length }
 }

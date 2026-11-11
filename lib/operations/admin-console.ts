@@ -138,6 +138,13 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
     await tx.user.update({ where: { id: target.id }, data: { suspended_at: null, suspension_reason: null } })
   } else throw new ApiError(400, 'INVALID_REQUEST', 'Choose a user access action.')
   const audit = await tx.adminAudit.create({ data: { actor_id: actorId, action: data.operation, target_type: 'user', target_id: target.id, reason: data.reason, metadata: { previous, ...(data.operation === 'set_gallery_permission' ? { allowed: data.allowed } : {}), ...(data.operation === 'change_role' ? { role: data.role } : {}), ownerOverride: selfGallery, moneyMoved: false } } })
+  if (data.operation === 'set_gallery_permission' && previous.galleryAllowed !== data.allowed) {
+    await tx.notification.createMany({ data: [{ user_id: target.id, kind: 'gallery_permission',
+      title: data.allowed ? 'Gallery uploads approved' : 'Gallery upload permission removed',
+      body: data.allowed ? 'An administrator approved gallery photos and videos for your account. Open Create Listing to choose your files. Each listing still requires human review.' : 'Gallery uploads are no longer approved. Your drafts and files are retained; affected published gallery listings need review before they can appear again.',
+      href: data.allowed ? '/marketplace/listing/create?gallery=1' : '/marketplace/listing',
+    }] })
+  }
   return audit.id
 }
 async function inspectionCommand(tx: Prisma.TransactionClient, actorId: string, data: Extract<AdminCommand, { operation: 'review_manual_inspection' }>): Promise<string> {

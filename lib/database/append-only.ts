@@ -1,4 +1,4 @@
-const appendOnlyModels = new Set(['LedgerTransaction', 'LedgerEntry', 'AdminAudit', 'HoldCreditAllocation', 'FinancialAllocation', 'MutationReceipt'])
+const appendOnlyModels = new Set(['LedgerTransaction', 'LedgerEntry', 'AdminAudit', 'HoldCreditAllocation', 'FinancialAllocation', 'MutationReceipt', 'GoogleIdentity'])
 const prohibitedOperations = new Set(['update', 'updateMany', 'updateManyAndReturn', 'delete', 'deleteMany', 'upsert'])
 const dataOperations = new Set(['create', 'createMany', 'createManyAndReturn', 'update', 'updateMany', 'updateManyAndReturn', 'upsert'])
 export type RelationGraph = Readonly<Record<string, Readonly<Record<string, string>>>>
@@ -33,6 +33,12 @@ function inspectData(model: string, data: unknown, relations: RelationGraph): vo
 
 /** Server-client guard. Collection access outside Prisma still requires restricted database credentials. */
 export function assertAppendOnlyOperation(model: string, operation: string, args?: unknown, relations: RelationGraph = {}): void {
+  // A Google credential refresh may only CAS the credential fingerprint. Provider
+  // subject/account bindings stay immutable, including through nested relations.
+  if (model === 'GoogleIdentity' && operation === 'updateMany') {
+    if (!record(args) || !record(args.where) || !record(args.data) || Object.keys(args.where).sort().join(',') !== 'credential_fingerprint,id,user_id' || Object.keys(args.data).join(',') !== 'credential_fingerprint' || ![args.where.id, args.where.user_id].every(value => typeof value === 'string' && value.length > 0) || ![args.where.credential_fingerprint, args.data.credential_fingerprint].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))) throw new Error('APPEND_ONLY_RECORD')
+    return
+  }
   if (appendOnlyModels.has(model) && prohibitedOperations.has(operation)) throw new Error('APPEND_ONLY_RECORD')
   if (model === 'StorageObject' && ['update', 'updateMany'].includes(operation) && record(args) && record(args.data) && 'upload_completed_at' in args.data &&
     (!record(args.where) || args.where.state !== 'uploading' || typeof args.where.operation_token !== 'string' || args.data.state !== 'available')) throw new Error('IMMUTABLE_UPLOAD_PROVENANCE')

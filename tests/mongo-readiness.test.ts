@@ -16,7 +16,7 @@ vi.mock('@/lib/database/config', () => ({
   mongoDatabaseName: () => 'owned_readiness_fixture',
 }))
 
-import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared, assertOwnerAdminReady, ownerAdminPrepared } from '@/lib/database/readiness'
+import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared, assertOwnerAdminReady, ownerAdminPrepared, assertGoogleAuthReady, googleAuthPrepared, assertOrganizationsReady, organizationsPrepared } from '@/lib/database/readiness'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -178,4 +178,23 @@ describe('Mongo readiness recovery', () => {
     expect(state.clients[1].close).not.toHaveBeenCalled()
     expect(state.clients[1].findOne).toHaveBeenCalledOnce()
   })
+  it('keeps email authentication available while Google identity preparation remains gated', async () => {
+    await assertMongoReady(); expect(await googleAuthPrepared()).toBe(false)
+    await expect(assertGoogleAuthReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, googleAuthVersion: 1 })
+    expect(await googleAuthPrepared()).toBe(true); await assertGoogleAuthReady()
+  })
+})
+
+it('keeps existing accounts available while organization admission requires its additive preparation', async () => {
+  vi.stubEnv('MONGODB_URL', 'mongodb://fixture-organization/owned_readiness_fixture')
+  state.nextRead = () => Promise.resolve({ schemaVersion: 1 })
+  try {
+    await assertMongoReady()
+    expect(await organizationsPrepared()).toBe(false)
+    await expect(assertOrganizationsReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, organizationVersion: 1 })
+    expect(await organizationsPrepared()).toBe(true)
+    await assertOrganizationsReady()
+  } finally { await closeMongoReadiness(); vi.unstubAllEnvs() }
 })

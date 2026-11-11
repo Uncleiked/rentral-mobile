@@ -1,182 +1,54 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/client'
 import { useRouter } from 'next/navigation'
 import { login, signup } from './actions'
+import { startGoogleSignIn } from '@/app/auth/google/actions'
 import { toast } from 'sonner'
-import { authErrorMessage } from '@/lib/auth-errors'
 
-export default function AuthForm({ providers }: { providers: { google: boolean; apple: boolean } }) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [showPassword, setShowPassword] = useState(false)
+const field = 'w-full rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary'
+export default function AuthForm({ providers, initialError = '' }: { providers: { google: boolean; apple: boolean }; initialError?: string }) {
+  const [isLoading, setIsLoading] = useState(false), [errorMessage, setErrorMessage] = useState(initialError)
+  const [showPassword, setShowPassword] = useState(false), [creating, setCreating] = useState(false)
+  const [accountType, setAccountType] = useState<'individual' | 'organization' | null>(null), [accepted, setAccepted] = useState(false)
   const router = useRouter()
-
-  const handleOAuth = async (provider: 'google' | 'apple') => {
-    if (isLoading) return
+  async function handleGoogle() {
+    if (isLoading || !providers.google) return
+    setErrorMessage('')
+    if (creating && (!accountType || !accepted)) { setErrorMessage('Choose an account type and accept the terms before continuing.'); return }
     setIsLoading(true)
-    setErrorMessage(null)
     try {
-      const { error } = await createClient().auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      })
-      if (error) setErrorMessage(authErrorMessage(error))
-    } catch {
-      setErrorMessage('Unable to connect. Check your connection and try again.')
-    } finally {
-      setIsLoading(false)
-    }
+      const result = await startGoogleSignIn(creating ? { mode: 'signup', accountType, termsAccepted: accepted } : { mode: 'signin' })
+      if ('error' in result) setErrorMessage(result.error)
+      else window.location.assign(result.url)
+    } catch { setErrorMessage('Unable to connect. Check your connection and try again.') }
+    finally { setIsLoading(false) }
   }
-
-  const handleEmailAuth = async (form: HTMLFormElement | null, action: 'login' | 'signup') => {
-    if (isLoading) return
-    if (!form || !form.checkValidity()) {
-      form?.reportValidity()
-      return
-    }
-
-    setIsLoading(true)
-    setErrorMessage(null)
-    const formData = new FormData(form)
-    
+  async function handleEmail(form: HTMLFormElement) {
+    if (isLoading || !form.reportValidity()) return
+    setIsLoading(true); setErrorMessage('')
     try {
-      const result = action === 'login' ? await login(formData) : await signup(formData)
-      if ('error' in result) {
-        setErrorMessage(result.error)
-      } else if (result.success && result.redirectTo) {
-        toast.success(result.message ?? (action === 'login' ? 'Signed in successfully.' : 'Account created!'))
-        router.replace(result.redirectTo)
-        router.refresh()
+      const result = await (creating ? signup : login)(new FormData(form))
+      if ('error' in result) setErrorMessage(result.error)
+      else {
+        toast.success(result.message ?? (creating ? 'Account created!' : 'Signed in successfully.'))
+        router.replace(result.redirectTo); router.refresh()
       }
-    } catch {
-      setErrorMessage('Unable to connect. Check your connection and try again.')
-    } finally {
-      setIsLoading(false)
-    }
+    } catch { setErrorMessage('Unable to connect. Check your connection and try again.') }
+    finally { setIsLoading(false) }
   }
-
-  return (
-    <div className="bg-surface-card border border-border-subtle rounded-2xl p-6 sm:p-8 shadow-2xl max-w-md w-full mx-auto">
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-text-primary tracking-wide mb-2">Welcome to Rentral</h1>
-        <p className="text-sm text-text-secondary">Sign in to access the ultimate trust marketplace.</p>
-      </div>
-
-      <form className="flex flex-col gap-4" aria-busy={isLoading} onSubmit={(event) => {
-        event.preventDefault()
-        void handleEmailAuth(event.currentTarget, 'login')
-      }}>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="email">
-            Email
-          </label>
-          <input
-            className="bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all"
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            required
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" htmlFor="password">
-              Password
-            </label>
-            <a href="/forgot-password" className="text-xs font-medium text-text-muted hover:text-accent-primary transition-colors tracking-wide">
-              Forgot Password?
-            </a>
-          </div>
-          <div className="relative w-full">
-            <input
-              className="w-full bg-background-app border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:ring-1 focus:ring-accent-primary focus:border-accent-primary focus:outline-none transition-all pr-12"
-              id="password"
-              name="password"
-              autoComplete="current-password"
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors cursor-pointer p-1"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 mt-4">
-          <button
-            type="submit"
-            className="bg-accent-primary text-text-inverse font-bold uppercase tracking-wide text-xs py-3 px-4 rounded-xl hover:bg-accent-hover active:scale-95 transition-all shadow-lg text-center"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Please wait...' : 'Sign In'}
-          </button>
-          
-          <button
-            type="button"
-            onClick={(event) => void handleEmailAuth(event.currentTarget.form, 'signup')}
-            className="bg-glass-light border border-glass-border-medium text-text-primary font-bold uppercase tracking-wide text-xs py-3 px-4 rounded-xl hover:bg-glass-light-hover active:scale-95 transition-all backdrop-blur-md text-center"
-            disabled={isLoading}
-          >
-            Create Account
-          </button>
-        </div>
-        {errorMessage && <p role="alert" className="text-sm text-trust-flagged break-words">{errorMessage}</p>}
-      </form>
-
-      {(providers.google || providers.apple) && <>
-      <div className="my-6 flex items-center gap-3">
-        <div className="h-[1px] flex-1 bg-border-subtle"></div>
-        <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Or continue with</span>
-        <div className="h-[1px] flex-1 bg-border-subtle"></div>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {providers.google && <button
-          onClick={() => handleOAuth('google')}
-          type="button"
-          className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary shadow-md backdrop-blur-md transition-all hover:bg-glass-light-hover active:scale-95"
-          disabled={isLoading}
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2" />
-            <path d="M12 12h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-          </svg>
-          Google
-        </button>}
-        
-        {providers.apple && <button
-          onClick={() => handleOAuth('apple')}
-          type="button"
-          className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-background-app px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary shadow-md transition-all hover:bg-glass-light active:scale-95"
-          disabled={isLoading}
-        >
-          <svg className="h-4 w-4 fill-current" viewBox="0 0 384 512" aria-hidden="true">
-            <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
-          </svg>
-          Apple
-        </button>}
-      </div>
-      </>}
-    </div>
-  )
+  return <section className="w-full max-w-md rounded-2xl border border-border-subtle bg-surface-card p-6 shadow-2xl sm:p-8">
+    <header className="mb-7"><p className="text-xs font-semibold uppercase tracking-widest text-accent-hover">Your Rentral account</p><h1 className="mt-3 text-2xl font-bold text-text-primary">Welcome to Rentral</h1><p className="mt-2 text-sm leading-6 text-text-secondary">{creating ? 'Choose your account type, then create an account with Google or email.' : 'Sign in with your email and password, or continue with Google.'}</p></header>
+    <form className="space-y-4" aria-busy={isLoading} onSubmit={event => { event.preventDefault(); void handleEmail(event.currentTarget) }}>
+      {creating && <><fieldset className="space-y-3"><legend className="mb-3 text-sm font-semibold text-text-primary">Account type</legend>{(['individual', 'organization'] as const).map(type => <label key={type} className={`flex min-h-16 cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${accountType === type ? 'border-accent-primary bg-accent-muted' : 'border-border-subtle bg-background-app'}`}><input className="mt-1 size-4 shrink-0 accent-accent-primary" type="radio" name="accountType" value={type} checked={accountType === type} onChange={() => setAccountType(type)} required /><span className="min-w-0"><span className="block text-sm font-semibold text-text-primary">{type === 'individual' ? 'Individual' : 'Organization'}</span><span className="mt-1 block text-xs leading-5 text-text-muted">{type === 'individual' ? 'Rent or list assets using your own account.' : 'Submit registration evidence for admin approval.'}</span></span></label>)}</fieldset><label className="flex items-start gap-3 text-sm leading-6 text-text-secondary"><input className="mt-1 size-4 shrink-0 accent-accent-primary" type="checkbox" name="termsAccepted" checked={accepted} onChange={event => setAccepted(event.target.checked)} required /><span>I accept the <a className="text-accent-hover" href="/terms">terms</a> and <a className="text-accent-hover" href="/privacy">privacy policy</a>.</span></label></>}
+      <button type="button" onClick={() => void handleGoogle()} disabled={isLoading || !providers.google} className="flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-sm font-semibold text-text-primary transition-all hover:bg-glass-light-hover disabled:cursor-not-allowed disabled:opacity-50"><svg aria-hidden="true" viewBox="0 0 24 24" className="size-5"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M12 12h8" stroke="currentColor" strokeWidth="2" /></svg>Continue with Google</button>
+      {!providers.google && <p className="text-xs leading-5 text-text-muted">Google sign-in is awaiting configuration. Email and password are available.</p>}
+      <div className="flex items-center gap-3 py-2" aria-hidden="true"><span className="h-px flex-1 bg-border-subtle" /><span className="text-xs text-text-muted">or use email</span><span className="h-px flex-1 bg-border-subtle" /></div>
+      <div><label htmlFor="email" className="mb-2 block text-xs font-medium uppercase tracking-wide text-text-muted">Email</label><input className={field} id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></div>
+      <div><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><label htmlFor="password" className="text-xs font-medium uppercase tracking-wide text-text-muted">Password</label><a href="/forgot-password" className="text-xs text-accent-hover">Forgot Password?</a></div><div className="relative"><input className={field + ' pr-20'} id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete={creating ? 'new-password' : 'current-password'} minLength={creating ? 8 : 1} maxLength={128} required /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-3 text-xs font-medium text-text-muted" onClick={() => setShowPassword(value => !value)}>{showPassword ? 'Hide' : 'Show'}</button></div></div>
+      {errorMessage && <p role="alert" className="break-words text-sm leading-6 text-trust-flagged">{errorMessage}</p>}
+      <button type="submit" disabled={isLoading} className="min-h-12 w-full rounded-xl bg-accent-primary px-4 py-3 text-sm font-bold text-text-inverse transition-all hover:bg-accent-hover disabled:opacity-50">{isLoading ? 'Please wait...' : creating ? 'Create Account' : 'Sign In'}</button>
+      <button type="button" disabled={isLoading} onClick={() => { setCreating(value => !value); setErrorMessage('') }} className="min-h-11 w-full rounded-xl border border-border-subtle px-4 py-3 text-sm font-semibold text-text-secondary transition-all hover:bg-glass-light disabled:opacity-50">{creating ? 'I already have an account' : 'Create Account'}</button>
+    </form>
+  </section>
 }

@@ -10,6 +10,13 @@ vi.mock('@/lib/auth/service', () => ({
   loginAccount: vi.fn(), registerAccount: vi.fn(), requestPasswordReset: vi.fn(),
 }))
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+// Organization admission is covered separately; this fixture exercises only
+// the shared rotation of one existing individual's session, without a database.
+vi.mock('@/lib/organizations/access', () => ({
+  organizationMarketplaceAllowed: vi.fn(async () => true),
+  assertOrganizationMarketplaceAccess: vi.fn(async () => undefined),
+  organizationPageExempt: (path: string) => path.startsWith('/api/'),
+}))
 
 import { createClient } from '@/lib/server'
 import { updateSession } from '@/lib/proxy'

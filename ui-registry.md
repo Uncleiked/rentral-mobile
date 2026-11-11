@@ -435,3 +435,30 @@ and offer readback. Label sponsored cards separately from organic results.
 Native web handoffs reuse secondary Button plus muted help stating separate
 browser sign-in; never add session credentials to navigation URLs.
 
+
+## Web administration and signup patterns - 2026-11-11
+
+Canonical owner workspace: /admin. Six keyboard tabs separate Listings, Members &
+permissions, Organizations, Inspections, Audit trail and More workspaces. Use
+semantic surface-card/background-app/border-subtle panels, rounded-2xl containers,
+rounded-xl fields,44px minimum controls and desktop queue/detail grids that stack
+on phones. Member search fields take a full mobile row. Counts describe the loaded
+bounded queue, not platform totals. Focus selected reviews into view.
+
+AdminToggle wraps a native checkbox role=switch with a decorative track/thumb.
+A gallery switch prepares a desired state; show the saved state separately and
+require Record decision, a reason and the explicit owner-self acknowledgment.
+Use checkboxes for evidence attestations, not for service availability. Unknown
+commands preserve original actor-scoped receipts/readback and never auto-replay.
+Current permission matrices determine available actions and default selections.
+
+AuthForm keeps email/password and one Google alternative; new accounts first
+choose native Individual/Organization radio cards and accept terms/privacy.
+Unconfigured Google is visibly unavailable while email stays usable. Registration
+proof and review statuses are separate from identity/location/asset ownership.
+Organization forms and queues use the same semantic fields, clear unavailable
+states, exact evidence links and explicit independent approval checklists.
+
+UI verification uses the actual four bundled Inter weights and320/390/768/1440px.
+The isolated admin fixture uses only synthetic records and blocked external calls;
+it is not an authenticated production route or an authorization bypass.

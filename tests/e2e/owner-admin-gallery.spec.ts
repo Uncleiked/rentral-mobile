@@ -83,6 +83,7 @@ test('owner self-waiver requires an explicit override and a lost decision acknow
   await page.getByRole('button', { name: 'Check original decision', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Confirm the original decision', exact: true })).toHaveCount(0)
   expect(commands).toHaveLength(1); expect(await page.evaluate(key => sessionStorage.getItem(key), markerKey)).toBeNull()
+  await page.getByRole('tab', { name: 'Inspections', exact: true }).click()
   await page.getByRole('button', { name: new RegExp(`Inspection ${inspectionId}`) }).click()
   await selected.getByLabel('Reason for this decision', { exact: true }).fill('Independent review of the supplied visit evidence confirms the participants met at the property.')
   await selected.getByRole('button', { name: 'Record decision', exact: true }).click()

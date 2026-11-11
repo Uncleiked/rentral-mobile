@@ -48,8 +48,8 @@ export async function createClient() {
       try { const session = await loginAccount(input); save(session); return { data: { session, user: session.user }, error: null } }
       catch (error) { return { data: { session: null, user: null }, error: error instanceof AuthError ? error : new AuthError(503, 'AUTH_UNAVAILABLE', 'Sign-in is temporarily unavailable.') } }
     },
-    async signUp(input: { email: string; password: string; options?: { emailRedirectTo?: string } }) {
-      try { const session = await registerAccount({ email: input.email, password: input.password }); save(session); return { data: { session, user: session.user }, error: null } }
+    async signUp(input: { email: string; password: string; accountType?: 'individual' | 'organization'; options?: { emailRedirectTo?: string } }) {
+      try { const session = await registerAccount({ email: input.email, password: input.password, accountType: input.accountType }); save(session); return { data: { session, user: session.user }, error: null } }
       catch (error) { return { data: { session: null, user: null }, error: error instanceof AuthError ? error : new AuthError(503, 'AUTH_UNAVAILABLE', 'Account creation is temporarily unavailable.') } }
     },
     async signOut() {

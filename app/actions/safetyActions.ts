@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireUserId } from '@/lib/action-helpers'
+import { requireSessionUserId } from '@/lib/action-helpers'
 import { hasStaffPermission } from '@/lib/auth/roles'
 import { type ActionResult, PLATFORM_UNAVAILABLE } from '@/lib/platform'
 import { appealSafetyNotice, decideSafetyAppeal, issueSafetyNotice, safetyEnabled } from '@/lib/trust/safety'
@@ -15,7 +15,7 @@ function revalidateSafety() {
 export async function issueSafetyNoticeAction(input: unknown): Promise<ActionResult> {
   try {
     if (!safetyEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
-    const actor = await requireUserId()
+    const actor = await requireSessionUserId()
     if (!actor || !await hasStaffPermission(actor, 'safety:review')) return { success: false, error: 'Staff access required.' }
     await issueSafetyNotice(actor, input)
     revalidateSafety()
@@ -26,7 +26,7 @@ export async function issueSafetyNoticeAction(input: unknown): Promise<ActionRes
 export async function appealSafetyNoticeAction(input: unknown): Promise<ActionResult> {
   try {
     if (!safetyEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
-    const userId = await requireUserId()
+    const userId = await requireSessionUserId()
     if (!userId) return { success: false, error: 'Sign in to appeal a notice on your account.' }
     await appealSafetyNotice(userId, input)
     revalidateSafety()
@@ -37,7 +37,7 @@ export async function appealSafetyNoticeAction(input: unknown): Promise<ActionRe
 export async function decideSafetyAppealAction(input: unknown): Promise<ActionResult> {
   try {
     if (!safetyEnabled()) return { success: false, error: PLATFORM_UNAVAILABLE }
-    const actor = await requireUserId()
+    const actor = await requireSessionUserId()
     if (!actor || !await hasStaffPermission(actor, 'safety:review')) return { success: false, error: 'Staff access required.' }
     await decideSafetyAppeal(actor, input)
     revalidateSafety()

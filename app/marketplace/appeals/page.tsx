@@ -2,14 +2,14 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { MarketplaceShell } from '@/components/layout/MarketplaceShell'
 import { SafetyAppealForm } from '@/components/trust/SafetyAppealForm'
-import { requireUserId } from '@/lib/action-helpers'
+import { requireSessionUserId } from '@/lib/action-helpers'
 import { getOwnSafetyNotices, safetyEnabled } from '@/lib/trust/safety'
 import { safetyCategories, safetyCategoryLabels } from '@/lib/trust/safety-policy'
 
 export const metadata = { title: 'Safety notices & appeals | Rentral' }
 
 export default async function SafetyAppealsPage() {
-  const userId = await requireUserId()
+  const userId = await requireSessionUserId()
   if (!userId) redirect('/sign-in')
   const enabled = safetyEnabled()
   const notices = await getOwnSafetyNotices(userId)

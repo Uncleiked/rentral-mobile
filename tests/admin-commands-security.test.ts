@@ -78,6 +78,20 @@ describe('owner administration authorization and original-command receipts', () 
     expect(state.listingUpdate).toHaveBeenCalledWith({ where: { lister_id: member, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', revision: { increment: 1 } } })
     expect(state.audits).toHaveBeenCalledTimes(1); expect(state.receipts.size).toBe(1)
   })
+  it('notifies a newly approved gallery uploader once, including original-command replay', async () => {
+    const input = command('set_gallery_permission', { allowed: true })
+    await executeAdminCommand(owner, input)
+    await executeAdminCommand(owner, input)
+    expect(state.users.get(member)!.gallery_upload_allowed).toBe(true)
+    expect(state.notify).toHaveBeenCalledExactlyOnceWith({ data: [expect.objectContaining({ user_id: member, kind: 'gallery_permission', title: 'Gallery uploads approved', href: '/marketplace/listing/create?gallery=1' })] })
+    expect(state.userUpdate).toHaveBeenCalledTimes(1)
+    expect(state.audits).toHaveBeenCalledTimes(1)
+  })
+  it('does not create a new permission-change notification for an unchanged setting', async () => {
+    await executeAdminCommand(owner, command('set_gallery_permission', { allowed: false }))
+    expect(state.notify).not.toHaveBeenCalled()
+    expect(state.audits).toHaveBeenCalledTimes(1)
+  })
   it('rejects a stale target snapshot before altering its capability', async () => {
     state.users.get(member)!.revision = 3
     await expect(executeAdminCommand(owner, command('set_gallery_permission', { allowed: true }))).rejects.toMatchObject({ code: 'ADMIN_TARGET_CHANGED' })

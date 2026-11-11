@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import prisma from '@/lib/db'
 import { captureServerEvent } from '@/lib/posthog'
-import { requireUserId, revalidateProfilePaths } from '@/lib/action-helpers'
+import { requireSessionUserId, revalidateProfilePaths } from '@/lib/action-helpers'
 import { updateAccountProfile } from '@/lib/accounts/profile'
 import { AccountUnavailableError } from '@/lib/accounts/availability'
 
@@ -33,7 +33,7 @@ export async function checkUsernameAvailability(
     }
   }
 
-  const userId = await requireUserId()
+  const userId = await requireSessionUserId()
   if (!userId) {
     return { available: false, error: 'Not authenticated' }
   }
@@ -51,7 +51,7 @@ export async function checkUsernameAvailability(
 }
 
 export async function updateProfileIdentity(data: { username: string; bio: string }): Promise<ActionResult> {
-  const userId = await requireUserId()
+  const userId = await requireSessionUserId()
   if (!userId) {
     return { success: false, error: 'Not authenticated' }
   }
@@ -90,7 +90,7 @@ export async function updateProfileIdentity(data: { username: string; bio: strin
 }
 
 export async function updateAvatarUrl(avatarUrl: string): Promise<ActionResult> {
-  const userId = await requireUserId()
+  const userId = await requireSessionUserId()
   if (!userId) {
     return { success: false, error: 'Not authenticated' }
   }

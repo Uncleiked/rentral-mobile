@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   let started = false
   try {
-    const identity = await requireApiIdentity(request, { platform: true, mutation: true, verified: true })
+    const identity = await requireApiIdentity(request, { admission: false, platform: true, mutation: true, verified: true })
     const id = z.uuid().parse((await params).id)
     const input = safetyAppealInputSchema.parse(await readApiJson(request, 24576))
     if (!safetyEnabled()) throw new ApiError(503, 'SAFETY_UNAVAILABLE', 'Safety reviews are not available yet.')

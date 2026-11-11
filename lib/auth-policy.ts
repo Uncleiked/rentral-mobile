@@ -6,7 +6,7 @@ function matchesRoute(pathname: string, route: string): boolean {
 
 export function authRedirect(pathname: string, user: AuthIdentity): string | null {
   const publicPages = ['/', '/sign-in', '/forgot-password', '/reset-password', '/confirm-email', '/auth/callback', '/help', '/terms', '/privacy', '/insights']
-  if (publicPages.includes(pathname) || matchesRoute(pathname, '/api/webhooks')) return null
+  if (matchesRoute(pathname, '/auth/google') || publicPages.includes(pathname) || matchesRoute(pathname, '/api/webhooks')) return null
   // Versioned APIs perform bearer/cookie authorization and return JSON errors.
   if (matchesRoute(pathname, '/api/v1')) return null
   // Retired verification initiation returns JSON 410, including for old clients.
@@ -16,6 +16,7 @@ export function authRedirect(pathname: string, user: AuthIdentity): string | nul
   if (!user || user.is_anonymous) return '/sign-in'
   // Account authentication is sufficient. Profile details and historical KYC
   // decisions are never prerequisites for entering the marketplace.
+  if (pathname === '/onboarding/organization') return null
   return matchesRoute(pathname, '/onboarding') ? '/marketplace' : null
 }
 

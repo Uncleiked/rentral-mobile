@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { mongoUrl } from '../lib/database/config.ts'
 
-const flags = ['AUTH_DEV_EMAIL_OUTBOX', 'RENTRAL_PLATFORM_ENABLED', 'RENTRAL_SAFETY_ENABLED', 'PAYMENTS_ENABLED', 'SETTLEMENT_ENABLED', 'PAYSTACK_TRANSFERS_ENABLED', 'PAYSTACK_REFUNDS_ENABLED', 'MUX_ENABLED', 'MEDIA_WORKER_ENABLED', 'LIFECYCLE_WORKER_ENABLED', 'AUTH_EMAIL_ENABLED', 'NOTIFICATION_EMAIL_ENABLED', 'PUSH_NOTIFICATIONS_ENABLED', 'COMMERCIAL_ENABLED', 'RENTRAL_ANALYTICS_ENABLED', 'NEXT_PUBLIC_POSTHOG_ENABLED', 'OLUSO_ENABLED']
+const flags = ['GOOGLE_AUTH_ENABLED', 'AUTH_DEV_EMAIL_OUTBOX', 'RENTRAL_PLATFORM_ENABLED', 'RENTRAL_SAFETY_ENABLED', 'PAYMENTS_ENABLED', 'SETTLEMENT_ENABLED', 'PAYSTACK_TRANSFERS_ENABLED', 'PAYSTACK_REFUNDS_ENABLED', 'MUX_ENABLED', 'MEDIA_WORKER_ENABLED', 'LIFECYCLE_WORKER_ENABLED', 'AUTH_EMAIL_ENABLED', 'NOTIFICATION_EMAIL_ENABLED', 'PUSH_NOTIFICATIONS_ENABLED', 'COMMERCIAL_ENABLED', 'RENTRAL_ANALYTICS_ENABLED', 'NEXT_PUBLIC_POSTHOG_ENABLED', 'OLUSO_ENABLED']
 const publicNames = new Set(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_EAS_PROJECT_ID'])
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const cutoff = value => typeof value === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value))
@@ -31,6 +31,15 @@ export function inspectEnvironment(backend, mobile) {
   else { try { mongoUrl(uri, backend.MONGODB_DB_NAME || 'rentral') } catch { fail('MONGODB_URL', 'Use a valid MongoDB connection with certificate validation and an explicit database name or MONGODB_DB_NAME.') } }
   if (!backend.JWT_SECRET || Buffer.byteLength(backend.JWT_SECRET, 'utf8') < 32) fail('JWT_SECRET', 'Generate a private signing secret of at least 32 bytes.')
   if (!origin(backend.NEXT_PUBLIC_APP_URL)) fail('NEXT_PUBLIC_APP_URL', 'Use the web origin only, such as http://localhost:3000.')
+  if (enabled('GOOGLE_AUTH_ENABLED')) {
+    required('GOOGLE_CLIENT_ID'); required('GOOGLE_CLIENT_SECRET')
+    if (backend.GOOGLE_CLIENT_ID?.trim() && (!backend.GOOGLE_CLIENT_ID.trim().endsWith('.apps.googleusercontent.com') || /\s/.test(backend.GOOGLE_CLIENT_ID.trim()))) fail('GOOGLE_CLIENT_ID', 'Use the Web application OAuth client ID from Google Auth Platform.')
+    if (origin(backend.NEXT_PUBLIC_APP_URL)) {
+      const callbackOrigin = new URL(backend.NEXT_PUBLIC_APP_URL)
+      if (callbackOrigin.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(callbackOrigin.hostname)) fail('NEXT_PUBLIC_APP_URL', 'Google sign-in requires HTTPS, except for a loopback development origin.')
+    }
+    notes.push('Google also requires the additive identity database setup and the exact /auth/google/callback redirect registered in Google Auth Platform. This offline check does not verify either.')
+  } else notes.push('Google sign-in is not enabled. Email/password remains available; follow context/google-sign-in-setup.md to configure the alternative.')
   if (!origin(mobile.EXPO_PUBLIC_API_URL)) fail('EXPO_PUBLIC_API_URL', 'Set the backend origin reachable from the device, without /api/v1.')
   for (const key of Object.keys(mobile)) {
     if (key.startsWith('EXPO_PUBLIC_') && !publicNames.has(key)) fail(key, 'This public mobile variable is not used by Rentral. Keep backend keys out of the mobile file.')

@@ -1,135 +1,150 @@
-# Memory — Owner administration and approved gallery media
+# Memory - Windows-safe build and active RentralMobile
 
-Last updated: 2026-11-10 Africa/Lagos. The user approved the owner/admin blueprint.
-Source, current-source local verification and runtime handback are complete.
-Selected Atlas preparation and named-account ownership are verified. Git history
-and the final handback identify the delivery revision.
-Check actual Git/process state
-and context/owner-admin-review.md before assuming any operation ran.
+Last updated: 2026-11-11 Africa/Lagos.
 
-## What was built
+## Latest follow-up: Windows build fixed
 
-Web /admin and native Admin share current-role APIs and audited command receipts.
-The deliberate bootstrap binds ownership to the existing active account requested
-by the user, dannyiked@gmail.com; ordinary email sign-in never grants a role.
-Ordinary staff, suspension and account-closure flows protect the owner. Transfer
-uses its own audited operation. Source includes member/staff controls, gallery
-permission decisions, document review, fee waivers and manual inspections.
+The user reported npm build failing. Reproduced npm.cmd run build exit1 with
+EPERM renaming query_engine-windows.dll.node while Next PID34928 held it open.
+Read-only installed Prisma6.19.3 source confirmed unconditional engine overwrite.
+Changed package.json build to node scripts/build.mjs and added
+scripts/prisma-build-cache.mjs plus its .d.mts declaration. The hash-only ignored
+node_modules/.cache/rentral/prisma-build.json proof is written only after normal
+generation exits0. Exact schema/config/tool-package/generation-flag/Node/platform
+inputs and every non-temp generated artifact must match before reuse. Missing,
+changed or partially generated clients still run standard Prisma generation.
+Native engines were not disabled or removed; no processes are killed by the script.
 
-Active Gemini document screening is removed. Human approval binds to the exact
-private file/digest. Fee waiver means waived, not paid; it creates no payment or
-journal fiction. Owner-self listing review requires an explicit detailed override.
-Financial and inspection participant independence still applies to the owner.
+Stopped only confirmed old Next PIDs1380/34928 once for generation. First corrected
+full build passed and recorded its proof. A Next dev instance was already running
+again when restoration was attempted; reused it rather than killing it. Verified
+listener24564/parent19148 in this exact project, /sign-in200 and tasklist reporting
+the same process holding query_engine-windows.dll.node. Final npm.cmd run build
+passed with that active lock through verified client reuse, TypeScript and108page
+generation. A missing .mjs declaration caught during verification was corrected;
+final npm.cmd run typecheck and scoped ESLint passed.12new cache regressions pass.
+The previous full1953app tests/88browser results below are historical, not rerun for
+this build-only increment. No application UI/API/runtime behavior changed.
 
-Gallery permission is separate from KYC. Current grant/revision is rechecked for
-upload/save/submit/edit/publish, with actual User-row writes to serialize
-revocation. Server-built proofs bind owned byte-validated objects/digests; every
-photo is protected from deletion and verified by backup restoration. Photo-only
-listings need no Mux/GPS. Optional video keeps Mux's 120s/200MiB ceiling. Public
-origin/trust labels are explicit, with no fabricated capture or GPS match.
-Revocation hides inventory; regrant requires legitimate resave/edit and new review.
-Existing booking, evidence, file and financial history remains.
+README/library-docs/progress explain that ordinary unchanged-client builds may run
+with dev. After schema/tool changes or a fresh unverified install, stop this
+checkout's dev/start terminal with Ctrl+C before generation on Windows. Use
+npm.cmd run build (not npm build); npm run build also works when the shell allows
+npm.ps1. No DB preparation, .env changes, dependency installation, commit/push or
+deployment ran. All prior current feature gates/setup limitations remain.
 
-Profile upload errors retain trusted Mongo setup/connectivity diagnoses rather
-than claiming local disk failed. Capture preflight adds opt-in bounded lookup
-reasons with legacy strict-response compatibility. Four live Geoapify calls used
-only supplied strings; both full Lagos addresses returned state-level confidence 0.
-No private recording GPS was read/sent and no distance was inferred. Ordinary
-recorded listing admission keeps its precision/confidence and 100-metre boundary.
+## Active project and authority
 
-## Decisions made
+The user explicitly confirmed C:/Users/Mudian Consult/Documents/RentralMobile,
+http://localhost:3000/admin. The current Codex workspace may still be the separate
+Documents/rentral folder: do not edit that old Supabase app for this task. Use
+RentralMobile (ordinary spelling without invisible characters) as the working
+directory and read its AGENTS/context/current installed Next docs first.
 
-- Preserve Expo Android/iOS, npm/Node 24, Next.js, Prisma 6.19.3 MongoDB, JWT,
-  private local filesystem storage, Paystack only and removal of personal KYC.
-- User explicitly approved context/owner-admin-media-blueprint.md, named-account
-  bootstrap, necessary additive preparation, cleanup/testing/guidance and existing
-  repository delivery. Do not reopen routine authorization or add store/deploy scope.
-- No new admin/owner environment secret is required. Owner identity is persisted
-  by account ID. Existing backend Geoapify/Mux/Paystack configuration stays private.
-- Preserve .env.local, mobile private settings, uploads, installed skills, original
-  PostgreSQL/history and financial records. Never print keys/URI/private IDs or
-  put backend values in public mobile configuration.
-- Real provider payment/payout, public deployment and EAS/store release remain
-  separate. Full Vercel use needs object storage and reviewed workers/webhooks.
+Latest sign-in instruction: KEEP email/password with MongoDB/JWT AND add Google
+as an alternative. Google-only is superseded. npm11.19.1/Node24, Prisma6.19.3,
+Next16.4.5/React19.3, private local storage and existing native compatibility stay.
+Personal KYC remains removed. Supabase/PostgreSQL/Clerk are not used by this app.
 
-## Problems solved
+Preserve .env.local, existing Atlas accounts/data/roles/uploads and old PostgreSQL.
+No hosted schema/preparation, user permission, provider configuration or private
+environment changes were made. Do not repeat owner bootstrap or enable gallery
+by a database tool. New Google/organization preparation remains unapplied. No
+commit/push/deployment ran; all changes are saved in the working tree.
 
-State-only or uncertain address results are not evidence of provider outage.
-The API opts newer clients into ?details=1; older strict clients keep their exact
-response shape. New owner media fields are optional for older recorded payloads.
-Gallery source bypasses recording only under a current explicit server grant.
-Published/suspended gallery edits after regrant refresh the grant snapshot and
-force manual review, preventing automatic republication.
+## Changes
 
-Root accepted and implemented one additional review finding: web gallery uploads
-previously chose a new random path after an unknown byte-upload acknowledgement.
-The source now persists the intended path/form before bytes, performs owned-file
-readback after interruption/reload, and requires deliberate same-content/path
-retry using a full chunked WebCrypto fingerprint. Reviewed abandonment retains
-other work and does not delete server files. Thirty focused checks and scoped
-lint pass; the final production browser suite passed all 11 journeys in six files,
-including the third new unknown-upload/readback journey.
+- Actual /admin: six keyboard-accessible tabs, focused queue/detail review, search,
+  listing status filter and compact switch. Current permissions determine actions.
+  Native gallery switch shows saved versus pending state; Record decision needs
+  a reason and explicit owner-self override with30characters (other decisions15).
+  Original commands/receipts survive uncertain outcomes and exact retries; stale
+  selection refreshes safely. Mobile search width fixed after visual inspection.
+- Gallery grant/revoke notifies once atomically with audit/receipt; postcommit cache
+  refresh cannot turn success into uncertainty. Existing authorization, revision,
+  human-document review, grant revocation and truthful gallery labels remain.
+- Direct Google OAuth: state/nonce/PKCE, bounded fixed HTTPS provider endpoints,
+  verified issuer/audience/authorized party/email, encrypted HttpOnly cookies.
+  Matching email alone never links: current Rentral password must confirm.
+  GoogleIdentity subject/user binding is immutable; credential/email fingerprint
+  changes force password reconfirmation. Session creation rereads current User and
+  binding under the User lock. Existing owner role/gallery flags never come from
+  Google metadata. Google is web-only; existing native password login remains.
+- New web signup requires Individual/Organization and terms. Existing native
+  registration remains backward-compatible with default individual. Organization
+  admission has private CAC certificate OR status report, optional authority/
+  licence/address support, revisions/status/reasons, exact digest-bound evidence,
+  independent staff checklists and actor-scoped receipt/readback recovery.
+- Current DB account type/approval gates proxy, actions and APIs. Narrow session
+  exceptions cover organization enrollment, account tools, assigned staff/redress.
+  Null legacy account types remain individuals. Unknown nonnull type cannot loop
+  through onboarding. Refresh cookies survive organization-readiness503 after
+  rotation. Current/historical organization evidence remains protected by claims.
+- Added GoogleIdentity and OrganizationApplication model/index/validator plans,
+  googleAuthVersion and organizationVersion readiness, separately gated so old
+  individual sign-in/admin do not need new preparation. No selected Atlas setup ran.
+- New guides: context/local-setup-audit.md, google-sign-in-setup.md and
+  runtime-admin-auth-repair-plan.md; updated README/progress/both UI registries.
+  Environment checker supports optional Google settings without revealing values.
+  Playwright default now3000 (was incorrectly3100). No dependency install/change.
 
-## Current state
+## Verification
 
-- Prior delivery cb42fd1 contains the recording-location/brand/favicon increment;
-  baseline6f2af2f contains whole-app completion. Preserve them as historical evidence.
-- Profile focused 62 unit + 2 owned real fixtures passed. Backend/address/gallery/public/
-  storage/backup focused 214 checks / 17 files passed; counts overlap the aggregate.
-- New owned owner/admin integration 10/10 passed in 29.73s with real JWT/bootstrap/
-  storage/claims/receipts/documents/waivers/revocation/manual/transfer; Next adapters
-  mocked and limiter clock isolated. Existing owned Mongo passed all 95 in one
-  serial run: core 55, financial 18, auth/closure/export 20 and backup 2. Actual
-  backup wrapper verified 14 records / 4 files / 1 balanced journal / 1 claim;
-  source preserved, restore quarantined and owned fixtures cleaned.
-- Native 114 focused checks, TypeScript/scoped lint passed; intercepted native preview
-  4 journeys / 24 calls / 0 errors / 0 outbound at 320/390/768. This is not device acceptance.
-- Global ESLint and the final ordinary unit aggregate passed: 1,868 / 0 failures /
-  107 configured skips. Owned real suites have separate evidence; do not add
-  overlapping focused counts. Earlier query expectation failures were corrected
-  with exact selectors and privacy sentinels. Upload-recovery source is frozen;
-  production TypeScript/build passed, including Prisma generation and Next
-  generation progress 103/103. Final production browser acceptance passed all
-  11 journeys in six files. All 107 configured real-fixture skips ran separately:
-  existing Mongo 95, owner/admin 10 and final current-source avatar 2, all passed.
-- Environment format check passes. The user supplied Mux webhook configuration
-  privately. No provider acceptance is inferred from populated values.
-- Selected Atlas additive setup verified 52 application collections / 156 indexes,
-  preserving all 53 pre-existing collections and 14 non-marker documents. Its
-  preservation report is test-results/selected-mongo-preparation-1794329083111.json.
-  The subsequent dedicated audited bootstrap granted the exact existing active
-  dannyiked@gmail.com account ownership: one owner, all staff permissions and
-  adminAvailable verified; credentials/profile and other existing users/audits
-  preserved. Result: test-results/selected-owner-application.json. Email text never
-  grants a role during ordinary sign-in. Preparation preservation preceded this
-  deliberate role/audit change.
-- Final native exports passed: Android 2,104 modules / about 5.9 MB / 38.2s;
-  iOS 2,125 modules / about 5.9 MB / 22.2s. Dependency audit reported zero findings.
-- Final private-value delivery scan checked 1,191 source/public/native-export
-  files against nine actual private values: zero matches. Environment files remain
-  private/untracked. Final offline environment and whitespace checks passed.
-  Git history and the verified final handback identify the delivered revision.
-  The selected-database owner grant is complete; do not repeat it blindly.
-- Backend 3000 was restarted and verified: /help, /favicon.ico and /icon.svg
-  returned 200; signed-out /admin redirects to sign-in and /api/v1/admin returns
-  401. Existing Metro 8090 returns packager-status:running. Preserve unrelated
-  projects 8081–8083 and Docker resources.
+- Final ordinary Vitest suite:1953 passed in149 files,107 owned real-fixture cases
+  skipped. Focused counts overlap and must not be added to the aggregate.
+- TypeScript and full lint PASS. Prisma validate/generate PASS. Final production
+  build PASS after the representative-role input limit was aligned to100.
+- Actual-app browser coverage:48 passed across320/390/768/1440;4 disabled-Mux guard
+  cases skipped because Mux is configured. Initial44 passed plus4 password-recovery
+  cases passed after replacing old Supabase link expectations with actual reset
+  code UI. The invalid code is malformed before any DB lookup/write. Artifacts:
+  test-results/current-app-browser and current-app-recovery-browser.
+- Admin actual-component/API-boundary fixture:40 passed(10journeys x4viewports),
+  synthetic records only, external requests blocked, all4actual Inter weights
+  loaded/asserted. Includes gallery grant/revoke, owner confirmation, stale state,
+  lost receipt/exact retry, organization evidence/checklists and unavailable setup.
+  Desktop/320screenshots visually inspected; serif fixture font and collapsed
+  mobile search caught/corrected. Artifacts test-results/admin-workspace-browser.
+- Independent auth/org review found no blocking source issue; minor form limit
+  fixed. New source, docs and tests scanned against9actual private env values:
+  1042files,zero matches. No private value was printed.
+- New owned Mongo integration assertions were NOT executed. Docker Desktop app
+  says running but engine status is stopped; info hangs. Do not run fixtures
+  against Atlas as a workaround. Existing107fixture results fromNov10 are history.
+- No live Google OAuth, organization applicant/staff/Storage acceptance, physical
+  device, provider webhook/payment/email delivery or real gallery grant claimed.
 
-## Next session starts with
+## Environment and setup
 
-Read the current increment review, Git status/log/remote and runtime state. Finish
-only any work that truly remains from the current handback. Do not repeat owner
-bootstrap blindly; use its read-only dry run and existing persisted account role.
-Then perform deliberate physical Android/iOS camera/gallery/large-file/offline/
-startup/accessibility acceptance and selected live-provider workflows as needed.
-Use context/owner-admin-setup.md, environment-setup.md, document-providers.md and
-mux-local-setup.md for operational instructions. The exact delivery revision is
-recorded in Git history/final handback, not a self-referential committed hash.
+Read-only audit confirmed MONGODB_URL/JWT_SECRET/NEXT_PUBLIC_APP_URL present;
+configured origin matches localhost3000. Mongo ping and13previous readiness
+markers passed. Mux GET returned200 and playback private key parses; Geoapify
+sample returned200. This is not webhook/playback/address accuracy acceptance.
 
-## Open questions
+Google keys and flag are missing/off. Configure GOOGLE_AUTH_ENABLED=false,
+GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET privately, register the exact redirect
+http://localhost:3000/auth/google/callback in Google Auth Platform (direct app,
+NOT Supabase), then deliberately prepare the reviewed additive chosen database.
+For saved Atlas the manual command is npm.cmd run db:setup -- --allow-remote;
+it changes that selected database and was NOT run. Set GOOGLE_AUTH_ENABLED=true
+only after prep/config, restart, and test real new/existing linked Google accounts.
+Organization admission needs its new readiness/collection but no API key or flag.
 
-No further product clarification is needed for the approved increment. Real
-building-level coverage for the supplied streets remains unavailable from the
-observed Geoapify responses; another key is not assumed to solve data coverage.
-The admin-approved gallery/manual-review path is an explicit exception, not a
-false GPS match. Provider/device/store/deployment acceptance remains separate.
+Paystack collection, real Resend email, lifecycle sending, encrypted backups and
+optional push/commercial/analytics/settlement are unconfigured. AUTH_DEV_EMAIL_OUTBOX
+is enabled: recovery codes are private local outbox files, not delivered email.
+Mux/media worker and Geoapify are configured; worker flags do not start a process
+or make localhost webhooks reachable. Follow the current audit/individual guides.
+
+## Runtime and next work
+
+Root stopped only confirmed RentralMobile Next PIDs8932/19336/26380 (both dev and
+old production had used3000). This released Prisma's Windows DLL for generation.
+The latest verified development backend is on3000, listenerPID24564/parent19148. Earlier toolsession61262/PID34928 was stopped for the build repair. It serves updated source with hot reload. Keep exactly
+one backend; other projects/Metro and oldrentral3100were not stopped. Production
+build remains saved in.next; dev uses.next/dev.
+
+Next work: user completes Google/config/additive prep in chosen environment;
+run the owned Mongo fixtures when Docker engine works, then live Google and real
+organization/gallery/provider/device acceptance. Preserve active sessions, history
+and private files. Recheck actual current processes and Git before new work.

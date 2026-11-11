@@ -5,7 +5,7 @@ import { ownSafetyForApi } from '@/lib/api/safety'
 export const runtime = 'nodejs'
 export async function GET(request: Request): Promise<Response> {
   try {
-    const identity = await requireApiIdentity(request, { platform: true })
+    const identity = await requireApiIdentity(request, { admission: false, platform: true })
     return apiSuccess(await ownSafetyForApi(identity.userId))
   } catch (error) { return apiFailure(error, 'safety-notices') }
 }

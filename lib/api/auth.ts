@@ -1,12 +1,13 @@
 import prisma from '@/lib/db'
 import { createClient } from '@/lib/server'
 import { platformEnabled, PLATFORM_UNAVAILABLE } from '@/lib/platform'
+import { assertOrganizationMarketplaceAccess } from '@/lib/organizations/access'
 import { ApiError } from './http'
 import { apiBearer, cookieMutationOriginAllowed } from './policy'
 import { apiRateLimiter } from './rate-limit'
 
 // `verified` is the legacy option name: it now checks account existence only.
-type Options = { mutation?: boolean; verified?: boolean; platform?: boolean }
+type Options = { mutation?: boolean; verified?: boolean; platform?: boolean; admission?: false }
 export type ApiIdentity = { userId: string; email?: string; sessionId?: string; mode: 'cookie' | 'bearer' }
 
 export async function requireApiIdentity(request: Request, options: Options = {}): Promise<ApiIdentity> {
@@ -42,5 +43,6 @@ export async function requireApiIdentity(request: Request, options: Options = {}
     const account = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
     if (!account) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Your account is unavailable. Please sign in again.')
   }
+  if (options.admission !== false) await assertOrganizationMarketplaceAccess(userId)
   return { userId, email, ...(sessionId ? { sessionId } : {}), mode: authorization.mode }
 }

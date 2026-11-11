@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { organizationMarketplaceAllowed, organizationPageExempt } from '@/lib/organizations/access'
 import { authRedirect } from '@/lib/auth-policy'
 import { authenticateAccess } from '@/lib/auth/service'
 import { refreshWebSession } from '@/lib/auth/web-refresh'
@@ -41,7 +42,17 @@ export async function updateSession(request: NextRequest) {
       for (const cookie of sessionCookies(refreshed)) request.cookies.set(cookie.name, cookie.value)
     } catch { /* A losing rotation must not erase another response's new cookies. */ }
   }
-  const destination = authRedirect(request.nextUrl.pathname, user)
+  let destination = authRedirect(request.nextUrl.pathname, user)
+  if (user && !organizationPageExempt(request.nextUrl.pathname)) {
+    try { if (!await organizationMarketplaceAllowed(user.id)) destination = '/onboarding/organization' }
+    catch {
+      const unavailable = new NextResponse('Organization registration is temporarily unavailable. Your account remains signed in.', { status: 503, headers: { 'Cache-Control': 'private, no-store' } })
+      // Refresh rotation already consumed the previous token. Preserve its
+      // winning replacement even if a later organization readiness read fails.
+      if (refreshed) for (const cookie of sessionCookies(refreshed)) unavailable.cookies.set(cookie)
+      return unavailable
+    }
+  }
   const response = destination ? NextResponse.redirect(new URL(destination, request.url)) : NextResponse.next({ request })
   if (refreshed) for (const cookie of sessionCookies(refreshed)) response.cookies.set(cookie)
   if (destination) response.headers.set('Cache-Control', 'private, no-store')

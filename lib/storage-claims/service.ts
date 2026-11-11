@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma, StorageObject } from '@prisma/client'
 import prisma from '@/lib/db'
-import { assertStorageClaimsReady, lifecyclePrepared, capturePrepared, ownerAdminPrepared } from '@/lib/database/readiness'
+import { assertStorageClaimsReady, lifecyclePrepared, capturePrepared, ownerAdminPrepared, organizationsPrepared } from '@/lib/database/readiness'
 import { withTransaction } from '@/lib/database/transactions'
 import { createLocalStorage, defaultStorageDirectory, type ObjectMetadata } from '@/lib/local-storage/core'
 import { verifiedAvatarReference } from '@/lib/local-storage/avatars'
@@ -174,6 +174,7 @@ async function referenced(tx: Prisma.TransactionClient, bucket: StorageBucket, p
     return Boolean(await tx.mediaAsset.findFirst({ where: { source_path: match }, select: { id: true } }))
   }
   if (bucket === 'compliance-docs') {
+    if (await organizationsPrepared() && await tx.organizationApplication.findFirst({ where: { evidence_paths: { has: path.toLowerCase() } }, select: { id: true } })) return true
     if (await tx.listing.findFirst({ where: { document_path: match }, select: { id: true } })) return true
     if (!await lifecyclePrepared()) return false
     if (await tx.renewal.findFirst({ where: { evidence_path: match }, select: { id: true } })) return true

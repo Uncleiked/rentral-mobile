@@ -1,5 +1,63 @@
 ## Progress Tracker
 
+## Windows build engine-lock repair - 2026-11-11
+
+Reproduced npm run build failing EPERM while the active development server held
+query_engine-windows.dll.node. Prisma6.19.3 copied that DLL unconditionally.
+Replaced the raw build chain with scripts/build.mjs and a hash-only verified
+snapshot in ignored node_modules cache. Missing/changed schema, config, tools,
+generation flags or generated artifacts still require normal generation. Snapshots
+are recorded only after generator exit0 and unchanged inputs; partial or incomplete
+clients cannot be silently reused. Native engine generation stays enabled.
+
+A first full generation/build passed with the lock released. Subsequent verification
+kept the actual Next development server and its native engine loaded; reuse avoided
+the original lock. Added12focused cache regressions and a typed declaration for
+TypeScript consumers. Final npm.cmd run build passed with the active native-engine lock; TypeScript, scoped lint and all12cache regressions passed. Current process is recorded in memory.md.
+No app UI, database, environment or dependency installation changed.
+
+
+## Active-project repair - 2026-11-11
+
+The user confirmed RentralMobile at localhost:3000/admin, not the separate rentral
+Supabase workspace on3100. Keep npm/MongoDB/JWT. Email/password stays and Google
+is an alternative; the earlier Google-only preference is superseded.
+
+Rebuilt the actual /admin into six accessible tabs with focused review panes,
+search/filter controls, explicit saved/pending gallery switches, clear owner
+acknowledgment and15/30character reasons. Gallery changes atomically notify once
+and refresh affected views after committed receipts; stale and unknown outcomes
+retain original-command recovery. Mobile search collapse was visually found/fixed.
+
+New web accounts choose Individual/Organization. Google uses direct verified
+OAuth state/nonce/PKCE and encrypted cookies, immutable subject binding and
+password-confirmed linking. Credential/email changes invalidate the binding until
+reconfirmed. Current User/binding snapshots are checked under locks before issuing
+ordinary Mongo JWT sessions; existing roles/gallery grants are preserved.
+
+OrganizationApplication includes private digest-bound CAC evidence, status/reasons,
+resubmission, independent checklists and original-command receipt recovery. Current
+DB approval gates pages/actions/APIs; staff/account/redress have narrow exceptions.
+Historical registration evidence remains protected. The proxy preserves refreshed
+cookies even when later admission readiness fails. Unknown account types cannot
+loop through onboarding. No personal KYC gate was restored.
+
+Verified:1953 ordinary tests passed in149 files;107 owned real-fixture cases remain
+skipped in this run. TypeScript/lint and final production build passed. Admin UI
+passed40 browser checks across1440/390/320/768 with synthetic boundary fixtures and
+all four real Inter weights; actual-app browser coverage passed48checks (4configured-Mux guard skips). Total browser coverage:88passed. See memory.md.
+Independent auth/org review found no blocking issue; minor role-field limit fixed.
+
+Read-only environment audit: MongoDB connection and13previous readiness markers
+passed; Mux read access and Geoapify responded200. Google credentials/enable flag,
+Paystack, actual email delivery, lifecycle sending and backups are not configured.
+New googleAuthVersion/organizationVersion setup remains unapplied. No hosted data,
+permission, provider or .env.local changes were made. Docker Desktop engine stays
+stopped, so no new owned Mongo integration run is claimed. See local-setup-audit.md,
+google-sign-in-setup.md and runtime-admin-auth-repair-plan.md. Changes are saved
+locally; no commit/push/deployment was performed.
+
+
 ## Owner administration, gallery media and upload recovery — 2026-11-10
 
 The [approved owner/admin increment](owner-admin-media-blueprint.md) implements

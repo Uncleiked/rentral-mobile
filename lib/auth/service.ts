@@ -15,8 +15,8 @@ import { cancelAuthEmails, queueAuthEmail } from './email-delivery'
 import { invalidateAccountChallenges, revokeAccountPush, revokeSessionPush } from './credential-state'
 import { accountIsActive } from '@/lib/accounts/availability'
 
-export const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(8).max(128) }).strict()
-export const loginSchema = credentialsSchema.extend({ password: z.string().min(1).max(128) })
+export const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(8).max(128), accountType: z.enum(['individual', 'organization']).optional().default('individual') }).strict()
+export const loginSchema = z.object({ email: credentialsSchema.shape.email, password: z.string().min(1).max(128) }).strict()
 const authUserSelect = { id: true, email: true, password_hash: true, staff_role: true, closed_at: true, suspended_at: true } satisfies Prisma.UserSelect
 type Account = Prisma.UserGetPayload<{ select: typeof authUserSelect }>
 
@@ -27,7 +27,7 @@ async function sessionResponse(user: Account, sessionId: string, refreshToken: s
   return { access_token: await accessToken(user.id, sessionId), refresh_token: refreshToken, token_type: 'bearer',
     expires_in: ACCESS_SECONDS, expires_at: Math.floor(Date.now() / 1000) + ACCESS_SECONDS, user: publicUser(user) }
 }
-async function newSession(user: Account): Promise<AuthSession> {
+async function newSession(user: Account, googleBinding?: { subject: string; fingerprint: string }): Promise<AuthSession> {
   const refresh = opaqueToken()
   const current = await withTransaction(async tx => {
     if (!await lockRecord(tx, 'user', user.id)) throw new AuthError(401, 'INVALID_CREDENTIALS', 'Your email or password is incorrect.')
@@ -35,10 +35,20 @@ async function newSession(user: Account): Promise<AuthSession> {
     // Password verification runs outside retries. Serialize session creation
     // with resets, and reject a credential snapshot superseded while hashing.
     if (!accountIsActive(account) || !account || account.password_hash !== user.password_hash || account.email !== user.email) throw new AuthError(401, 'INVALID_CREDENTIALS', 'Your email or password is incorrect.')
+    if (googleBinding) {
+      const binding = await tx.googleIdentity.findUnique({ where: { id: googleBinding.subject }, select: { user_id: true, credential_fingerprint: true } })
+      const fingerprint = tokenHash(JSON.stringify([account.email, account.password_hash]))
+      if (binding?.user_id !== account.id || binding.credential_fingerprint !== googleBinding.fingerprint || fingerprint !== googleBinding.fingerprint) throw new AuthError(409, 'GOOGLE_RECONFIRM', 'Your account credentials changed. Start Google sign-in again and confirm your current password.')
+    }
     const session = await tx.authSession.create({ data: { user_id: account.id, refresh_hash: tokenHash(refresh), revoked_at: null, expires_at: new Date(Date.now() + REFRESH_SECONDS * 1000) }, select: { id: true } })
     return { account, sessionId: session.id }
   })
   return sessionResponse(current.account, current.sessionId, refresh)
+}
+export async function createGoogleAccountSession(userId: string, subject: string, fingerprint: string): Promise<AuthSession> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: authUserSelect })
+  if (!user || !accountIsActive(user)) throw new AuthError(401, 'UNAUTHORIZED', 'This account is unavailable.')
+  return newSession(user, { subject, fingerprint })
 }
 export async function registerAccount(input: unknown): Promise<AuthSession> {
   const data = credentialsSchema.parse(input)
@@ -46,7 +56,7 @@ export async function registerAccount(input: unknown): Promise<AuthSession> {
   const passwordHash = await hashPassword(data.password)
   const id = randomUUID()
   try {
-    const user = await prisma.user.create({ data: { id, email: data.email, username: defaultAccountHandle(id), account_type: 'individual', password_hash: passwordHash }, select: authUserSelect })
+    const user = await prisma.user.create({ data: { id, email: data.email, username: defaultAccountHandle(id), account_type: data.accountType, password_hash: passwordHash }, select: authUserSelect })
     return newSession(user)
   } catch (error) {
     if (isUniqueConstraintError(error)) throw new AuthError(409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Sign in or reset your password.')
