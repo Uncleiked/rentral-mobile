@@ -1,5 +1,28 @@
 ## Progress Tracker
 
+## Google activation diagnostics and checker parity - 2026-11-11
+
+User confirmed Production was redeployed after adding NEXT_PUBLIC_APP_URL, but
+the public sign-in still returned awaiting-configuration. Read-only HTTP checks
+found local Google available and production unavailable before provider navigation.
+The exact private production failure remains unknown; do not assume a missed redeploy.
+
+Added pure lib/auth/google-settings.ts shared by runtime and offline env:check.
+The old offline checker accepted short/invalid client IDs and whitespace/oversized
+secrets that runtime rejected. Kept runtime validation and fail-closed storage
+gates; added fixed-code server warnings distinguishing config keys, base database
+readiness, Google-specific preparation and database unavailability/unknown errors.
+No raw errors, credentials, connection strings or identities are logged. Public UI
+and OAuth state/nonce/PKCE/token protections are unchanged.
+
+84 focused tests across7files, TypeScript, scoped lint, local offline environment
+check and npm.cmd run build PASS (108static pages). Independent review found no
+blocking issue. Added guide instructions to deploy this source and inspect
+[auth/google/readiness] in Vercel runtime Logs. Full real-user Google sign-in and
+production acceptance remain pending. No environment, database, Vercel settings,
+commit, push or deployment changes were performed by this follow-up.
+
+
 ## Google callback origin repair - 2026-11-11
 
 Reproduced the reported callback failure with a valid encrypted flow, matching

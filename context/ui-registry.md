@@ -1,5 +1,12 @@
 # UI Registry
 
+### Google availability diagnostics - 2026-11-11
+
+The sign-in UI keeps the existing disabled Google button and general availability
+message. Detailed setup failures are fixed-code server logs only. No new public
+diagnostic controls or visual patterns were introduced.
+
+
 ### Owner/admin decisions and recovery — 2026-11-10
 
 Files: components/admin/AdminWorkspace.tsx, apps/mobile/app/admin.tsx.

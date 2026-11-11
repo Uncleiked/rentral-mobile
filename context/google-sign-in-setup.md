@@ -113,3 +113,45 @@ without visiting Google login or creating an account. Failure logs contain only
 a fixed stage: configuration, callback, state, exchange or account. Never share
 callback query strings, authorization codes, cookies, provider responses or secrets.
 A successful cancellation verifies the callback boundary, not a full live login.
+
+## Disabled Google button after a successful deployment
+
+The disabled button means Rentral stopped before contacting Google. A Ready
+deployment alone does not prove its settings or selected database passed the
+provider gate. The current source uses one Google settings validator for both
+runtime and npm run env:check; the older checker accepted some malformed values
+that runtime rejected.
+
+1. Commit/push the diagnostic source changes and wait for the new Production
+   deployment to become Ready. A redeploy of an older commit cannot add logging.
+2. Open Vercel -> Rentral -> Logs. Select the new Production deployment and remove
+   filters that hide warnings.
+3. Refresh https://rentral.vercel.app/sign-in, then search the runtime logs for
+   [auth/google/readiness]. These are request logs, not build logs.
+4. Read the fixed reasons array:
+   - GOOGLE_AUTH_NOT_ENABLED: GOOGLE_AUTH_ENABLED must be exactly true in Production.
+   - GOOGLE_CLIENT_ID_INVALID: check the complete Web application OAuth client ID.
+   - GOOGLE_CLIENT_SECRET_INVALID: the client secret is missing or malformed.
+   - NEXT_PUBLIC_APP_URL_INVALID: set NEXT_PUBLIC_APP_URL to
+     https://rentral.vercel.app. NEXT_APP_URL is unused. This NEXT_PUBLIC value is
+     included at build time; a new build/deployment is required after changing it.
+   - DATABASE_UNAVAILABLE: the deployment could not reach/read its configured MongoDB;
+     check its private connection, database user and Atlas network access.
+   - DATABASE_SETUP_REQUIRED: the selected database lacks the base preparation.
+   - GOOGLE_DATABASE_SETUP_REQUIRED: base preparation exists, but Google identity
+     preparation is missing/incompatible. Confirm production selects the intended
+     database name before reviewing any additive setup; do not reset it.
+   - GOOGLE_DATABASE_CHECK_FAILED: an unclassified configuration/readiness failure;
+     this deliberately excludes the private error from logs.
+5. Share only the [auth/google/readiness] line when requesting help. Do not share
+   environment values, MongoDB URLs, Google credentials or callback query strings.
+
+The public page deliberately keeps its general unavailable message. Readiness logs
+contain only fixed codes, never values or raw exceptions. No public diagnostic
+endpoint or automatic database preparation was added.
+
+Verification on 2026-11-11: the current local /sign-in rendered the available Google
+option with its saved configuration; the public production /sign-in still rendered
+the unavailable message. This compares provider availability, not a completed
+Google-account login. The user confirmed a Ready Production deployment after their
+environment edit, so a skipped redeploy is not an established explanation.
