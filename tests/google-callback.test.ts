@@ -39,3 +39,24 @@ it('handles user cancellation without contacting Google or creating an account',
   expect(response.headers.get('location')).toBe('http://localhost:3000/sign-in?google=cancelled')
   expect(mocks.exchange).not.toHaveBeenCalled(); expect(mocks.complete).not.toHaveBeenCalled()
 })
+
+it('validates a real browser Host when Next supplies its internal bind URL', async () => {
+  const response = await GET(new Request('http://0.0.0.0:3000/auth/google/callback?error=access_denied&state=bound', { headers: { host: 'localhost:3000' } }))
+  expect(response.headers.get('location')).toBe('http://localhost:3000/sign-in?google=cancelled')
+  expect(mocks.exchange).not.toHaveBeenCalled()
+  expect(mocks.complete).not.toHaveBeenCalled()
+})
+it('rejects a forged browser Host even with an otherwise valid callback', async () => {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const response = await GET(new Request('http://0.0.0.0:3000/auth/google/callback?code=private-code&state=bound', { headers: { host: 'attacker.invalid', 'x-forwarded-host': 'localhost:3000' } }))
+  expect(response.headers.get('location')).toBe('http://localhost:3000/sign-in?google=failed')
+  expect(mocks.exchange).not.toHaveBeenCalled()
+  expect(warning).toHaveBeenCalledWith('[auth/google/callback] Sign-in failed', { stage: 'state' })
+})
+it('logs only a fixed failure stage, never callback codes, cookies or provider errors', async () => {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  mocks.exchange.mockRejectedValue(new Error('private-provider-token-and-client-secret'))
+  await GET(new Request('http://localhost:3000/auth/google/callback?code=private-authorization-code&state=bound'))
+  expect(warning).toHaveBeenCalledExactlyOnceWith('[auth/google/callback] Sign-in failed', { stage: 'exchange' })
+  expect(JSON.stringify(warning.mock.calls)).not.toMatch(/private-|encrypted-flow|bound/)
+})

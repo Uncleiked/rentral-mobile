@@ -7,6 +7,11 @@ connection string, token, password, user record or provider response body is inc
 No environment value, hosted database record, provider configuration or permission
 was changed by this audit.
 
+Follow-up 2026-11-11: local Google enable flag and credential fields are now present,
+and the selected database has googleAuthVersion1 and organizationVersion1. This was
+confirmed read-only after user configuration. The initial audit below is historical.
+A callback-origin code fix is saved locally; production needs the updated source,
+matching HTTPS environment values and redeployment. See google-sign-in-setup.md.
 ## Which project is running
 
 There are two different local projects:

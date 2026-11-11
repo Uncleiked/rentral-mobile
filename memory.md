@@ -2,6 +2,43 @@
 
 Last updated: 2026-11-11 Africa/Lagos.
 
+## Latest follow-up: Google callback origin and production flag
+
+User reported the same Google error locally and on https://rentral.vercel.app,
+and asked what key belongs in GOOGLE_AUTH_ENABLED. That setting is exactly true,
+not a generated secret; existing Vercel Secret type can remain. Actual credentials
+are GOOGLE_CLIENT_ID/SECRET from Google Auth Platform Web application client.
+The production NEXT_PUBLIC_APP_URL must be https://rentral.vercel.app and registered
+callback https://rentral.vercel.app/auth/google/callback; local remains localhost3000.
+Saving env values requires a new deployment, and this local source fix must be
+committed/pushed/deployed by the user to affect production. No publish ran.
+
+Local private configuration now has Google flagtrue, valid-shapedClientID and a
+secret, with localapporigin. Read-only Mongo check found googleAuthVersion1 and
+organizationVersion1 already present (prepared outside this agent follow-up).
+No env/DB changes by agent. Public Google JWKS returned200 and validRSAkeyshapes.
+Production's public sign-in was observed with Google disabled; private Vercel
+settings cannot be inferred from that alone and no service connector is available.
+
+Reproduced callback failure without any Google login: isolated browser start,
+blockedaccounts.google.com navigation, validencryptedflow/state/nonce/verifier and
+configuredorigin, then error=access_denied callback incorrectly returned failed.
+InstalledNext16builds request.url frominternal0.0.0.0bindaddress. Fixed using new
+lib/auth/google-origin.ts exactconfiguredHost resolver; ignoresarbitraryforwarded
+hosts and only permitsinternalHTTP-toHTTPS withVercelserverflag+HTTPSforwardmarker.
+State/nonce/PKCE/tokenchecks remain. Actual local cancellation nowreturns cancelled.
+Callbacklogs fixed stage only (configuration/callback/state/exchange/account),
+never error messages, codes, cookies, provider bodies or identities.
+
+Changedcallbackroute, addedgoogle-originhelper/tests, expandedcallbackregressions;
+41focused tests across5files PASS, typecheck/scopedlintPASS afterexplicittyped
+headerfixturecorrection. Final production build PASS (108pages) after the typed test-table correction.
+Full live Google account/token exchange not performed; source/API fixture tests
+and a real cancellation do not prove a successful real-user login. Currentdevserver
+was left running and no hosted database, Vercel config or OAuth setting was changed.
+Updated context/google-sign-in-setup.md with exactproduction origin/callback/env/
+redeploymentsteps and officialGoogle/Verceldocs. Source savedlocallyuncommitted.
+
 ## Latest follow-up: Windows build fixed
 
 The user reported npm build failing. Reproduced npm.cmd run build exit1 with

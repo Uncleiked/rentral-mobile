@@ -4,19 +4,25 @@ import { requireGoogleConfiguration } from '@/lib/auth/google-config'
 import { completeVerifiedGoogle } from '@/lib/auth/google-accounts'
 import { GOOGLE_FLOW_COOKIE, GOOGLE_FINISH_COOKIE, GOOGLE_FINISH_SECONDS, googleCookieOptions, googleCookieSecure, validateGoogleFlow, exchangeGoogleCode, sealGoogleCookie } from '@/lib/auth/google-oauth'
 import { sessionCookies } from '@/lib/auth/cookies'
+import { googleCallbackOrigin } from '@/lib/auth/google-origin'
 
 export async function GET(request: Request): Promise<Response> {
   // Never log the code, Google tokens, account identity or provider error text.
   const store = await cookies(), incoming = new URL(request.url)
   let origin = incoming.origin, response: NextResponse
+  let stage = 'configuration'
   try {
     const config = requireGoogleConfiguration(); origin = config.origin
+    stage = 'callback'
     if (incoming.search.length > 12000 || ['code', 'state', 'error'].some(key => incoming.searchParams.getAll(key).length > 1)) throw new Error('Invalid callback')
-    const flow = await validateGoogleFlow(store.get(GOOGLE_FLOW_COOKIE)?.value, incoming.searchParams.get('state'), incoming.origin)
+    stage = 'state'
+    const flow = await validateGoogleFlow(store.get(GOOGLE_FLOW_COOKIE)?.value, incoming.searchParams.get('state'), googleCallbackOrigin(request, config.origin))
     if (incoming.searchParams.has('error')) {
       response = NextResponse.redirect(new URL('/sign-in?google=cancelled', origin))
     } else {
+      stage = 'exchange'
       const identity = await exchangeGoogleCode(incoming.searchParams.get('code') ?? '', flow)
+      stage = 'account'
       const result = await completeVerifiedGoogle(identity, flow.intent)
       if (result.kind === 'session') {
         response = NextResponse.redirect(new URL('/marketplace', origin))
@@ -26,7 +32,11 @@ export async function GET(request: Request): Promise<Response> {
         response.cookies.set({ ...googleCookieOptions, secure: googleCookieSecure(), name: GOOGLE_FINISH_COOKIE, value: await sealGoogleCookie(result.challenge, 'finish'), maxAge: GOOGLE_FINISH_SECONDS })
       }
     }
-  } catch { response = NextResponse.redirect(new URL('/sign-in?google=failed', origin)) }
+  } catch {
+    // Fixed, low-cardinality stage only: never log provider bodies, cookies, codes or identities.
+    console.warn('[auth/google/callback] Sign-in failed', { stage })
+    response = NextResponse.redirect(new URL('/sign-in?google=failed', origin))
+  }
   response.cookies.set({ ...googleCookieOptions, secure: origin.startsWith('https:'), name: GOOGLE_FLOW_COOKIE, value: '', maxAge: 0 })
   response.headers.set('Cache-Control', 'private, no-store')
   response.headers.set('Referrer-Policy', 'no-referrer')

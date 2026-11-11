@@ -6,7 +6,7 @@ Reviewed 2026-11-11. These steps apply to **RentralMobile** and its MongoDB/JWT 
 
 Email/password remains available. Google uses a web authorization-code flow with browser-bound state, nonce and PKCE, verified Google ID-token signatures and the existing MongoDB sessions. Native email/password is unchanged; this increment adds Google to the web sign-in page only.
 
-Google identity storage is additive and explicitly gated by `googleAuthVersion: 1`. Its source changes have not been applied to the saved hosted database. Keep Google disabled until the additional Mongo setup has been reviewed and prepared in your chosen environment. Existing core authentication remains available without that marker.
+Google identity storage is additive and explicitly gated by `googleAuthVersion: 1`. The latest read-only follow-up found this marker and organizationVersion at version1 in the database selected by .env.local. These were prepared outside this follow-up; no agent database writes ran. Verify preparation separately if production uses a different database. Existing core authentication remains available without this marker.
 
 ## 1. Create the Google OAuth client
 
@@ -59,3 +59,57 @@ Google tokens are not stored as Rentral credentials. Password resets, password c
 Email/password users keep their current password. New Google-only accounts have no invented password; they can use the existing verified-mailbox password-recovery process to set one. Production recovery requires configured email delivery. Password-based native login remains available after a password has been set.
 
 Provider configuration, key presence, unit/browser fixtures and compilation do not prove a live Google login. Test a real browser callback after these external steps are complete.
+
+## Production setup for rentral.vercel.app
+
+GOOGLE_AUTH_ENABLED is a boolean feature flag. Its exact value is true, without
+quotes or an API key. It works even if an existing Vercel variable has Secret type;
+there is no separate key to obtain for this flag.
+
+1. Open Google Cloud Console, select the project, and open Google Auth Platform ->
+   Clients. Select the Web application OAuth client already used locally, or create
+   one if missing. This client supplies GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
+2. Add these Authorized JavaScript origins:
+   - http://localhost:3000
+   - https://rentral.vercel.app
+3. Add these exact Authorized redirect URIs:
+   - http://localhost:3000/auth/google/callback
+   - https://rentral.vercel.app/auth/google/callback
+4. In Vercel Project Settings -> Environment Variables, select Production and set:
+
+```dotenv
+GOOGLE_AUTH_ENABLED=true
+GOOGLE_CLIENT_ID=YOUR_OAUTH_WEB_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=YOUR_OAUTH_WEB_CLIENT_SECRET
+NEXT_PUBLIC_APP_URL=https://rentral.vercel.app
+```
+
+Paste each value without surrounding quotation marks in Vercel. Keep the secret
+server-only. Preserve the existing stable JWT_SECRET and valid MongoDB settings;
+production must use a database prepared for GoogleIdentity. A Preview deployment
+needs its own matching registered domain if Google is enabled there.
+
+5. In Google Auth Platform Audience, add test accounts while the application is
+   in Testing; publish the consent configuration when ready for public use.
+6. Deploy the updated source containing the callback-origin correction. Saving
+   Vercel environment values does not update an existing deployment: redeploy.
+   Open a fresh https://rentral.vercel.app/sign-in and start a new Google attempt.
+
+[Google OAuth client and redirect setup](https://developers.google.com/identity/protocols/oauth2/web-server),
+[Google credentials](https://developers.google.com/identity/openid-connect/openid-connect),
+[Vercel environment changes](https://vercel.com/docs/environment-variables).
+
+## Callback-origin correction and diagnostics
+
+The follow-up reproduced a valid local encrypted/state-bound cancellation being
+rejected before token exchange. Next constructed request.url from its internal
+0.0.0.0 bind address. The callback now accepts an exact configured public Host over
+that internal URL. It never trusts arbitrary forwarded hosts; internal HTTP to
+HTTPS is accepted only for the Vercel runtime with its HTTPS forwarding marker.
+State, nonce, PKCE, cookie encryption and token validation remain required.
+
+A real local browser cancellation now returns google=cancelled instead of failed,
+without visiting Google login or creating an account. Failure logs contain only
+a fixed stage: configuration, callback, state, exchange or account. Never share
+callback query strings, authorization codes, cookies, provider responses or secrets.
+A successful cancellation verifies the callback boundary, not a full live login.

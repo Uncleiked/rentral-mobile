@@ -1,5 +1,21 @@
 ## Progress Tracker
 
+## Google callback origin repair - 2026-11-11
+
+Reproduced the reported callback failure with a valid encrypted flow, matching
+state/nonce/verifier and configured origin, while blocking provider navigation.
+The real Next bind URL rejected the external Host. Added a scoped exact-public-Host
+resolver; untrusted hosts/forwarded hosts and protocol downgrades remain denied.
+Valid local cancellation now returns cancelled, not failed. Added failure-stage-only
+logging and regressions for internal bind URLs, Vercel HTTPS forwarding, forged
+hosts, retained OAuth checks and secret-free logging.41focused tests, TypeScript, scoped lint and the final production build passed.
+Production settings/instructions are in google-sign-in-setup.md. Production was
+observed with Google disabled; no Vercel settings/deployment were changed.
+The selected local environment now has Google fields/flag and both new readiness
+markers; this was verified read-only, not applied by the agent. Full live Google
+login and production acceptance remain pending user configuration/deployment.
+
+
 ## Windows build engine-lock repair - 2026-11-11
 
 Reproduced npm run build failing EPERM while the active development server held
