@@ -84,9 +84,9 @@ export function MetadataForm({ actorId }: { actorId: string }) {
   }
 
   return (
-    <form onSubmit={event => { void handleSubmit(onSubmit)(event) }} className="w-full max-w-md mx-auto">
+    <form onSubmit={event => { void handleSubmit(onSubmit)(event) }} className="w-full max-w-md mx-auto min-w-0">
       <div className="mb-8 text-center">
-        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2 break-words">
           Asset details
         </h2>
         <p className="text-sm text-text-secondary">
@@ -103,14 +103,14 @@ export function MetadataForm({ actorId }: { actorId: string }) {
           type="button"
           onClick={goBack}
           disabled={checking}
-          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full whitespace-normal break-words"
         >
           Back
         </button>
         <button
           type="submit"
           disabled={checking}
-          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98"
+          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 min-h-11 max-w-full whitespace-normal break-words"
         >
           {checking ? 'Checking address…' : 'Check address & continue'}
         </button>

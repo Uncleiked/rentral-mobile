@@ -30,7 +30,7 @@ import './fonts.css'
 createRoot(document.getElementById('root')).render(<main style={{maxWidth:1440, margin:'0 auto', padding:16}}><AdminWorkspace actorId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" /></main>)
 `)
 const server = await createServer({
-  configFile: false, root: fixture, envDir: false, envPrefix: 'RENTRAL_UNUSED_UI_PREVIEW_', logLevel: 'warn',
+  configFile: false, cacheDir: join(fixture, '.vite'), root: fixture, envDir: false, envPrefix: 'RENTRAL_UNUSED_UI_PREVIEW_', logLevel: 'warn',
   esbuild: { jsx: 'automatic' },
   resolve: { alias: [{ find: 'next/link', replacement: link }, { find: '@', replacement: root }] },
   server: { host: '127.0.0.1', port: 4184, strictPort: true, fs: { allow: [root] } },

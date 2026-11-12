@@ -57,14 +57,14 @@ export function ChatPanel({ initialThread }: Props) {
 
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [thread.messages.length])
 
-  return <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-border-subtle bg-surface-card">
-    <header className="flex items-center justify-between gap-3 border-b border-border-subtle p-4 sm:p-5">
-      <div><h2 className="font-semibold">{thread.otherName}</h2><p aria-live="polite" className="text-xs text-text-muted">{activity?.otherTyping ? 'Typing…' : activity?.otherOnline ? 'Active in this conversation' : 'Your rental conversation'}</p></div>
-      <Link href={`/marketplace/listing/${thread.listingId}`} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-accent-hover">View listing <ArrowUpRight className="size-4" /></Link>
+  return <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-border-subtle bg-surface-card max-w-full wrap-anywhere text-text-primary">
+    <header className="flex items-center justify-between gap-3 border-b border-border-subtle p-4 sm:p-5 min-w-0 flex-wrap">
+      <div><h2 className="font-semibold break-words">{thread.otherName}</h2><p aria-live="polite" className="text-xs text-text-muted">{activity?.otherTyping ? 'Typing…' : activity?.otherOnline ? 'Active in this conversation' : 'Your rental conversation'}</p></div>
+      <Link href={`/marketplace/listing/${thread.listingId}`} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-accent-hover min-h-11 max-w-full break-words">View listing <ArrowUpRight className="size-4" /></Link>
     </header>
     {syncError && <p role="status" className="px-4 pt-3 text-xs text-trust-flagged">{syncError}</p>}
     <div role="log" aria-label="Conversation messages" aria-live="polite" className="flex max-h-[65dvh] min-h-80 flex-col gap-4 overflow-y-auto p-4 sm:p-6">
-      {thread.hasMore && <button type="button" className="self-center rounded-full border border-border-subtle px-4 py-2 text-xs text-text-secondary" onClick={() => startTransition(async () => {
+      {thread.hasMore && <button type="button" className="self-center rounded-full border border-border-subtle px-4 py-2 text-xs text-text-secondary min-h-11 max-w-full whitespace-normal break-words" onClick={() => startTransition(async () => {
         try {
           const result = await readThreadAction(thread.id, thread.messages[0]?.id)
           if (result.success) setThread(current => ({ ...current, hasMore: result.data.hasMore, messages: [...result.data.messages, ...current.messages] }))
@@ -75,13 +75,13 @@ export function ChatPanel({ initialThread }: Props) {
       {thread.messages.map(message => {
         const own = message.senderId === thread.userId
         return <div key={message.id} className={`max-w-[90%] rounded-2xl p-3 sm:max-w-[80%] ${own ? 'self-end bg-accent-muted' : 'self-start border border-border-subtle bg-background-app'}`}>
-          {message.sharedListing && <Link href={`/marketplace/listing/${message.sharedListing.id}`} className="mb-2 flex items-center gap-2 rounded-xl border border-glass-border-medium p-3 text-sm text-accent-hover"><Link2 className="size-4" /> View shared {message.sharedListing.category} <ArrowUpRight className="size-4" /></Link>}
+          {message.sharedListing && <Link href={`/marketplace/listing/${message.sharedListing.id}`} className="mb-2 flex items-center gap-2 rounded-xl border border-glass-border-medium p-3 text-sm text-accent-hover min-h-11 max-w-full break-words"><Link2 className="size-4" /> View shared {message.sharedListing.category} <ArrowUpRight className="size-4" /></Link>}
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{message.body}</p>
           <p className="mt-1 text-right text-[10px] text-text-muted">{new Date(message.sentAt).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}{own && (activity?.otherReadAt ?? thread.otherReadAt) && message.sentAt <= (activity?.otherReadAt ?? thread.otherReadAt)! ? ' · Read' : ''}</p>
         </div>
       })}<div ref={bottom} />
     </div>
-    <form className="mt-auto border-t border-border-subtle p-4" onSubmit={event => {
+    <form className="mt-auto border-t border-border-subtle p-4 min-w-0 max-w-full" onSubmit={event => {
       event.preventDefault()
       if (pending || (!body.trim() && !share)) return
       retryId.current ??= crypto.randomUUID()
@@ -95,15 +95,15 @@ export function ChatPanel({ initialThread }: Props) {
         } catch { setError('Connection interrupted. Your draft is still here; try sending again.') }
       })
     }}>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <label className="inline-flex items-center gap-2 text-xs text-text-secondary"><input type="checkbox" checked={share} onChange={event => { setShare(event.target.checked); retryId.current = null }} className="accent-accent-primary" /> Attach this listing</label>
+      <div className="mb-3 flex items-center justify-between gap-3 min-w-0 flex-wrap">
+        <label className="inline-flex items-center gap-2 text-xs text-text-secondary min-w-0 max-w-full"><input type="checkbox" checked={share} onChange={event => { setShare(event.target.checked); retryId.current = null }} className="accent-accent-primary" /> Attach this listing</label>
         <span className="text-[10px] text-text-muted">{body.length}/4000</span>
       </div>
-      <label className="mb-3 flex items-center gap-2 text-xs text-text-muted"><input type="checkbox" checked={shareActivity} onChange={event => setShareActivity(event.target.checked)} className="accent-accent-primary" /> Share activity and typing while this chat is open</label>
+      <label className="mb-3 flex items-center gap-2 text-xs text-text-muted min-w-0 max-w-full"><input type="checkbox" checked={shareActivity} onChange={event => setShareActivity(event.target.checked)} className="accent-accent-primary" /> Share activity and typing while this chat is open</label>
       <div className="flex items-end gap-2">
-        <label className="sr-only" htmlFor="chat-message">Message</label>
-        <textarea id="chat-message" rows={2} maxLength={4000} value={body} placeholder="Write a message…" className="min-w-0 flex-1 resize-none rounded-xl border border-border-subtle bg-background-app p-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-primary" onChange={event => { setBody(event.target.value); retryId.current = null }} />
-        <button type="submit" disabled={pending || (!body.trim() && !share)} aria-label="Send message" className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent-primary text-text-inverse disabled:opacity-50">{pending ? <LoaderCircle className="size-5 animate-spin" /> : <Send className="size-5" />}</button>
+        <label className="sr-only min-w-0 max-w-full" htmlFor="chat-message">Message</label>
+        <textarea id="chat-message" rows={2} maxLength={4000} value={body} placeholder="Write a message…" className="min-w-0 flex-1 resize-none rounded-xl border border-border-subtle bg-background-app p-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-primary min-h-11 max-w-full" onChange={event => { setBody(event.target.value); retryId.current = null }} />
+        <button type="submit" disabled={pending || (!body.trim() && !share)} aria-label="Send message" className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent-primary text-text-inverse disabled:opacity-50 min-h-11 max-w-full whitespace-normal break-words">{pending ? <LoaderCircle className="size-5 animate-spin" /> : <Send className="size-5" />}</button>
       </div>
       {error && <p role="alert" className="mt-2 text-xs text-trust-flagged">{error}</p>}
       <p className="mt-3 text-[10px] leading-relaxed text-text-muted">Keep your identity documents and bank details private. Rentral will never ask for your password in a message.</p>

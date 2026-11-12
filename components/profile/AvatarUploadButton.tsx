@@ -96,7 +96,7 @@ export function AvatarUploadButton({ profile }: AvatarUploadButtonProps) {
           type="file"
           accept={ALLOWED_TYPES.join(",")}
           onChange={handleFileChange}
-          className="hidden"
+          className="hidden min-h-11 min-w-0 max-w-full"
         />
       </div>
       {error && <span className="text-xs text-trust-flagged max-w-[120px]">{error}</span>}

@@ -49,7 +49,7 @@ export function ShareMenu({ username }: ShareMenuProps) {
         aria-label="Share profile"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className="h-9 w-9 flex items-center justify-center rounded-full bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all"
+        className="h-11 w-11 flex items-center justify-center rounded-full bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all min-h-11 max-w-full whitespace-normal break-words"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
@@ -64,7 +64,7 @@ export function ShareMenu({ username }: ShareMenuProps) {
           <button
             type="button"
             onClick={handleCopyLink}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left min-h-11 max-w-full whitespace-normal break-words"
           >
             <Link2 className="h-4 w-4 text-text-muted" />
             Copy link
@@ -72,7 +72,7 @@ export function ShareMenu({ username }: ShareMenuProps) {
           <button
             type="button"
             onClick={() => openShareIntent(`https://wa.me/?text=${url}`)}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle min-h-11 max-w-full whitespace-normal break-words"
           >
             <MessageCircle className="h-4 w-4 text-text-muted" />
             Share to WhatsApp
@@ -80,7 +80,7 @@ export function ShareMenu({ username }: ShareMenuProps) {
           <button
             type="button"
             onClick={() => openShareIntent(`https://twitter.com/intent/tweet?url=${url}`)}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle min-h-11 max-w-full whitespace-normal break-words"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 text-text-muted" fill="currentColor">
               <path d="M18.9 2H22l-7.6 8.7L23 22h-6.9l-5.4-6.9L4.4 22H1.3l8.2-9.3L1 2h7l4.9 6.3L18.9 2Zm-1.2 18h1.9L7.4 4H5.4l12.3 16Z" />
@@ -90,7 +90,7 @@ export function ShareMenu({ username }: ShareMenuProps) {
           <button
             type="button"
             onClick={() => openShareIntent(`https://www.facebook.com/sharer/sharer.php?u=${url}`)}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-glass-light-hover transition-all text-left border-t border-border-subtle min-h-11 max-w-full whitespace-normal break-words"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 text-text-muted" fill="currentColor">
               <path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12Z" />

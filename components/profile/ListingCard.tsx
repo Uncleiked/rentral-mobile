@@ -20,7 +20,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
     : { href: `/marketplace/listing/${listing.id}/edit`, label: "Edit Listing" };
 
   return (
-    <div className="rounded-xl overflow-hidden bg-surface-card border border-border-subtle">
+    <div className="rounded-xl overflow-hidden bg-surface-card border border-border-subtle min-w-0 max-w-full wrap-anywhere text-text-primary">
       <div className="relative aspect-[4/3] w-full">
         {listing.posterUrl ? (
           <Image src={listing.posterUrl} alt={listing.title} fill unoptimized sizes="(min-width: 640px) 33vw, 50vw" className="object-cover" />
@@ -39,7 +39,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
         <span className="absolute top-2 left-2 rounded-full bg-glass-dark backdrop-blur-sm border border-glass-border-light px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-text-primary">
           {isDraft ? 'Draft' : listing.media?.status === 'ready' ? 'Video ready' : 'Walkthrough'}
         </span>
-        <Link href={isDraft ? ownerAction.href : `/marketplace/listing/${listing.id}`} aria-label={`View ${listing.title}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-accent-primary" />
+        <Link href={isDraft ? ownerAction.href : `/marketplace/listing/${listing.id}`} aria-label={`View ${listing.title}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-accent-primary min-h-11 max-w-full break-words inline-flex items-center" />
       </div>
 
       <div className="p-3 flex flex-col gap-1">
@@ -47,7 +47,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
           <span className="text-sm font-extrabold text-accent-hover">₦{listing.price}</span>
           <span className="text-[10px] font-medium uppercase text-text-muted">/ {listing.priceDenomination}</span>
         </div>
-        <Link href={isDraft ? ownerAction.href : `/marketplace/listing/${listing.id}`} className="text-sm font-semibold text-text-primary line-clamp-1 hover:text-accent-hover">{listing.title}</Link>
+        <Link href={isDraft ? ownerAction.href : `/marketplace/listing/${listing.id}`} className="text-sm font-semibold text-text-primary line-clamp-1 hover:text-accent-hover min-h-11 max-w-full break-words inline-flex items-center">{listing.title}</Link>
         <div className="flex flex-wrap gap-1.5 mt-1">
           {listing.badges.map((badge) => (
             <span
@@ -62,7 +62,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
         {owner && (
           <Link
             href={ownerAction.href}
-            className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+            className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full break-words"
           >
             <PencilLine className="h-3.5 w-3.5" />
             {ownerAction.label}

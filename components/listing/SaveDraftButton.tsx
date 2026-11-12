@@ -72,7 +72,7 @@ export function SaveDraftButton({ actorId }: { actorId: string }) {
       type="button"
       onClick={handleSave}
       disabled={isSaving || capture.isRecording || (capture.hasStarted && !capture.isComplete)}
-      className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-2 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
+      className="flex items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-2 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-70 min-h-11 max-w-full whitespace-normal break-words"
     >
       <Save className="h-4 w-4" />
       {isSaving ? 'Saving Draft...' : 'Save Draft & Exit'}

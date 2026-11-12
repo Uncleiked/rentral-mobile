@@ -1,5 +1,23 @@
 ## UI Rules
 
+## Current website consistency rules - 2026-11-12
+
+The website uses a single dark appearance. app/globals.css maps generic
+component-library colors to --rentral tokens; do not append a separate light
+:root palette or redefine the brand radius scale. The font loader defines
+--font-rentral, consumed by --font-sans; never self-reference --font-sans.
+AccountPage is the shared account/recovery/organization entry shell.
+
+Use min-width0 and bounded widths on forms, cards and flex/grid children. Keep
+phone form fields single-column until sm unless a measured compact control fits.
+Actions have at least44px targets and visible focus; mobile text-entry controls
+use at least1rem. Outer marketplace gutters belong to MarketplaceShell only.
+Compact navigation and bottom-navigation spacing share the1280px breakpoint.
+Keep long identifiers, review reasons, totals and feedback inside their cards.
+Dialogs must fit the viewport, scroll internally and support keyboard focus,
+Escape and focus restoration. See ui-registry.md for the current patterns.
+
+
 Current implementation (2026-11-09): Expo components use semantic equivalents from
 `apps/mobile/src/theme.ts` through React Native StyleSheet. The CSS/Tailwind/font
 loading syntax below applies to web components. Native tab navigation and safe

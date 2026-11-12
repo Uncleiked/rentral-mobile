@@ -17,7 +17,7 @@ export function ListingGridCard({ listing }: Props) {
       {listing.holdUntil && <span className="absolute left-3 top-3 rounded-full border border-glass-border-warning bg-glass-dark px-3 py-1.5 text-[10px] font-medium text-text-primary backdrop-blur-md">Currently on hold</span>}
     </div>
     <div className="flex items-start justify-between gap-3"><Link href={`/marketplace/listing/${listing.id}`} className="min-w-0"><h2 className="truncate text-sm font-semibold text-text-primary">{listing.location}</h2><p className="mt-1 truncate text-xs text-text-muted">{listing.title}</p></Link><ArrowUpRight aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" /></div>
-    <p className="mt-2 flex flex-wrap items-baseline gap-1.5 text-xs"><span className="text-base font-semibold text-text-primary">₦{listing.price}</span>{listing.intent !== 'buy' && <span className="text-text-muted">/ {listing.priceDenomination}</span>}</p>
-    <Link href={`/marketplace/profile/${encodeURIComponent(listing.username)}`} className="mt-2 flex w-fit items-center gap-1.5 text-[11px] text-text-muted hover:text-text-secondary">@{listing.username}{listing.isVerified && <BadgeCheck aria-label="Identity verified" className="h-3.5 w-3.5 text-accent-hover" />}</Link>
+    <p className="mt-2 flex flex-wrap items-baseline gap-1.5 text-xs"><span className="max-w-full break-words text-base font-semibold text-text-primary">₦{listing.price}</span>{listing.intent !== 'buy' && <span className="text-text-muted">/ {listing.priceDenomination}</span>}</p>
+    <Link href={`/marketplace/profile/${encodeURIComponent(listing.username)}`} className="mt-1 inline-flex min-h-11 max-w-full items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary"><span className="truncate">@{listing.username}</span>{listing.isVerified && <BadgeCheck aria-label="Identity verified" className="h-3.5 w-3.5 text-accent-hover" />}</Link>
   </article>
 }

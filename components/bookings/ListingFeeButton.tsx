@@ -10,7 +10,7 @@ export function ListingFeeButton({ listingId, enabled, waived = false }: Props) 
   const [pending, startTransition] = useTransition()
   if (waived) return <p role="status" className="rounded-xl border border-glass-border-success bg-accent-muted p-4 text-sm leading-6 text-text-secondary">An administrator waived the publication fee. Your listing still requires human document approval and the remaining publication checks.</p>
   return <div className="space-y-3">
-    <button disabled={!enabled || pending} className="min-h-12 w-full rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => startTransition(async () => {
+    <button disabled={!enabled || pending} className="min-h-12 w-full rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-w-full whitespace-normal break-words" onClick={() => startTransition(async () => {
       setError('')
       try { const result = await startListingFeePaymentAction(listingId); if (result.success) window.location.assign(result.data); else setError(result.error) }
       catch { setError('Unable to connect. Check payment status before paying again.') }

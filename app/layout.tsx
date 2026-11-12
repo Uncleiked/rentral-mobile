@@ -12,7 +12,7 @@ const inter = localFont({
     { path: '../node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf', weight: '500', style: 'normal' },
     { path: '../node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf', weight: '600', style: 'normal' },
     { path: '../node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf', weight: '700', style: 'normal' },
-  ], variable: '--font-sans', display: 'swap', preload: false,
+  ], variable: '--font-rentral', display: 'swap', preload: false,
 });
 
 export const metadata: Metadata = {
@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", "font-sans", inter.variable)}
+      className={cn("dark", "h-full", "antialiased", "font-sans", inter.variable)}
     >
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
         {children}

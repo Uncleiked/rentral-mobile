@@ -23,7 +23,7 @@ export function CategorySelector() {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="mb-8 text-center">
-        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2 break-words">
           What are you listing?
         </h2>
         <p className="text-sm text-text-secondary">
@@ -48,7 +48,7 @@ export function CategorySelector() {
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-glass-border-light bg-glass-light">
                 <Icon className="h-5 w-5 text-text-primary" />
               </span>
-              <span className="flex flex-col gap-0.5">
+              <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-base font-semibold text-text-primary">{label}</span>
                 <span className="text-sm font-medium text-text-secondary">{description}</span>
               </span>
@@ -59,7 +59,7 @@ export function CategorySelector() {
 
       <Link
         href="/marketplace/listing"
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full break-words"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Your Listings

@@ -12,7 +12,7 @@ import { EmailConfirmationForm } from '@/components/account/EmailConfirmationFor
 
 const inputClass = 'w-full min-w-0 rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary'
 const buttonClass = 'min-h-11 max-w-full whitespace-normal rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-sm font-semibold text-text-primary hover:bg-glass-light-hover disabled:opacity-50'
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block min-w-0 space-y-2 text-sm text-text-secondary"><span>{label}</span>{children}</label> }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block min-w-0 space-y-2 text-sm text-text-secondary max-w-full"><span>{label}</span>{children}</label> }
 
 export function SecurityCard({ userId }: { userId: string }) {
   const router = useRouter(), requestId = useRef(0)
@@ -81,19 +81,19 @@ export function SecurityCard({ userId }: { userId: string }) {
       setSessions(current => ({ items: [...new Map([...(current?.items ?? []), ...page.items].map(item => [item.id, item])).values()], nextCursor: page.nextCursor }))
     })
   }
-  return <section id="account-security" aria-labelledby="account-security-title" className="min-w-0 max-w-full scroll-mt-24 space-y-6 rounded-2xl border border-border-subtle bg-surface-card p-4 sm:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-accent-hover" /><h2 id="account-security-title" className="text-lg font-semibold text-text-primary">Account security</h2></div>
+  return <section id="account-security" aria-labelledby="account-security-title" className="min-w-0 max-w-full scroll-mt-24 space-y-6 rounded-2xl border border-border-subtle bg-surface-card p-4 sm:p-6 wrap-anywhere text-text-primary">
+    <div className="flex flex-wrap items-center justify-between gap-4 min-w-0"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-accent-hover" /><h2 id="account-security-title" className="text-lg font-semibold text-text-primary break-words">Account security</h2></div>
       <button type="button" className={buttonClass} disabled={Boolean(busy)} onClick={() => { setBusy('loading'); void refresh() }}>Refresh status</button></div>
     <p className="text-sm leading-relaxed text-text-muted">Keep your password private and review active sign-ins. Password and completed email changes sign out all existing sessions.</p>
     {busy === 'loading' && <p role="status" className="text-sm text-text-muted">Loading account details…</p>}
     {error && <p role="alert" className="break-words text-sm text-trust-flagged">{error}</p>}
     {message && <p role="status" className="break-words text-sm text-accent-hover">{message}</p>}
     {account && <div className="grid min-w-0 grid-cols-1 gap-7 lg:grid-cols-2">
-      <form onSubmit={passwordSubmit} className="min-w-0 space-y-4"><h3 className="text-sm font-semibold text-text-primary">Change password</h3>
+      <form onSubmit={passwordSubmit} className="min-w-0 space-y-4 max-w-full"><h3 className="text-sm font-semibold text-text-primary">Change password</h3>
         <Field label="Current password"><input type="password" autoComplete="current-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} className={inputClass} disabled={Boolean(busy)} /></Field>
         <Field label="New password"><input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={replacement} onChange={event => setReplacement(event.target.value)} className={inputClass} disabled={Boolean(busy)} /></Field>
         <Field label="Confirm new password"><input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={confirmation} onChange={event => setConfirmation(event.target.value)} className={inputClass} disabled={Boolean(busy)} /></Field>
-        <button type="submit" disabled={Boolean(busy)} className="min-h-11 w-full rounded-xl bg-accent-primary px-4 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover disabled:opacity-50">{busy === 'password' ? 'Updating…' : 'Update password and sign out'}</button>
+        <button type="submit" disabled={Boolean(busy)} className="min-h-11 w-full rounded-xl bg-accent-primary px-4 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover disabled:opacity-50 max-w-full whitespace-normal break-words">{busy === 'password' ? 'Updating…' : 'Update password and sign out'}</button>
       </form>
       <div className="min-w-0 space-y-4"><h3 className="text-sm font-semibold text-text-primary">Email address</h3><p className="break-all text-sm text-text-secondary">{account.email}</p>
         {account.emailChange ? <div className="min-w-0 space-y-4 rounded-xl border border-border-subtle bg-background-app p-4">
@@ -101,7 +101,7 @@ export function SecurityCard({ userId }: { userId: string }) {
           <p className="text-xs leading-relaxed text-text-muted">Current inbox: {account.emailChange.oldConfirmed ? 'confirmed' : 'waiting'}. New inbox: {account.emailChange.newConfirmed ? 'confirmed' : 'waiting'}. Expires {new Date(account.emailChange.expiresAt).toLocaleTimeString()}.</p>
           <EmailConfirmationForm onConfirmed={async complete => { if (complete) signInAgain(); else await refresh() }} />
           <button type="button" disabled={Boolean(busy)} className={buttonClass} onClick={() => void act('cancel-email', async () => { await accountSecurityRequest('/email-change', z.object({ cancelled: z.literal(true) }), { method: 'DELETE', expectedUserId: userId }); await refresh() })}>Cancel email change</button>
-        </div> : <form onSubmit={emailSubmit} className="space-y-4">
+        </div> : <form onSubmit={emailSubmit} className="space-y-4 min-w-0 max-w-full">
           <Field label="New email address"><input type="email" autoComplete="email" maxLength={254} required value={email} onChange={event => setEmail(event.target.value)} className={inputClass} disabled={Boolean(busy) || account.delivery === 'unavailable'} /></Field>
           <Field label="Password to authorize email change"><input type="password" autoComplete="current-password" maxLength={128} required value={emailPassword} onChange={event => setEmailPassword(event.target.value)} className={inputClass} disabled={Boolean(busy) || account.delivery === 'unavailable'} /></Field>
           <p className="text-xs leading-relaxed text-text-muted">{account.delivery === 'unavailable' ? 'Email confirmations are unavailable. Contact the Rentral operator.' : 'Both the current and new inbox must confirm before your address changes.'}</p>
@@ -111,10 +111,10 @@ export function SecurityCard({ userId }: { userId: string }) {
     </div>}
     {sessions && <div className="space-y-4 border-t border-border-subtle pt-6"><h3 className="text-sm font-semibold text-text-primary">Active sessions</h3>
       {sessions.items.length === 0 && <p className="text-sm text-text-muted">No active sessions were found. Refresh or sign in again.</p>}
-      <ul className="space-y-3">{sessions.items.map(session => <li key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-background-app p-4"><div className="min-w-0"><p className="text-sm text-text-secondary">{session.current ? 'This session' : 'Another session'}</p><p className="mt-1 text-xs text-text-muted">Started {new Date(session.createdAt).toLocaleString()} · Expires {new Date(session.expiresAt).toLocaleDateString()}</p></div>
+      <ul className="space-y-3">{sessions.items.map(session => <li key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-background-app p-4 min-w-0"><div className="min-w-0"><p className="text-sm text-text-secondary">{session.current ? 'This session' : 'Another session'}</p><p className="mt-1 text-xs text-text-muted">Started {new Date(session.createdAt).toLocaleString()} · Expires {new Date(session.expiresAt).toLocaleDateString()}</p></div>
         <button type="button" disabled={Boolean(busy)} className={buttonClass} onClick={() => void revoke(session.id)}>Sign out {session.current ? 'this session' : 'session'}</button></li>)}</ul>
       <div className="flex flex-wrap gap-3">{sessions.nextCursor && <button type="button" disabled={Boolean(busy)} className={buttonClass} onClick={() => void olderSessions()}>Load older sessions</button>}<button type="button" disabled={Boolean(busy)} className={buttonClass} onClick={() => void revoke()}>Sign out all sessions</button></div>
     </div>}
-    <div className="flex flex-wrap gap-5 text-sm"><Link href="/forgot-password" className="text-accent-hover underline underline-offset-4">Recover a forgotten password</Link><Link href="/confirm-email" className="text-text-muted underline underline-offset-4">Enter an email confirmation code</Link></div>
+    <div className="flex flex-wrap gap-5 text-sm"><Link href="/forgot-password" className="text-accent-hover underline underline-offset-4 min-h-11 max-w-full break-words inline-flex items-center">Recover a forgotten password</Link><Link href="/confirm-email" className="text-text-muted underline underline-offset-4 min-h-11 max-w-full break-words inline-flex items-center">Enter an email confirmation code</Link></div>
   </section>
 }

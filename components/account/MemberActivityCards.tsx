@@ -10,7 +10,7 @@ export function MemberActivityCards({ activity }: { activity: MemberActivity }) 
     { label: 'Completed-booking reviews', value: activity.reviews.averageRating === null ? 'No reviews' : `${activity.reviews.averageRating.toFixed(1)} / 5`,
       detail: `${activity.reviews.count} reviews received across your completed bookings, over all time.` },
   ]
-  return <section aria-label="Your recorded activity" className="space-y-4"><h2 className="text-xl font-semibold">Your recorded activity</h2><p className="max-w-2xl text-xs leading-relaxed text-text-muted">These observations describe recorded activity. Missing check-in evidence does not prove absence, and a response average excludes unanswered messages.</p>
-    <div className="grid gap-4 sm:grid-cols-3">{rows.map(row => <article key={row.label} className="min-w-0 space-y-3 rounded-2xl border border-border-subtle bg-surface-card p-5"><p className="text-xs text-text-muted">{row.label}</p><p className="break-words text-2xl font-semibold">{row.value}</p><p className="text-xs leading-relaxed text-text-secondary">{row.detail}</p></article>)}</div>
+  return <section aria-label="Your recorded activity" className="space-y-4"><h2 className="text-xl font-semibold break-words">Your recorded activity</h2><p className="max-w-2xl text-xs leading-relaxed text-text-muted">These observations describe recorded activity. Missing check-in evidence does not prove absence, and a response average excludes unanswered messages.</p>
+    <div className="grid gap-4 sm:grid-cols-3">{rows.map(row => <article key={row.label} className="min-w-0 space-y-3 rounded-2xl border border-border-subtle bg-surface-card p-5 max-w-full wrap-anywhere text-text-primary"><p className="text-xs text-text-muted">{row.label}</p><p className="break-words text-2xl font-semibold">{row.value}</p><p className="text-xs leading-relaxed text-text-secondary">{row.detail}</p></article>)}</div>
   </section>
 }

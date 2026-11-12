@@ -8,7 +8,7 @@
 
 @theme {
   /* Font Families */
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: var(--font-rentral, "Inter", system-ui, sans-serif);
 
   /* Base Backgrounds & Solid Surfaces */
   --color-background-app: var(--rentral-background-app);
@@ -107,7 +107,7 @@
     color: var(--color-text-primary);
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
-    @apply bg-background text-foreground;
+    overflow-wrap: break-word;
   }
 
   a {
@@ -121,6 +121,35 @@
   textarea {
     font: inherit;
   }
+  :where(main, section, article, aside, header, footer, form, fieldset) {
+    min-inline-size: 0;
+  }
+
+  :where(input, select, textarea) {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    accent-color: var(--color-accent-primary);
+  }
+
+  :where(input, textarea)::placeholder {
+    color: var(--color-text-muted);
+    opacity: 1;
+  }
+
+  :where(select) option {
+    background: var(--color-surface-card);
+    color: var(--color-text-primary);
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-accent-hover);
+    outline-offset: 3px;
+  }
+
+  :where(img, video, canvas) {
+    max-inline-size: 100%;
+  }
+
 }
 
 @layer components {
@@ -478,7 +507,6 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -510,82 +538,47 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
 }
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
 
+/* Component-library aliases use the same palette as every Rentral page.
+ * This product currently has one dark appearance; never restore an independent
+ * light :root palette that can override body text or anonymous account screens. */
+:root,
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: var(--rentral-background-app);
+  --foreground: var(--rentral-text-primary);
+  --card: var(--rentral-surface-card);
+  --card-foreground: var(--rentral-text-primary);
+  --popover: var(--rentral-surface-card);
+  --popover-foreground: var(--rentral-text-primary);
+  --primary: var(--rentral-accent-primary);
+  --primary-foreground: var(--rentral-text-inverse);
+  --secondary: var(--rentral-glass-light);
+  --secondary-foreground: var(--rentral-text-primary);
+  --muted: var(--rentral-surface-card);
+  --muted-foreground: var(--rentral-text-muted);
+  --accent: var(--rentral-accent-muted);
+  --accent-foreground: var(--rentral-text-primary);
+  --destructive: var(--rentral-trust-flagged);
+  --border: var(--rentral-border-subtle);
+  --input: var(--rentral-border-subtle);
+  --ring: var(--rentral-accent-hover);
+  --chart-1: var(--rentral-accent-primary);
+  --chart-2: var(--rentral-accent-warm);
+  --chart-3: var(--rentral-trust-verified);
+  --chart-4: var(--rentral-text-secondary);
+  --chart-5: var(--rentral-text-muted);
+  --radius: var(--radius-md);
+  --sidebar: var(--rentral-background-app);
+  --sidebar-foreground: var(--rentral-text-primary);
+  --sidebar-primary: var(--rentral-accent-primary);
+  --sidebar-primary-foreground: var(--rentral-text-inverse);
+  --sidebar-accent: var(--rentral-glass-light);
+  --sidebar-accent-foreground: var(--rentral-text-primary);
+  --sidebar-border: var(--rentral-border-subtle);
+  --sidebar-ring: var(--rentral-accent-hover);
 }
 
 /* Rentral's editorial landing page. Keep these rules scoped to the homepage. */
@@ -751,4 +744,13 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .rentral-home *, .rentral-home *::before, .rentral-home *::after { scroll-behavior: auto; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Prevent mobile browsers zooming into otherwise responsive compact form fields.
+ * Control heights/spacing stay with their components; checkbox/radio sizes are
+ * deliberately excluded so their native checked states remain usable. */
+@media (width < 640px) {
+  :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="hidden"], [type="submit"], [type="button"]), select, textarea) {
+    font-size: var(--text-base);
+  }
 }

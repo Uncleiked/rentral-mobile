@@ -13,7 +13,7 @@ export function VerifiedBadge({ size = "sm" }: VerifiedBadgeProps) {
     >
       <svg
         viewBox="0 0 24 24"
-        className={size === "sm" ? "h-2.5 w-2.5 text-white" : "h-3.5 w-3.5 text-white"}
+        className={size === "sm" ? "h-2.5 w-2.5 text-text-inverse" : "h-3.5 w-3.5 text-text-inverse"}
         fill="none"
         stroke="currentColor"
         strokeWidth="4"

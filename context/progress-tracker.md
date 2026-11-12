@@ -1,5 +1,58 @@
 ## Progress Tracker
 
+## Website consistency and responsive pass - 2026-11-12
+
+Corrected the conflicting global light component palette that caused the
+organization screenshot's unreadable white background/black card text. Shared
+aliases now use the canonical Rentral dark palette. Removed competing radii and
+font self-reference; retained locally bundled Inter. Added shared branded
+AccountPage/account-styles for entry, recovery, Google completion and organization
+registration. Normalized page/workspace cards, fields, action sizing, wrapping,
+focus states and outer gutters across the web platform.
+
+Navigation stays complete below1280px through a compact keyboard-dismissable menu.
+Listing/booking/finance/commerce/matching/privacy/profile/lease/admin/message
+workspaces fit narrow screens; property metadata starts columns at640px. Profile
+dialog supports focus containment/Escape/restore and viewport scrolling. Fixed
+phone listing-to-message composer visibility, bounded feed feedback and filter
+field layout. Authentication actions, permissions and data/provider configuration remain unchanged.
+
+Verified:2,002 isolated tests PASS,107 skipped; production build/TypeScript PASS;
+web lint clean. All40 admin browser scenarios verified (38initialpass,2desktop
+load-timeouts passed separately with longer fixture startup allowance).
+Actual Next homepage12browser cases PASS.60 synthetic component/viewport checks
+PASS at320/390/768/1024/1440px; menu and profile keyboard/focus checks PASS.
+See ui-consistency-review.md for scope, screenshots, fixture setup and limits.
+Final320px filter/save/share feedback checks PASS; latest production rebuild and
+scoped lint PASS after the final presentation adjustments.
+
+Docker unavailable; no authenticated database-backed browser fixture or native
+device acceptance claimed. No DB/env/dependency/deployment changes. Earlier
+database connectivity guide/progress edits were preserved. UI source is saved
+locally and must be deployed to update the public Vercel site.
+
+
+## Production database connectivity diagnosis - 2026-11-12
+
+User supplied [auth/google/readiness] DATABASE_UNAVAILABLE and reported both
+Google and email/password login failing on production, with ~10s invocations.
+This is a failed Mongo readiness read before password validation. A missing
+preparation marker is a different error; no setup/reset is warranted.
+
+The saved local Atlas SRV/TLS connection passed an actual read-only ping and
+projected base/Google/organization setup lookup. It does not prove the deployed
+Vercel connection is the same. Independent source review found no connection
+reuse/cache defect explaining the production-only timeout. Atlas IP/network
+access and production URI/user settings remain candidates, not proven causes.
+Asked user which Atlas IP rule is Active; private Atlas/Vercel access is unavailable.
+
+87 isolated shared authentication/JWT/readiness/Google-gate tests PASS.
+Saved network/access and private production configuration steps in
+google-sign-in-setup.md. No auth code, dependency, environment, hosted data, Atlas
+rule or Vercel setting/deployment changed. Production recovery remains pending
+the external configuration correction and a fresh verification.
+
+
 ## Google activation diagnostics and checker parity - 2026-11-11
 
 User confirmed Production was redeployed after adding NEXT_PUBLIC_APP_URL, but

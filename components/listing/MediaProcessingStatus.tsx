@@ -30,13 +30,13 @@ export function MediaProcessingStatus({ listingId, media }: { listingId: string;
     }
   }
   return <div className="mt-2 border-t border-border-subtle pt-2 text-xs text-text-secondary">
-    <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center justify-between gap-2 min-w-0 flex-wrap">
       <span role="status">{labels[media.status] ?? 'Video unavailable'}</span>
       {media.status !== 'ready' && <button
         type="button" disabled={pending}
         aria-label={canRetry ? 'Retry video processing' : 'Refresh video status'}
         title={canRetry ? 'Retry video processing' : 'Refresh video status'}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-glass-light disabled:opacity-50"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-glass-light disabled:opacity-50 min-h-11 max-w-full whitespace-normal break-words"
         onClick={() => canRetry ? void retry() : router.refresh()}
       ><RefreshCw className={pending ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /></button>}
     </div>

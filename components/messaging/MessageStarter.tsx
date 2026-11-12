@@ -9,11 +9,11 @@ export function MessageStarter({ listingId }: { listingId: string }) {
   const [error, setError] = useState('')
   const [pending, startTransition] = useTransition()
   const router = useRouter()
-  return <div className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+  return <div className="rounded-2xl border border-border-subtle bg-surface-card p-6 min-w-0 max-w-full wrap-anywhere text-text-primary">
     <MessageCircle className="mb-4 size-8 text-accent-primary" />
-    <h2 className="text-xl font-semibold">A conversation starts here.</h2>
+    <h2 className="text-xl font-semibold break-words">A conversation starts here.</h2>
     <p className="mt-2 text-sm text-text-muted">Ask the host about the asset, availability, or an inspection. Keep payments on Rentral.</p>
-    <button type="button" disabled={pending} className="mt-6 rounded-xl bg-accent-primary px-5 py-3 font-semibold text-text-inverse disabled:opacity-50"
+    <button type="button" disabled={pending} className="mt-6 rounded-xl bg-accent-primary px-5 py-3 font-semibold text-text-inverse disabled:opacity-50 min-h-11 max-w-full whitespace-normal break-words"
       onClick={() => startTransition(async () => {
         try {
           const result = await startConversationAction(listingId)

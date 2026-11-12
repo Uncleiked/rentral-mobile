@@ -407,7 +407,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="mb-6 text-center">
-        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2 break-words">
           Record your walkthrough
         </h2>
         <p className="text-sm text-text-secondary">
@@ -425,7 +425,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
                 <p role="status">Video unavailable</p>
                 <button type="button" title="Retry video" aria-label="Retry video"
                   onClick={() => { setPreviewError(false); previewVideoRef.current?.load() }}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-glass-light hover:bg-glass-light-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary">
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-glass-light hover:bg-glass-light-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary min-h-11 max-w-full whitespace-normal break-words">
                   <RotateCcw className="h-4 w-4" />
                 </button>
               </div>
@@ -443,7 +443,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
         )}
 
         {/* Top overlay — GPS lock indicator */}
-        <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between">
+        <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between min-w-0 flex-wrap gap-3">
           <div className="flex items-center gap-2 rounded-full border border-glass-border-light bg-glass-dark px-3 py-1.5 backdrop-blur-lg">
             <span
               className={`h-2 w-2 rounded-full ${gpsLocked ? 'bg-trust-verified' : 'bg-trust-flagged'}`}
@@ -486,7 +486,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
               type="button"
               onClick={handleStart}
               disabled={!!cameraError || recordingBusy}
-              className="glass-btn flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
+              className="glass-btn flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70 min-h-11 max-w-full whitespace-normal break-words"
             >
               <Video className="h-4 w-4" />
               {isAcquiringGps ? 'Locking GPS...' : gpsError ? 'Retry Walkthrough' : 'Start 120s Walkthrough'}
@@ -497,7 +497,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
             <button
               type="button"
               onClick={stopRecording}
-              className="w-full rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+              className="w-full rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full whitespace-normal break-words"
             >
               Finish Early
             </button>
@@ -512,7 +512,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
                 type="button"
                 onClick={retake}
                 disabled={recordingBusy}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-40 min-h-11 max-w-full whitespace-normal break-words"
               >
                 <RotateCcw className="h-4 w-4" />
                 Retake Walkthrough
@@ -522,15 +522,15 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
         </div>
       </div>
 
-      {unconfirmed ? <div className="mt-4 text-sm text-text-secondary"><p role="status">A recording request still needs confirmation. Check its saved status before recording another take.</p><button type="button" disabled={isAcquiringGps} onClick={() => { void checkPending() }} className="mt-3 min-h-11 w-full rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-40">{isAcquiringGps ? 'Checking recording…' : 'Check recording status'}</button></div> : null}
-      {needsRetake || (showPreview && !captureId) ? <div className="mt-4 text-sm text-text-secondary"><p>This recording has no completed backend location lock. Keep your draft details and record a new walkthrough before submitting.</p><button type="button" disabled={recordingBusy} className="mt-2 min-h-11 text-accent-primary disabled:cursor-not-allowed disabled:opacity-40" onClick={retake}>Record a new walkthrough</button></div> : null}
+      {unconfirmed ? <div className="mt-4 text-sm text-text-secondary"><p role="status">A recording request still needs confirmation. Check its saved status before recording another take.</p><button type="button" disabled={isAcquiringGps} onClick={() => { void checkPending() }} className="mt-3 min-h-11 w-full rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-40 max-w-full whitespace-normal break-words">{isAcquiringGps ? 'Checking recording…' : 'Check recording status'}</button></div> : null}
+      {needsRetake || (showPreview && !captureId) ? <div className="mt-4 text-sm text-text-secondary"><p>This recording has no completed backend location lock. Keep your draft details and record a new walkthrough before submitting.</p><button type="button" disabled={recordingBusy} className="mt-2 min-h-11 text-accent-primary disabled:cursor-not-allowed disabled:opacity-40 max-w-full whitespace-normal break-words" onClick={retake}>Record a new walkthrough</button></div> : null}
 
       <div className="mt-6 flex gap-3">
         <button
           type="button"
           onClick={() => { if (isCurrent() && !busy.current && !recordingBusy) goBack() }}
           disabled={recordingBusy}
-          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-40 min-h-11 max-w-full whitespace-normal break-words"
         >
           Back
         </button>
@@ -538,7 +538,7 @@ function CaptureSession({ actorId, generation }: { actorId: string; generation: 
           type="button"
           onClick={() => { if (isCurrent() && !busy.current && !recordingBusy && !needsRetake) goNext() }}
           disabled={!capture.isComplete || !captureId || recordingBusy || needsRetake}
-          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-40 min-h-11 max-w-full whitespace-normal break-words"
         >
           Continue
         </button>

@@ -63,7 +63,7 @@ function DoneScreen() {
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-muted">
         <CheckCircle2 className="h-8 w-8 text-accent-hover" />
       </span>
-      <h2 className="text-xl font-bold text-text-primary tracking-wide">Listing saved</h2>
+      <h2 className="text-xl font-bold text-text-primary tracking-wide break-words">Listing saved</h2>
       <p className="max-w-sm text-sm text-text-secondary">
         Your walkthrough, details, and documents are saved under Your Listings.
         Your listing will appear in the marketplace once verification and publication are complete.
@@ -71,14 +71,14 @@ function DoneScreen() {
       <Link
         href="/marketplace/listing"
         onClick={reset}
-        className="mt-2 rounded-xl bg-accent-primary px-6 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98"
+        className="mt-2 rounded-xl bg-accent-primary px-6 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 min-h-11 max-w-full break-words inline-flex items-center"
       >
         View Your Listings
       </Link>
       <button
         type="button"
         onClick={reset}
-        className="rounded-xl border border-glass-border-medium bg-glass-light px-6 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+        className="rounded-xl border border-glass-border-medium bg-glass-light px-6 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full whitespace-normal break-words"
       >
         Start Another Listing
       </button>
@@ -118,7 +118,7 @@ export function CreateListingWizard({ draft, actorId }: { draft: DraftPayload | 
 
   return (
     <div className="min-h-screen bg-background-app px-4 py-10 sm:px-6">
-      <div className="mx-auto mb-7 w-full max-w-md"><Link href="/marketplace/vault" aria-disabled={mutationBusy || Boolean(pendingCommand || capturePending)} onClick={event => { if (mutationBusy || pendingCommand || capturePending) event.preventDefault() }} className="inline-flex min-h-11 items-center gap-2 text-xs text-text-muted transition-colors hover:text-text-primary"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your Media Vault</Link></div>
+      <div className="mx-auto mb-7 w-full max-w-md"><Link href="/marketplace/vault" aria-disabled={mutationBusy || Boolean(pendingCommand || capturePending)} onClick={event => { if (mutationBusy || pendingCommand || capturePending) event.preventDefault() }} className="inline-flex min-h-11 items-center gap-2 text-xs text-text-muted transition-colors hover:text-text-primary max-w-full break-words"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your Media Vault</Link></div>
       <WizardStepper />
       <ListingRequestRecovery actorId={actorId} />
 

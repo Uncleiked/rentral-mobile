@@ -65,7 +65,7 @@ export function DocumentUploadZone() {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="mb-8 text-center">
-        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2 break-words">
           Ownership and listing authority
         </h2>
         <p className="text-sm text-text-secondary">{copy.title}</p>
@@ -76,7 +76,7 @@ export function DocumentUploadZone() {
         type="file"
         aria-label="Proof of ownership and listing authority"
         accept=".pdf,.jpg,.jpeg,.png"
-        className="hidden"
+        className="hidden min-h-11 min-w-0 max-w-full"
         onChange={(e) => handleFiles(e.target.files)}
       />
       <button
@@ -101,7 +101,7 @@ export function DocumentUploadZone() {
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-muted">
               <FileCheck2 className="h-6 w-6 text-accent-hover" />
             </span>
-            <p className="text-sm font-semibold text-text-primary">{documentName ?? 'Uploaded document'}</p>
+            <p className="wrap-anywhere text-sm font-semibold text-text-primary">{documentName ?? 'Uploaded document'}</p>
             <p className="text-xs font-medium text-text-muted">Tap to replace file</p>
           </>
         ) : (
@@ -128,7 +128,7 @@ export function DocumentUploadZone() {
         <button
           type="button"
           onClick={goBack}
-          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full whitespace-normal break-words"
         >
           Back
         </button>
@@ -136,7 +136,7 @@ export function DocumentUploadZone() {
           type="button"
           onClick={goNext}
           disabled={!hasDocument}
-          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-40 min-h-11 max-w-full whitespace-normal break-words"
         >
           Continue
         </button>

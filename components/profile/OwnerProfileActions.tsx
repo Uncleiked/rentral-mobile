@@ -15,11 +15,11 @@ export function OwnerProfileActions({ profile }: OwnerProfileActionsProps) {
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => setIsEditOpen(true)}
-          className="px-4 py-2 rounded-lg text-sm font-semibold bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all"
+          className="px-4 py-2 rounded-lg text-sm font-semibold bg-glass-light border border-glass-border-medium text-text-primary hover:bg-glass-light-hover active:scale-95 transition-all min-h-11 max-w-full whitespace-normal break-words"
         >
           Edit profile
         </button>

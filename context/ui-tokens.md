@@ -1,5 +1,7 @@
 ## UI Tokens: Rentral Marketplace
 
+Current website authority (2026-11-12): app/globals.css owns one --rentral palette. Component-library aliases reference it; established radius tokens remain unchanged. The local font loader defines --font-rentral, consumed by --font-sans. Historical token examples below do not override current CSS.
+
 Design tokens and architectural styling guidelines for Rentral. All colors, typography, spacing, glassmorphic parameters, and component values are extracted from the core Rentral design architecture. Use these exact semantic values throughout the codebase to ensure consistency across the immersive, mobile-first, zero-trust marketplace.
 
 ## How to Use
@@ -18,7 +20,7 @@ This project utilizes Tailwind CSS v4.0 alongside Shadcn UI. All custom design t
 className="bg-glass-dark backdrop-blur-lg border border-glass-border-light text-text-primary"
 
 // Also correct — applying standard Tailwind utilities mapped to our brand guidelines
-className="bg-neutral-950 text-white rounded-[32px]"
+className="bg-background-app text-text-primary rounded-2xl"
 
 // Never — hardcoded arbitrary hex values in the JSX
 className="bg-[#0A0A0A] text-[#10B981]"

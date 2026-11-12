@@ -155,3 +155,72 @@ option with its saved configuration; the public production /sign-in still render
 the unavailable message. This compares provider availability, not a completed
 Google-account login. The user confirmed a Ready Production deployment after their
 environment edit, so a skipped redeploy is not an established explanation.
+
+## Production DATABASE_UNAVAILABLE - verified 2026-11-12
+
+Both Google and email/password depend on the same MongoDB readiness read. The
+reported DATABASE_UNAVAILABLE is raised when that read fails, before password
+validation. It is different from DATABASE_SETUP_REQUIRED and does not justify
+running database setup, recreating collections or resetting accounts.
+
+Read-only verification from this machine succeeded using the saved .env.local
+Atlas SRV connection with TLS: ping and base/Google/organization markers passed.
+No user records were read or changed. Production requests still timed out at
+about the configured ten-second connection deadline. This supports a difference
+in network access or deployed configuration, not a confirmed password failure.
+A review found no client reuse/cache defect explaining this production-only issue.
+
+### 1. Check Atlas access for the Vercel server
+
+Select the Atlas project containing the intended cluster, then Security ->
+Network Access (or Database & Network Access -> IP Access List).
+An entry allowing only the developer computer does not allow Vercel.
+
+If configured Vercel Static IPs are available, add the actual outbound addresses
+from Vercel Settings -> Networking for the function region. Do not use the website
+DNS address, a visitor IP from logs or the laptop IP as a substitute.
+
+For a short connectivity test when static egress is not configured, Atlas offers
+Add IP Address -> Allow Access From Anywhere (0.0.0.0/0). Use a temporary entry
+with an expiry, wait until Active, then refresh the production sign-in page.
+This widens network access; database credentials and TLS remain required.
+Do not disable authentication/TLS or delete existing access entries.
+Confirm and choose the intended ongoing access policy after the test, rather
+than assuming a temporary rule is a permanent deployment fix.
+
+### 2. Check the production connection privately
+
+In Vercel -> Rentral -> Settings -> Environment Variables, verify MONGODB_URL
+in Production uses the complete intended working Atlas connection from
+RentralMobile/.env.local. Copy only its value, without the key prefix or surrounding
+quotes. Do not paste it into chat. Keep the database name/MONGODB_DB_NAME consistent.
+A localhost/127.0.0.1 Docker URI cannot reach the laptop database from Vercel.
+Rentral uses MONGODB_URL before DATABASE_URL, so editing only the latter will not
+override an existing MONGODB_URL. Preserve JWT_SECRET and the Google credentials.
+
+If the chosen database user changed, use its Atlas database credentials (not
+the Atlas website password). Keep the URI password correctly percent encoded.
+The local working connection already passed authentication; do not reset it just
+because production cannot connect. Check cluster availability and the correct
+Atlas project/cluster if those settings already match.
+
+Changing a Vercel environment value requires a new Production deployment.
+Changing only Atlas's access list can be tested after the entry becomes Active.
+
+### 3. Verify the actual result
+
+Open a fresh https://rentral.vercel.app/sign-in. The Google option should become
+available once configuration and its database read succeed. Test an existing
+email/password account, then the real Google callback. Provider availability alone
+does not prove a complete login. If DATABASE_UNAVAILABLE remains, share only
+sanitized reason codes and whether the network entry is Active, never credentials.
+
+87 isolated tests across shared auth, JWT routes, database failure recovery and
+Google readiness passed. No source/auth logic, environment settings, hosted
+database data, Atlas rules or Vercel deployment was changed in this follow-up.
+
+Sources:
+- [Atlas connection troubleshooting](https://www.mongodb.com/docs/atlas/troubleshoot-connection/)
+- [Atlas IP access list and temporary entries](https://www.mongodb.com/docs/atlas/security/ip-access-list/)
+- [MongoDB's Vercel deployment guide](https://www.mongodb.com/docs/drivers/node/current/integrations/next-vercel/)
+- [Vercel static outbound addresses](https://vercel.com/docs/networking/static-ips)

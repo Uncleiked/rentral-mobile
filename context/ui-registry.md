@@ -1,5 +1,37 @@
 # UI Registry
 
+### Website consistency baseline - 2026-11-12
+
+Files: app/globals.css, app/layout.tsx, components/layout/AccountPage.tsx,
+MarketplaceShell.tsx, PublicPage.tsx, components/ui/account-styles.ts and web
+workspace controls. This baseline supersedes conflicting historical examples.
+
+| Property | Required pattern |
+| --- | --- |
+| Appearance | One dark canonical --rentral palette; component-library aliases reference it |
+| Typography | next/font/local -> --font-rentral -> --font-sans; no self-reference |
+| Corners | Existing brand radius tokens8/12/16/24/32px; no second shadcn radius scale |
+| Body/card text | text-text-primary; secondary explanation text-text-secondary; metadata text-text-muted |
+| Card | min-w-0 rounded-2xl border border-border-subtle bg-surface-card, p-5 sm:p-6 (account p-5 sm:p-8) |
+| Field | w-full min-w-0 max-w-full min-h-11 rounded-xl, semantic background/border/text |
+| Mobile field text | At least1rem below640px to avoid browser focus zoom |
+| Primary action | min-h-11 rounded-xl bg-accent-primary text-text-inverse, text-sm font-semibold |
+| Secondary action | min-h-11 rounded-xl border-border-subtle, semantic foreground and visible hover/focus |
+| Icon action | size-11 with an accessible name; round shape is appropriate for feed/navigation icons |
+| Page gutters | MarketplaceShell owns px-4 sm:px-6 lg:px-10; domain pages do not repeat them |
+| Form columns | Single column on narrow phones; expand from sm when fields have space |
+| Compact navigation | Below1280px, all routes available; Escape restores toggle focus |
+| Data/actions | min-w-0, wrap long identifiers/reasons, wrap/stack action groups |
+| Feedback | Keep compact feed feedback within the card rather than off its left edge |
+| Dialog | Named role, viewport-bounded scroll, focus containment, Escape and restoration |
+
+AccountPage uses max-w-lg; organization admission uses max-w-3xl. PublicPage
+retains a bounded readable column and shared brand/help navigation. Existing
+homepage/media presentation remains intentionally distinct while using the same
+palette and typography. None of these visual patterns implies a verification,
+payment, ownership or administrator permission.
+
+
 ### Google availability diagnostics - 2026-11-11
 
 The sign-in UI keeps the existing disabled Google button and general availability

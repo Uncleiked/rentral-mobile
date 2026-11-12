@@ -25,9 +25,9 @@ export function createMatchingRequest(actorId: string | null) {
 }
 export const matchingIdSchema = z.object({ id: z.uuid() }).strict()
 export const matchingProfileResultSchema = z.object({ profile: ownMatchProfileSchema.nullable(), canDiscover: z.boolean() }).strict()
-export const matchingButton = 'inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
-export const matchingSecondary = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm text-text-secondary hover:bg-surface-card focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
-export const matchingField = 'mt-1 block min-h-11 w-full rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary'
+export const matchingButton = 'inline-flex min-h-11 max-w-full whitespace-normal break-words items-center justify-center rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
+export const matchingSecondary = 'inline-flex min-h-11 max-w-full whitespace-normal break-words items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm text-text-secondary hover:bg-surface-card focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
+export const matchingField = 'mt-2 block min-h-11 w-full min-w-0 max-w-full rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary'
 export function matchingNaira(kobo: string): string {
   const amount = BigInt(kobo), whole = amount / BigInt(100), fraction = (amount % BigInt(100)).toString().padStart(2, '0')
   return `${whole}.${fraction}`

@@ -8,5 +8,5 @@ export default async function MatchingConversationPage({ params }: { params: Pro
   if (!await requireUserId()) redirect('/sign-in')
   const id = z.uuid().safeParse((await params).id)
   if (!id.success) notFound()
-  return <MarketplaceShell><div className="mx-auto w-full max-w-3xl space-y-7 px-4 py-8 sm:px-6 sm:py-12"><MatchingConversation id={id.data} /></div></MarketplaceShell>
+  return <MarketplaceShell><div className="mx-auto w-full max-w-3xl space-y-7 min-w-0"><MatchingConversation id={id.data} /></div></MarketplaceShell>
 }

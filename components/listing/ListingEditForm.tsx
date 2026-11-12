@@ -52,9 +52,9 @@ export function ListingEditForm({ listing }: { listing: EditableListing }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-md mx-auto">
+    <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-md mx-auto min-w-0">
       <div className="mb-8 text-center">
-        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">Edit listing</h2>
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2 break-words">Edit listing</h2>
         <p className="text-sm text-text-secondary">
           Update the details and pricing of your listing.
         </p>
@@ -73,14 +73,14 @@ export function ListingEditForm({ listing }: { listing: EditableListing }) {
       <div className="mt-6 flex gap-3">
         <Link
           href="/marketplace/listing"
-          className="flex flex-1 items-center justify-center rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98"
+          className="flex flex-1 items-center justify-center rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 min-h-11 max-w-full break-words"
         >
           Cancel
         </Link>
         <button
           type="submit"
           disabled={isSaving}
-          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70 min-h-11 max-w-full whitespace-normal break-words"
         >
           {isSaving ? 'Saving...' : 'Save Changes'}
         </button>

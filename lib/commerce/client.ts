@@ -19,7 +19,7 @@ export function createCommercialRequest(actorId: string | null) {
   throw new CommercialRequestError(failure.success ? failure.data.error : 'Purchase details could not be verified. Refresh before paying.', response.status || 503, failure.success ? failure.data.code : 'INVALID_RESPONSE')
  }
 }
-export const commercialButton = 'inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
-export const commercialSecondary = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm text-text-secondary hover:bg-surface-card focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
-export const commercialField = 'mt-1 block min-h-11 w-full rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary'
+export const commercialButton = 'inline-flex min-h-11 max-w-full whitespace-normal break-words items-center justify-center rounded-xl bg-accent-primary px-5 py-3 text-sm font-semibold text-text-inverse hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
+export const commercialSecondary = 'inline-flex min-h-11 max-w-full whitespace-normal break-words items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm text-text-secondary hover:bg-surface-card focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-hover disabled:opacity-50'
+export const commercialField = 'mt-2 block min-h-11 w-full min-w-0 max-w-full rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary'
 export function commercialNaira(kobo: string): string { const value = BigInt(kobo); return `₦${(value / BigInt(100)).toLocaleString('en-NG')}.${(value % BigInt(100)).toString().padStart(2, '0')}` }

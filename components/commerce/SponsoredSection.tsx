@@ -19,5 +19,5 @@ function SponsoredOption({ row }: { row: SponsoredPlacement }) {
 }
 export function SponsoredSection({ rows }: { rows: SponsoredPlacement[] }) {
   if (!rows.length) return null
-  return <section aria-label="Sponsored options" className="mb-9 space-y-5 rounded-2xl border border-border-subtle bg-surface-card p-5"><div><h2 className="font-semibold">Sponsored options</h2><p className="mt-2 text-xs text-text-muted">Paid placements matching your current filters.</p></div><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{rows.map(row => <SponsoredOption key={row.campaignId} row={row} />)}</div></section>
+  return <section aria-label="Sponsored options" className="mb-9 space-y-5 rounded-2xl border border-border-subtle bg-surface-card p-5 min-w-0 wrap-anywhere text-text-primary"><div><h2 className="font-semibold break-words">Sponsored options</h2><p className="mt-2 text-xs text-text-muted">Paid placements matching your current filters.</p></div><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{rows.map(row => <SponsoredOption key={row.campaignId} row={row} />)}</div></section>
 }

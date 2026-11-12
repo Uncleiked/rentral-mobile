@@ -1,15 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { accountField, accountPrimaryAction, accountSecondaryAction } from '@/components/ui/account-styles'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { CaptureRequestError, listingRequest } from '@/lib/listings/capture-client'
 import { organizationMineSchema, organizationReceiptSchema, organizationSubmissionSchema, organizationUploadSchema, type OrganizationView } from '@/lib/contracts/organizations'
 import { clearOrganizationPending, readOrganizationPending, saveOrganizationPending, type OrganizationPending } from '@/lib/organizations/recovery'
 
-const field = 'mt-2 block min-h-11 w-full min-w-0 rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary'
-const button = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm font-semibold disabled:opacity-50'
-const card = 'min-w-0 rounded-2xl border border-border-subtle bg-surface-card p-5 sm:p-6'
+const field = accountField + ' mt-2'
+const fileField = accountField + ' file:mr-3 file:rounded-lg file:border-0 file:bg-glass-light file:px-3 file:py-2 file:text-sm file:font-semibold file:text-text-primary'
+const button = accountSecondaryAction
+const card = 'min-w-0 rounded-2xl border border-border-subtle bg-surface-card p-5 text-text-primary sm:p-6'
 type FormState = { legalName: string; registrationType: 'company' | 'business_name' | 'llp' | 'incorporated_trustees'; registrationNumber: string; representativeName: string; representativeRole: string; documentKind: 'cac_certificate' | 'cac_status_report'; supportingKind: '' | 'authority_letter' | 'professional_licence' | 'office_address' }
 const initial: FormState = { legalName: '', registrationType: 'company', registrationNumber: '', representativeName: '', representativeRole: '', documentKind: 'cac_certificate', supportingKind: '' }
 type UploadRecovery = { path: string; kind: 'registration' | 'supporting' }
@@ -126,21 +128,69 @@ export function OrganizationApplicationForm({ actorId }: { actorId: string }) {
   }
   const editable = ready && (!application || ['changes_requested', 'rejected'].includes(application.status))
   const blocked = busy || Boolean(pending) || Boolean(pendingUpload) || recoveryError
-  return <div className="space-y-5">
-    {message && <p role="status" className={card + ' text-sm leading-6 text-text-secondary'}>{message}</p>}
-    {!ready && <button type="button" className={button} disabled={busy} onClick={() => { void run(load) }}>Retry registration status</button>}
-    {application && <section className={card}><p className="text-xs font-semibold uppercase tracking-wide text-accent-hover">{application.status.replaceAll('_', ' ')}</p><h2 className="mt-2 text-xl font-semibold">{application.legalName}</h2>{application.reviewReason && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{application.reviewReason}</p>}{application.status === 'pending' && <p className="mt-3 text-sm text-text-muted">Your evidence is awaiting independent review.</p>}{application.status === 'approved' && <Link className={button + ' mt-4 bg-accent-primary text-text-inverse'} href="/marketplace">Enter marketplace</Link>}<button type="button" className={button + ' mt-4'} disabled={busy} onClick={() => { void run(load) }}>Refresh review status</button></section>}
-    {pendingUpload && <section className={card}><h2 className="font-semibold">Confirm your original document upload</h2><p className="mt-2 text-sm leading-6 text-text-muted">Your original filename is retained. This status check does not upload another copy.</p><button className={button + ' mt-4'} disabled={busy} onClick={() => { void run(checkUpload) }}>Check original upload</button></section>}
-    {pending && <section className={card}><h2 className="font-semibold">Confirm your original registration</h2><p className="mt-2 text-sm text-text-muted">New submissions are paused until its outcome is confirmed.</p><button className={button + ' mt-4'} disabled={busy} onClick={() => { void run(check) }}>Check original registration</button>{canRetry && <button className={button + ' mt-4'} disabled={busy} onClick={() => { void run(() => send(pending)) }}>Resend exact saved registration</button>}</section>}
-    {editable && <form className={card + ' space-y-5'} onSubmit={event => { event.preventDefault(); void run(submit) }}>
-      <fieldset disabled={blocked} className="space-y-5 disabled:opacity-60"><legend className="mb-4 font-semibold">Registration details</legend>
-      {(['legalName', 'registrationNumber', 'representativeName', 'representativeRole'] as const).map(name => <label key={name} className="block text-sm">{({ legalName: 'Registered legal name', registrationNumber: 'CAC registration number', representativeName: 'Representative full name', representativeRole: 'Representative role or title' })[name]}<input className={field} required minLength={2} maxLength={name === 'legalName' ? 160 : name === 'registrationNumber' ? 80 : name === 'representativeRole' ? 100 : 120} value={form[name]} onChange={event => setForm(previous => ({ ...previous, [name]: event.target.value }))} /></label>)}
-      <label className="block text-sm">Registration type<select className={field} value={form.registrationType} onChange={event => setForm(previous => ({ ...previous, registrationType: z.enum(['company', 'business_name', 'llp', 'incorporated_trustees']).parse(event.target.value) }))}><option value="company">Company</option><option value="business_name">Business name</option><option value="llp">Limited liability partnership</option><option value="incorporated_trustees">Incorporated trustees</option></select></label>
-      <label className="block text-sm">Required registration evidence<select className={field} value={form.documentKind} onChange={event => setForm(previous => ({ ...previous, documentKind: z.enum(['cac_certificate', 'cac_status_report']).parse(event.target.value) }))}><option value="cac_certificate">CAC certificate</option><option value="cac_status_report">Official CAC status report</option></select><input aria-label="Registration document" className={field} type="file" accept="application/pdf,image/jpeg,image/png" required={!paths.registration} onChange={event => { setRegistration(event.target.files?.[0] ?? null); setPaths(previous => ({ ...previous, registration: undefined })) }} /></label>
-      <p className="text-xs leading-5 text-text-muted">One registration proof is required. PDF, JPEG or PNG; maximum 10 MB. Registration approval does not verify ownership of individual assets.</p>
-      <label className="block text-sm">Supporting evidence (optional)<select className={field} value={form.supportingKind} onChange={event => setForm(previous => ({ ...previous, supportingKind: z.enum(['', 'authority_letter', 'professional_licence', 'office_address']).parse(event.target.value) }))}><option value="">No supporting document</option><option value="authority_letter">Representative authorization letter</option><option value="professional_licence">Relevant professional licence</option><option value="office_address">Office-address proof</option></select><input aria-label="Supporting document" className={field} type="file" accept="application/pdf,image/jpeg,image/png" onChange={event => { setSupporting(event.target.files?.[0] ?? null); setPaths(previous => ({ ...previous, supporting: undefined })) }} /></label>
-      <label className="flex items-start gap-3 text-sm leading-6 text-text-secondary"><input type="checkbox" checked={declaration} onChange={event => setDeclaration(event.target.checked)} required className="mt-1 size-5 shrink-0 accent-accent-primary" />I am authorized to represent this organization and confirm these registration details and documents are accurate.</label>
-      <button className={button + ' w-full bg-accent-primary text-text-inverse'} disabled={blocked || !declaration}>{busy ? 'Saving registration…' : 'Submit for administrator review'}</button></fieldset>
+  return <div className="min-w-0 space-y-5">
+    {message && <p role="status" className={card + ' break-words text-sm leading-6 text-text-secondary'}>{message}</p>}
+    {!ready && <section className={card}><p className="text-sm leading-6 text-text-secondary">Loading your organization registration status.</p><button type="button" className={button + ' mt-4 w-full sm:w-auto'} disabled={busy} onClick={() => { void run(load) }}>Retry registration status</button></section>}
+    {application && <section className={card}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent-hover">{application.status.replaceAll('_', ' ')}</p>
+      <h2 className="mt-2 break-words text-xl font-semibold text-text-primary">{application.legalName}</h2>
+      {application.reviewReason && <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">{application.reviewReason}</p>}
+      {application.status === 'pending' && <p className="mt-3 text-sm leading-6 text-text-secondary">Your evidence is awaiting independent review.</p>}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        {application.status === 'approved' && <Link className={accountPrimaryAction + ' sm:w-auto'} href="/marketplace">Enter marketplace</Link>}
+        <button type="button" className={button} disabled={busy} onClick={() => { void run(load) }}>Refresh review status</button>
+      </div>
+    </section>}
+    {pendingUpload && <section className={card}>
+      <h2 className="font-semibold text-text-primary">Confirm your original document upload</h2>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">Your original filename is retained. This status check does not upload another copy.</p>
+      <button type="button" className={button + ' mt-4 w-full sm:w-auto'} disabled={busy} onClick={() => { void run(checkUpload) }}>Check original upload</button>
+    </section>}
+    {pending && <section className={card}>
+      <h2 className="font-semibold text-text-primary">Confirm your original registration</h2>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">New submissions are paused until its outcome is confirmed.</p>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <button type="button" className={button} disabled={busy} onClick={() => { void run(check) }}>Check original registration</button>
+        {canRetry && <button type="button" className={button} disabled={busy} onClick={() => { void run(() => send(pending)) }}>Resend exact saved registration</button>}
+      </div>
+    </section>}
+    {editable && <form className={card} aria-busy={busy} onSubmit={event => { event.preventDefault(); void run(submit) }}>
+      <fieldset disabled={blocked} className="min-w-0 space-y-6 disabled:opacity-60">
+        <legend className="mb-5 text-base font-semibold text-text-primary">Registration details</legend>
+        <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+          {(['legalName', 'registrationNumber', 'representativeName', 'representativeRole'] as const).map(name => <label key={name} className="block min-w-0 text-sm font-medium text-text-secondary">
+            {({ legalName: 'Registered legal name', registrationNumber: 'CAC registration number', representativeName: 'Representative full name', representativeRole: 'Representative role or title' })[name]}
+            <input className={field} required minLength={2} maxLength={name === 'legalName' ? 160 : name === 'registrationNumber' ? 80 : name === 'representativeRole' ? 100 : 120} value={form[name]} onChange={event => setForm(previous => ({ ...previous, [name]: event.target.value }))} />
+          </label>)}
+        </div>
+        <label className="block min-w-0 text-sm font-medium text-text-secondary">Registration type
+          <select className={field} value={form.registrationType} onChange={event => setForm(previous => ({ ...previous, registrationType: z.enum(['company', 'business_name', 'llp', 'incorporated_trustees']).parse(event.target.value) }))}>
+            <option value="company">Company</option><option value="business_name">Business name</option><option value="llp">Limited liability partnership</option><option value="incorporated_trustees">Incorporated trustees</option>
+          </select>
+        </label>
+        <div className="min-w-0 space-y-4 border-t border-border-subtle pt-6">
+          <div><h2 className="font-semibold text-text-primary">Registration documents</h2><p id="registration-help" className="mt-2 text-xs leading-5 text-text-muted">One registration proof is required. PDF, JPEG or PNG; maximum 10 MB. Registration approval does not verify ownership of individual assets.</p></div>
+          <label className="block min-w-0 text-sm font-medium text-text-secondary" htmlFor="document-kind">Required registration evidence</label>
+          <select id="document-kind" className={accountField} value={form.documentKind} onChange={event => setForm(previous => ({ ...previous, documentKind: z.enum(['cac_certificate', 'cac_status_report']).parse(event.target.value) }))}>
+            <option value="cac_certificate">CAC certificate</option><option value="cac_status_report">Official CAC status report</option>
+          </select>
+          <label className="block min-w-0 text-sm font-medium text-text-secondary" htmlFor="registration-document">Upload registration document</label>
+          <input id="registration-document" aria-label="Registration document" aria-describedby="registration-help" className={fileField} type="file" accept="application/pdf,image/jpeg,image/png" required={!paths.registration} onChange={event => { setRegistration(event.target.files?.[0] ?? null); setPaths(previous => ({ ...previous, registration: undefined })) }} />
+        </div>
+        <div className="min-w-0 space-y-4 border-t border-border-subtle pt-6">
+          <label className="block min-w-0 text-sm font-medium text-text-secondary" htmlFor="supporting-kind">Supporting evidence (optional)</label>
+          <select id="supporting-kind" className={accountField} value={form.supportingKind} onChange={event => setForm(previous => ({ ...previous, supportingKind: z.enum(['', 'authority_letter', 'professional_licence', 'office_address']).parse(event.target.value) }))}>
+            <option value="">No supporting document</option><option value="authority_letter">Representative authorization letter</option><option value="professional_licence">Relevant professional licence</option><option value="office_address">Office-address proof</option>
+          </select>
+          <label className="block min-w-0 text-sm font-medium text-text-secondary" htmlFor="supporting-document">Upload supporting document</label>
+          <input id="supporting-document" aria-label="Supporting document" className={fileField} type="file" accept="application/pdf,image/jpeg,image/png" onChange={event => { setSupporting(event.target.files?.[0] ?? null); setPaths(previous => ({ ...previous, supporting: undefined })) }} />
+        </div>
+        <label className="flex min-h-11 items-start gap-3 rounded-xl border border-border-subtle bg-background-app p-4 text-sm leading-6 text-text-secondary">
+          <input type="checkbox" checked={declaration} onChange={event => setDeclaration(event.target.checked)} required className="mt-1 size-5 shrink-0 accent-accent-primary" />
+          <span className="min-w-0">I am authorized to represent this organization and confirm these registration details and documents are accurate.</span>
+        </label>
+        <button type="submit" className={accountPrimaryAction} disabled={blocked || !declaration}>{busy ? 'Saving registration...' : 'Submit for administrator review'}</button>
+      </fieldset>
     </form>}
   </div>
 }

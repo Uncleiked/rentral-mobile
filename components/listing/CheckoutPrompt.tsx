@@ -71,7 +71,7 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="mb-8 text-center">
-        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2">
+        <h2 className="text-xl font-bold text-text-primary tracking-wide mb-2 break-words">
           Submit your listing
         </h2>
         <p className="text-sm text-text-secondary">
@@ -79,8 +79,8 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-border-subtle bg-surface-card px-6 py-6">
-        <div className="flex items-center justify-between border-b border-border-subtle pb-4">
+      <div className="rounded-2xl border border-border-subtle bg-surface-card px-6 py-6 min-w-0 max-w-full wrap-anywhere text-text-primary">
+        <div className="flex items-center justify-between border-b border-border-subtle pb-4 min-w-0 flex-wrap gap-3">
           <span className="text-sm font-medium text-text-secondary">Publication status</span>
           <span className="text-sm font-semibold text-text-primary">Pending review</span>
         </div>
@@ -104,7 +104,7 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
           type="button"
           onClick={goBack}
           disabled={phase !== 'idle'}
-          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-70 min-h-11 max-w-full whitespace-normal break-words"
         >
           Back
         </button>
@@ -112,7 +112,7 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
           type="button"
           onClick={handleConfirm}
           disabled={phase !== 'idle'}
-          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70 min-h-11 max-w-full whitespace-normal break-words"
         >
           {phase === 'uploading' ? 'Uploading walkthrough...' : phase === 'saving' ? 'Saving listing...' : 'Submit for Review'}
         </button>

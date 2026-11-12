@@ -20,7 +20,7 @@ function VideoError({ retry }: { retry: () => void }) {
   return <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-background-app px-4 text-center text-sm text-text-secondary">
     <p role="status">Video unavailable</p>
     <button type="button" title="Retry video" aria-label="Retry video"
-      className="flex h-10 w-10 items-center justify-center rounded-lg bg-glass-light hover:bg-glass-light-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+      className="flex h-10 w-10 items-center justify-center rounded-lg bg-glass-light hover:bg-glass-light-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary min-h-11 max-w-full whitespace-normal break-words"
       onClick={event => { event.stopPropagation(); retry() }}>
       <RefreshCw className="h-4 w-4" />
     </button>
