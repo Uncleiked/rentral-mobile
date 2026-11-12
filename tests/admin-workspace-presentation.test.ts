@@ -6,9 +6,9 @@ import { adminTabs, decisionsFor, type AdminSelection } from '../components/admi
 
 const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const memberId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-const selection: AdminSelection = { kind: 'user', value: { id: memberId, revision: 0, email: 'synthetic@example.invalid', username: null, role: 'member', suspended: false, closed: false, galleryAllowed: false, galleryPermissionRevision: 0, createdAt: '2026-11-11T10:00:00Z' } }
+const selection: AdminSelection = { kind: 'user', value: { id: memberId, revision: 0, email: 'synthetic@example.invalid', username: null, role: 'member', suspended: false, closed: false, galleryAllowed: false, freePostingAllowed: false, directPublishAllowed: false, galleryPermissionRevision: 0, createdAt: '2026-11-11T10:00:00Z' } }
 const noop = () => undefined
-const props = { selection, actorId, owner: true, permissions: ['gallery:manage'], blocked: false, busy: false, operation: 'set_gallery_permission', setOperation: noop, role: 'member', setRole: noop, reason: 'Reviewed the supplied account evidence for gallery listing permission.', setReason: noop, override: false, setOverride: noop, galleryAllowed: false, setGalleryAllowed: noop, privateDocument: null, openedDocument: null, onPrepareDocument: noop, onOpenDocument: noop, onSubmit: noop, onClose: noop }
+const props = { selection, actorId, owner: true, permissions: ['gallery:manage'], blocked: false, busy: false, operation: 'set_gallery_permission', setOperation: noop, role: 'member', setRole: noop, reason: 'Reviewed the supplied account evidence for gallery listing permission.', setReason: noop, override: false, setOverride: noop, galleryAllowed: false, setGalleryAllowed: noop, freePostingAllowed: false, setFreePostingAllowed: noop, directPublishAllowed: false, setDirectPublishAllowed: noop, privateDocument: null, openedDocument: null, onPrepareDocument: noop, onOpenDocument: noop, onSubmit: noop, onClose: noop }
 function saveDisabled(html: string): boolean { return /<button[^>]*disabled=""[^>]*>Record decision<\/button>/.test(html) }
 
 describe('admin review presentation safeguards', () => {
@@ -24,6 +24,22 @@ describe('admin review presentation safeguards', () => {
     expect(short).toContain('At least 30 characters.')
     expect(saveDisabled(short)).toBe(true)
     expect(saveDisabled(renderToStaticMarkup(createElement(AdminRecordReview, { ...self, override: true })))).toBe(false)
+  })
+  it('keeps the free-posting switch and its save gate independent of gallery access', () => {
+    const free = { ...props, operation: 'set_free_posting_permission', permissions: ['listing:waive'] }
+    expect(saveDisabled(renderToStaticMarkup(createElement(AdminRecordReview, free)))).toBe(true)
+    const html = renderToStaticMarkup(createElement(AdminRecordReview, { ...free, freePostingAllowed: true }))
+    expect(saveDisabled(html)).toBe(false)
+    expect(html).toContain('Allow free listing posts')
+    expect(html).not.toContain('Allow gallery uploads')
+    expect(decisionsFor(selection, ['listing:waive'], actorId, false).map(action => action.value)).toEqual(['set_free_posting_permission'])
+  })
+  it('requires an explicit owner override for their own direct publication permission', () => {
+    const own: AdminSelection = { kind: 'user', value: { ...selection.value, id: actorId, role: 'owner' } }
+    const direct = { ...props, selection: own, operation: 'set_direct_publish_permission', directPublishAllowed: true }
+    expect(saveDisabled(renderToStaticMarkup(createElement(AdminRecordReview, direct)))).toBe(true)
+    expect(saveDisabled(renderToStaticMarkup(createElement(AdminRecordReview, { ...direct, override: true })))).toBe(false)
+    expect(decisionsFor(selection, ['gallery:manage'], actorId, false).map(action => action.value)).toEqual(['set_gallery_permission', 'set_direct_publish_permission'])
   })
   it('offers no ordinary role or suspension decisions against the protected owner', () => {
     const own: AdminSelection = { kind: 'user', value: { ...selection.value, role: 'owner' } }

@@ -21,6 +21,10 @@ import { GET as dashboard } from '@/app/api/v1/admin/route'
 import { POST as adminCommand } from '@/app/api/v1/admin/commands/route'
 import { GET as adminReceipt } from '@/app/api/v1/admin/commands/[clientId]/route'
 import { GET as documentPreview } from '@/app/api/v1/admin/listings/[id]/document/route'
+import { searchAdminListings } from '@/lib/operations/admin-listings'
+import { getAdminListingMedia } from '@/lib/operations/admin-media'
+import { publishOwnListing } from '@/lib/listings/publishing'
+import { PUBLICATION_FEE_KOBO } from '@/lib/contracts/listing-payments'
 import { GET as manualStatus, POST as manualRequest } from '@/app/api/v1/bookings/[id]/manual-inspection/route'
 
 // Only Next request-context adapters are replaced. The real rate limiter keeps
@@ -200,6 +204,124 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     expect((await prisma.user.findUniqueOrThrow({ where: { id: host.user.id } })).gallery_upload_allowed).toBe(false)
     expect(await prisma.listing.count({ where: { lister_id: host.user.id, listing_status: 'active' } })).toBe(0)
   }, 15000)
+  it('applies free posting only to future submissions and keeps human review separate from gallery upload approval', async () => {
+    const earlier = await createGallery()
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: earlier.listingId } })).fee_waived_at).toBeNull()
+    expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    const fresh = await createGallery()
+    const row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId }, include: { documentReview: true } })
+    expect(row).toMatchObject({ listing_status: 'pending_verification', fee_waived_by: platformOwner.user.id, fee_waiver_reason: reason })
+    expect(row.fee_waived_at).toBeInstanceOf(Date); expect(row.publication_mode).not.toBe('trusted_publisher')
+    expect(row.documentReview?.status).not.toBe('approved')
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: earlier.listingId } })).fee_waived_at).toBeNull()
+    expect(await ownedPublicationFee(host.user.id, fresh.listingId)).toMatchObject({ waived: true, payment: null, actions: { checkout: false } })
+    expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: false })).response.status).toBe(200)
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).fee_waived_at).toBeInstanceOf(Date)
+    const afterRevocation = await createGallery()
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: afterRevocation.listingId } })).fee_waived_at).toBeNull()
+    expect(await prisma.paymentIntent.count()).toBe(0)
+  }, 20000)
+  it('publishes a granted gallery account without human approval, keeps the queue truthful and previews only owned media', async () => {
+    expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    const fresh = await createGallery()
+    const row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId }, include: { documentReview: true } })
+    expect(row).toMatchObject({ listing_status: 'active', publication_mode: 'trusted_publisher', capture_id: null })
+    expect(row.documentReview?.status).not.toBe('approved')
+    expect(row.direct_publish_proof).toMatchObject({ ownerId: host.user.id, grantedBy: platformOwner.user.id, documentPath: fresh.documentPath, documentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+    expect((await searchAdminListings(platformOwner.user.id, { status: 'review', listerId: host.user.id })).items.some(item => item.id === fresh.listingId)).toBe(false)
+    expect((await searchAdminListings(platformOwner.user.id, { status: 'all', query: host.user.email })).items.some(item => item.id === fresh.listingId)).toBe(true)
+    const preview = await getAdminListingMedia(platformOwner.user.id, fresh.listingId)
+    expect(preview).toMatchObject({ source: 'approved_gallery', items: [{ kind: 'image', url: expect.stringContaining('/api/v1/files/listings-media/'), expiresAt: expect.any(String) }] })
+    expect(JSON.stringify(preview)).not.toContain('compliance-docs')
+    expect((await getDiscoveryListings(parseDiscoveryFilters({}), null)).listings.some(item => item.id === fresh.listingId)).toBe(true)
+    const grant = await prisma.user.findUniqueOrThrow({ where: { id: host.user.id }, select: { direct_publish_at: true } })
+    expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: host.user.id } })).direct_publish_at).toEqual(grant.direct_publish_at)
+    expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: false })).response.status).toBe(200)
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } }))).toMatchObject({ listing_status: 'pending_verification', publication_mode: 'manual_review' })
+    expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: false })).response.status).toBe(200)
+    expect(await prisma.paymentIntent.count()).toBe(0); expect(outbound).not.toHaveBeenCalled()
+  }, 20000)
+  it('blocks an unpaid trusted submission until a real waiver and preserves original publication receipt semantics', async () => {
+    expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    const fresh = await createGallery()
+    let row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })
+    expect(row).toMatchObject({ listing_status: 'pending_verification', publication_mode: 'trusted_publisher', fee_waived_at: null })
+    expect((await searchAdminListings(platformOwner.user.id, { status: 'review', listerId: host.user.id })).items.some(item => item.id === fresh.listingId)).toBe(false)
+    expect((await searchAdminListings(platformOwner.user.id, { status: 'pending_verification', query: fresh.listingId })).items.map(item => item.id)).toEqual([fresh.listingId])
+    await expect(publishOwnListing(host.user.id, fresh.listingId, { clientId: randomUUID(), expectedRevision: row.revision })).rejects.toMatchObject({ code: 'PUBLICATION_FEE_REQUIRED' })
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).listing_status).toBe('pending_verification')
+    expect((await command(platformOwner, 'waive_fee', fresh.listingId)).response.status).toBe(200)
+    row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })
+    const instruction = { clientId: randomUUID(), expectedRevision: row.revision }
+    expect(await publishOwnListing(host.user.id, fresh.listingId, instruction)).toMatchObject({ status: 'active', trustedPublisher: true })
+    expect(await publishOwnListing(host.user.id, fresh.listingId, instruction)).toMatchObject({ status: 'active', trustedPublisher: true })
+    expect(await prisma.adminAudit.count({ where: { action: 'trusted_listing_published', target_id: fresh.listingId } })).toBe(1)
+    expect(await prisma.documentReview.count({ where: { listing_id: fresh.listingId, status: 'approved' } })).toBe(0)
+    expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: false })).response.status).toBe(200)
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).listing_status).toBe('pending_verification')
+    expect(await prisma.paymentIntent.count()).toBe(0); expect(await prisma.financialOperation.count()).toBe(0)
+  }, 20000)
+  it('keeps privileged grants unavailable to members and does not conflate an upload grant with direct or free posting', async () => {
+    expect((await command(host, 'set_free_posting_permission', renter.user.id, { allowed: true })).response.status).toBe(403)
+    expect((await command(host, 'set_direct_publish_permission', renter.user.id, { allowed: true })).response.status).toBe(403)
+    await grantGallery()
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: host.user.id } })
+    expect(row.gallery_upload_allowed).toBe(true); expect(row.listing_fee_exempt).toBe(false); expect(row.direct_publish_allowed).toBe(false)
+    const listing = await createGallery()
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: listing.listingId } }))).toMatchObject({ listing_status: 'pending_verification', fee_waived_at: null })
+    expect((await command(platformOwner, 'publish', listing.listingId)).response.status).toBe(409)
+  }, 15000)
+  it('retains a trusted video submission while processing is unavailable even when posting is free', async () => {
+    await grantGallery()
+    expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+    try {
+      const files = await galleryFiles(), videoPath = `${host.user.id}/${randomUUID()}/walkthrough.mp4`
+      // A private fixture container signature is enough for storage validation;
+      // no transcoder or provider success is invented, and Mux remains disabled.
+      await uploadStoredObject(host.user.id, 'listings-media', videoPath, stream(new Uint8Array([0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0])), 'video/mp4')
+      const saved = await saveListingForUser(host.user.id, { clientId: randomUUID(), mediaSource: 'approved_gallery', galleryPhotos: [files.photoPath], videoPath, category: 'house', address, basePrice: '100000', documentPath: files.documentPath, metadata })
+      expect(saved.success).toBe(true)
+      if (!saved.success) throw new Error('Owned video submission fixture could not be saved')
+      const row = await prisma.listing.findUniqueOrThrow({ where: { id: saved.listingId } })
+      expect(row).toMatchObject({ listing_status: 'pending_verification', publication_mode: 'trusted_publisher', fee_waived_by: platformOwner.user.id })
+      await expect(publishOwnListing(host.user.id, saved.listingId, { clientId: randomUUID(), expectedRevision: row.revision })).rejects.toMatchObject({ code: 'PUBLICATION_VIDEO_REQUIRED' })
+      expect((await prisma.listing.findUniqueOrThrow({ where: { id: saved.listingId } })).listing_status).toBe('pending_verification')
+      expect(await prisma.paymentIntent.count()).toBe(0); expect(outbound).not.toHaveBeenCalled()
+    } finally {
+      await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: false })
+      await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: false })
+    }
+  }, 20000)
+  it('requires the exact succeeded same-listing fee, payer, currency, amount and environment before direct publishing', async () => {
+    const paymentIds: string[] = []
+    vi.stubEnv('PAYMENTS_ENABLED', 'true'); vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_owned_fixture_no_provider_calls'); vi.stubEnv('PAYSTACK_ENVIRONMENT', 'test')
+    try {
+      expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
+      const listing = await createGallery(), other = await createGallery()
+      const base = { listing_id: listing.listingId, user_id: host.user.id, kind: 'listing_fee', status: 'succeeded', currency: 'NGN', amount_kobo: BigInt(PUBLICATION_FEE_KOBO), provider_environment: 'test', customer_email: host.user.email }
+      const unrelated = [{ status: 'failed' }, { kind: 'inspection_fee' }, { listing_id: other.listingId }, { user_id: renter.user.id }, { currency: 'USD' }, { amount_kobo: BigInt(PUBLICATION_FEE_KOBO) - BigInt(1) }, { provider_environment: 'live' }]
+      for (const fields of unrelated) {
+        const payment = await prisma.paymentIntent.create({ data: { ...base, ...fields, reference: `owned-fixture-${randomUUID()}`, idempotency_key: randomUUID() } })
+        paymentIds.push(payment.id)
+        const current = await prisma.listing.findUniqueOrThrow({ where: { id: listing.listingId } })
+        await expect(publishOwnListing(host.user.id, listing.listingId, { clientId: randomUUID(), expectedRevision: current.revision })).rejects.toMatchObject({ code: 'PUBLICATION_FEE_REQUIRED' })
+      }
+      const exact = await prisma.paymentIntent.create({ data: { ...base, reference: `owned-fixture-${randomUUID()}`, idempotency_key: randomUUID() } })
+      paymentIds.push(exact.id)
+      const current = await prisma.listing.findUniqueOrThrow({ where: { id: listing.listingId } })
+      expect(await publishOwnListing(host.user.id, listing.listingId, { clientId: randomUUID(), expectedRevision: current.revision })).toMatchObject({ status: 'active' })
+      expect(await prisma.ledgerEntry.count()).toBe(0); expect(await prisma.financialOperation.count()).toBe(0); expect(outbound).not.toHaveBeenCalled()
+    } finally {
+      // Only this isolated fixture's synthetic rows are removed. No real PSP is
+      // called and no provider success/ledger entry is fabricated by app code.
+      await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: false })
+      await prisma.paymentIntent.deleteMany({ where: { id: { in: paymentIds } } })
+      vi.stubEnv('PAYMENTS_ENABLED', 'false')
+    }
+  }, 30000)
   it('transfers the only owner atomically and immediately removes old owner transfer authority', async () => {
     expect((await command(platformOwner, 'transfer_ownership', admin.user.id)).response.status).toBe(200)
     expect(await prisma.user.count({ where: { staff_role: 'owner' } })).toBe(1)

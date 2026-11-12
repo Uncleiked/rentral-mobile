@@ -13,7 +13,7 @@ import { DISCOVERY_PAGE_SIZE, discoveryLocation, type DiscoveryCursor, type Disc
 const listingSelect = {
   id: true, category: true, text_address: true, base_rent_amount: true,
   asset_metadata: true, video_path: true, poster_path: true, listing_status: true,
-  createdAt: true, lister_id: true,
+  createdAt: true, lister_id: true, publication_mode: true,
   ...galleryListingSelect,
   lister: { select: { username: true, avatar_url: true, kyc_verified: true, account_type: true, bio: true, createdAt: true, ...galleryUserSelect } },
 } satisfies Prisma.ListingSelect
@@ -30,7 +30,7 @@ export type DiscoveryListing = {
   galleryPhotoUrls?: string[]
 }
 export type ListingDetails = DiscoveryListing & {
-  listerId: string; isOwner: boolean; status: string; metadata: ListingMetadataJson
+  publicationMode?: 'manual_review' | 'trusted_publisher'; listerId: string; isOwner: boolean; status: string; metadata: ListingMetadataJson
   hostBio: string | null; hostSince: string; hostAccountType: string; postedOn: string
 }
 export type DiscoveryPage = { listings: DiscoveryListing[]; nextCursor: DiscoveryCursor | null }
@@ -182,7 +182,7 @@ export async function getListingDetails(id: string, userId: string | null): Prom
   if (!listing) return null
   return {
     ...listing, listerId: row.lister_id, isOwner: row.lister_id === userId,
-    status: row.listing_status, metadata: metadataRecord(row.asset_metadata),
+    publicationMode: row.publication_mode === 'trusted_publisher' ? 'trusted_publisher' : 'manual_review', status: row.listing_status, metadata: metadataRecord(row.asset_metadata),
     hostBio: row.lister.bio, hostSince: row.lister.createdAt.toISOString(),
     hostAccountType: row.lister.account_type === 'organization' ? 'Organization' : 'Individual', postedOn: row.createdAt.toISOString(),
   }

@@ -4,6 +4,7 @@ import { requireUserId } from '@/lib/action-helpers'
 import { redirect } from 'next/navigation'
 import prisma from '@/lib/db'
 import { GalleryListingWorkspace } from '@/components/listing/GalleryListingWorkspace'
+import { directPublishingGranted, freePostingGranted } from '@/lib/listings/publishing-policy'
 
 export default async function CreateListingPage({
   searchParams,
@@ -17,13 +18,14 @@ export default async function CreateListingPage({
   // null and the wizard simply starts fresh.
   const [draft, account] = await Promise.all([
     typeof params.draft === 'string' ? getDraftForOwner(params.draft) : Promise.resolve(null),
-    prisma.user.findUnique({ where: { id: actorId }, select: { gallery_upload_allowed: true, gallery_permission_revision: true } }),
+    prisma.user.findUnique({ where: { id: actorId }, select: { gallery_upload_allowed: true, gallery_permission_revision: true, direct_publish_allowed: true, direct_publish_by: true, direct_publish_at: true, direct_publish_reason: true, listing_fee_exempt: true, listing_fee_exempt_by: true, listing_fee_exempt_at: true, listing_fee_exempt_reason: true } }),
   ])
 
   if (params.gallery === '1' || draft?.mediaSource === 'approved_gallery' || (!draft && account?.gallery_upload_allowed)) {
     return <GalleryListingWorkspace key={`${actorId}:${params.draft ?? 'new'}`} actorId={actorId} draft={draft}
-      allowed={Boolean(account?.gallery_upload_allowed)} permissionRevision={account?.gallery_permission_revision ?? 0} />
+      allowed={Boolean(account?.gallery_upload_allowed)} permissionRevision={account?.gallery_permission_revision ?? 0}
+      directPublishAllowed={directPublishingGranted(account)} freePostingAllowed={freePostingGranted(account)} />
   }
 
-  return <CreateListingWizard key={`${actorId}:${params.draft ?? 'new'}`} actorId={actorId} draft={draft} />
+  return <CreateListingWizard key={`${actorId}:${params.draft ?? 'new'}`} actorId={actorId} draft={draft} directPublishAllowed={directPublishingGranted(account)} freePostingAllowed={freePostingGranted(account)} />
 }

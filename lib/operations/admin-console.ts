@@ -14,14 +14,15 @@ import { paymentsEnabled } from '@/lib/payments/config'
 import { paystackEnvironment } from '@/lib/payments/providers/paystack/client'
 import { PUBLICATION_FEE_KOBO } from '@/lib/contracts/listing-payments'
 import { adminCommandSchema, adminDashboardSchema, adminDocumentSchema, adminListingSchema, adminUsersSchema, type AdminCommand, type AdminCommandReceipt } from '@/lib/contracts/admin'
+import { directPublishingGranted, freePostingGranted } from '@/lib/listings/publishing-policy'
 import { publicationFeeWaived } from '@/lib/listings/fee-policy'
 import { claimStorageObjects, prepareListingStorage } from '@/lib/storage-claims/service'
 import { moderateListingInTransaction, prepareDocumentApproval } from './service'
 
-const userSelect = { id: true, revision: true, email: true, username: true, staff_role: true, closed_at: true, suspended_at: true, gallery_upload_allowed: true, gallery_permission_revision: true, createdAt: true } satisfies Prisma.UserSelect
-const listingSelect = { id: true, revision: true, category: true, text_address: true, asset_metadata: true, listing_status: true, media_source: true, gallery_media: true, archived_at: true, createdAt: true,
+const userSelect = { id: true, revision: true, email: true, username: true, staff_role: true, closed_at: true, suspended_at: true, gallery_upload_allowed: true, gallery_permission_revision: true, listing_fee_exempt: true, listing_fee_exempt_by: true, listing_fee_exempt_at: true, listing_fee_exempt_reason: true, direct_publish_allowed: true, direct_publish_by: true, direct_publish_at: true, direct_publish_reason: true, createdAt: true } satisfies Prisma.UserSelect
+export const listingSelect = { id: true, revision: true, category: true, text_address: true, asset_metadata: true, listing_status: true, media_source: true, gallery_media: true, publication_mode: true, archived_at: true, createdAt: true,
   lister_id: true, document_path: true, video_path: true, fee_waived_at: true, fee_waived_by: true, fee_waiver_reason: true,
-  lister: { select: { id: true, username: true } }, documentReview: { select: { status: true, reviewed_by: true, approved_path: true, approved_digest: true } },
+  lister: { select: { id: true, username: true, listing_fee_exempt: true, listing_fee_exempt_by: true, listing_fee_exempt_at: true, listing_fee_exempt_reason: true, direct_publish_allowed: true, direct_publish_by: true, direct_publish_at: true, direct_publish_reason: true } }, documentReview: { select: { status: true, reviewed_by: true, approved_path: true, approved_digest: true } },
   media: { select: { status: true } }, verification: { select: { spatial_status: true } },
   payments: { where: { kind: 'listing_fee', status: 'succeeded' }, select: { amount_kobo: true, currency: true, user_id: true, provider_environment: true } },
 } satisfies Prisma.ListingSelect
@@ -30,9 +31,9 @@ type ListingRow = Prisma.ListingGetPayload<{ select: typeof listingSelect }>
 
 function userView(user: UserRow) {
   return { id: user.id, revision: user.revision, email: user.email, username: user.username, role: user.staff_role ?? 'member', suspended: Boolean(user.suspended_at), closed: Boolean(user.closed_at),
-    galleryAllowed: user.gallery_upload_allowed === true, galleryPermissionRevision: user.gallery_permission_revision ?? 0, createdAt: user.createdAt.toISOString() }
+    galleryAllowed: user.gallery_upload_allowed === true, freePostingAllowed: freePostingGranted(user), directPublishAllowed: directPublishingGranted(user), galleryPermissionRevision: user.gallery_permission_revision ?? 0, createdAt: user.createdAt.toISOString() }
 }
-async function listingViews(rows: ListingRow[]) {
+export async function listingViews(rows: ListingRow[]) {
   const objects = rows.length ? await prisma.storageObject.findMany({ where: { bucket: 'compliance-docs', state: 'available', path: { in: rows.flatMap(row => row.document_path ? [row.document_path] : []) } }, select: { path: true, owner_id: true, digest: true } }) : []
   const environment = paymentsEnabled() ? paystackEnvironment(process.env.PAYSTACK_SECRET_KEY?.trim() ?? '', process.env.PAYSTACK_ENVIRONMENT?.trim()) : null
   return rows.map(row => {
@@ -40,12 +41,19 @@ async function listingViews(rows: ListingRow[]) {
     const metadata = row.asset_metadata && typeof row.asset_metadata === 'object' && !Array.isArray(row.asset_metadata) ? row.asset_metadata : {}
     const photos = Array.isArray(row.gallery_media) ? row.gallery_media.filter(item => item && typeof item === 'object' && !Array.isArray(item) && item.kind === 'image').length : 0
     return adminListingSchema.parse({ id: row.id, revision: row.revision, category: row.category, title: typeof metadata.listingTitle === 'string' ? metadata.listingTitle.slice(0, 200) : `${row.category} listing`, address: row.text_address ?? '',
-      status: row.listing_status, source: row.media_source === 'approved_gallery' ? 'approved_gallery' : 'recorded', archived: Boolean(row.archived_at), createdAt: row.createdAt.toISOString(), lister: row.lister,
+      status: row.listing_status, publicationMode: row.publication_mode === 'trusted_publisher' ? 'trusted_publisher' : 'manual_review', source: row.media_source === 'approved_gallery' ? 'approved_gallery' : 'recorded', archived: Boolean(row.archived_at), createdAt: row.createdAt.toISOString(), lister: { id: row.lister.id, username: row.lister.username, freePostingAllowed: freePostingGranted(row.lister), directPublishAllowed: directPublishingGranted(row.lister) },
       document: { present: Boolean(row.document_path), status: row.documentReview?.status ?? 'pending', approvalMatches: Boolean(document?.digest && row.documentReview?.status === 'approved' && row.documentReview.reviewed_by && row.documentReview.approved_path === row.document_path && row.documentReview.approved_digest === document.digest) },
       media: { hasVideo: Boolean(row.video_path), photoCount: photos, status: row.media?.status ?? null }, locationStatus: row.media_source === 'approved_gallery' ? 'exempt_gallery' : row.verification?.spatial_status ?? null,
       fee: { waived: publicationFeeWaived(row), paid: Boolean(environment && row.payments.some(payment => payment.amount_kobo === BigInt(PUBLICATION_FEE_KOBO) && payment.currency === 'NGN' && payment.user_id === row.lister_id && payment.provider_environment === environment)) } })
   })
 }
+const memberLookupPermissions: StaffPermission[] = ['user:manage', 'gallery:manage', 'listing:waive', 'staff:manage']
+function canLookupMembers(permissions: readonly StaffPermission[]): boolean { return memberLookupPermissions.some(permission => permissions.includes(permission)) }
+async function requireMemberLookup(actorId: string): Promise<void> {
+  await assertOwnerAdminReady()
+  if (!canLookupMembers(permissionsForRole(await currentStaffRole(actorId)))) throw new ApiError(403, 'STAFF_REQUIRED', 'Member lookup permission is required.')
+}
+
 async function requirePermission(actorId: string, permission: StaffPermission): Promise<void> {
   await assertOwnerAdminReady()
   if (!await hasStaffPermission(actorId, permission)) throw new ApiError(403, 'STAFF_REQUIRED', 'This administrative permission is required.')
@@ -57,7 +65,7 @@ export async function getAdminDashboard(actorId: string) {
   const permissions = permissionsForRole(role)
   const [listings, users, inspections, audit] = await Promise.all([
     permissions.includes('listing:review') ? prisma.listing.findMany({ where: { listing_status: { not: 'draft' } }, select: listingSelect, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 50 }) : [],
-    permissions.includes('user:manage') ? prisma.user.findMany({ select: userSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 }) : [],
+    canLookupMembers(permissions) ? prisma.user.findMany({ select: userSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 }) : [],
     permissions.includes('inspection:review') ? prisma.booking.findMany({ where: { manual_inspection_status: 'pending' }, select: { id: true, revision: true, listing_id: true, manual_inspection_status: true, manual_inspection_evidence: true, manual_inspection_requested_by: true, manual_inspection_requested_at: true, seeker_id: true, lister_id: true, starts_at: true }, orderBy: { manual_inspection_requested_at: 'asc' }, take: 50 }) : [],
     permissions.includes('operations:read') ? prisma.adminAudit.findMany({ select: { id: true, action: true, target_type: true, target_id: true, reason: true, actor_id: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 }) : [],
   ])
@@ -66,9 +74,10 @@ export async function getAdminDashboard(actorId: string) {
     audit: audit.map(row => ({ id: row.id, action: row.action, targetType: row.target_type, targetId: row.target_id, reason: row.reason, actorId: row.actor_id, createdAt: row.createdAt.toISOString() })) })
 }
 export async function searchAdminUsers(actorId: string, query: string) {
-  await requirePermission(actorId, 'user:manage')
+  await requireMemberLookup(actorId)
   const value = query.trim().toLowerCase()
   const rows = await prisma.user.findMany({ where: value ? { OR: [{ email: { startsWith: value } }, { username: { startsWith: value } }, ...(/^[a-f0-9-]{36}$/i.test(value) ? [{ id: value }] : [])] } : {}, select: userSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 })
+  await requireMemberLookup(actorId)
   return adminUsersSchema.parse({ items: rows.map(userView) })
 }
 export async function getAdminListing(actorId: string, id: string) {
@@ -99,7 +108,8 @@ export async function getAdminDocument(actorId: string, id: string) {
 export function adminCommandPermission(command: AdminCommand): StaffPermission {
   if (command.operation === 'transfer_ownership') return 'owner:transfer'
   if (command.operation === 'change_role') return 'staff:manage'
-  if (command.operation === 'set_gallery_permission') return 'gallery:manage'
+  if (command.operation === 'set_gallery_permission' || command.operation === 'set_direct_publish_permission') return 'gallery:manage'
+  if (command.operation === 'set_free_posting_permission') return 'listing:waive'
   if (command.operation === 'suspend_user' || command.operation === 'restore_user') return 'user:manage'
   if (command.operation === 'review_manual_inspection') return 'inspection:review'
   if (command.operation === 'waive_fee' || command.operation === 'revoke_fee_waiver') return 'listing:waive'
@@ -108,14 +118,14 @@ export function adminCommandPermission(command: AdminCommand): StaffPermission {
 function changed(): never { throw new ApiError(409, 'ADMIN_TARGET_CHANGED', 'This record changed. Refresh its current state before creating another review.') }
 async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: AdminCommand): Promise<string> {
   const owner = await tx.user.findUnique({ where: { id: actorId }, select: { staff_role: true } })
-  const selfGallery = data.operation === 'set_gallery_permission' && actorId === data.targetId && owner?.staff_role === 'owner' && data.ownerOverride && data.reason.length >= 30
-  if (actorId === data.targetId && !selfGallery) throw new ApiError(403, 'INDEPENDENT_REVIEW_REQUIRED', 'Another administrator must change your own access. The owner may explicitly override only their own gallery privilege.')
+  const selfPrivilege = ['set_gallery_permission', 'set_free_posting_permission', 'set_direct_publish_permission'].includes(data.operation) && actorId === data.targetId && owner?.staff_role === 'owner' && 'ownerOverride' in data && data.ownerOverride && data.reason.length >= 30
+  if (actorId === data.targetId && !selfPrivilege) throw new ApiError(403, 'INDEPENDENT_REVIEW_REQUIRED', 'Another administrator must change your own access. The owner may explicitly acknowledge changes to their own publishing privileges.')
   if (!await lockRecord(tx, 'user', data.targetId)) throw new ApiError(404, 'NOT_FOUND', 'This member is unavailable.')
   const target = await tx.user.findUniqueOrThrow({ where: { id: data.targetId }, select: userSelect })
-  if (target.revision !== data.expectedRevision + (selfGallery ? 2 : 1)) changed()
-  if (target.staff_role === 'owner' && !selfGallery) throw new ApiError(409, 'OWNER_PROTECTED', 'The owner account is protected. Use explicit ownership transfer instead.')
+  if (target.revision !== data.expectedRevision + (selfPrivilege ? 2 : 1)) changed()
+  if (target.staff_role === 'owner' && !selfPrivilege) throw new ApiError(409, 'OWNER_PROTECTED', 'The owner account is protected. Use explicit ownership transfer instead.')
   if (target.closed_at) throw new ApiError(409, 'ACCOUNT_CLOSED', 'Closed accounts cannot receive new administrative privileges.')
-  const previous = { role: target.staff_role, suspended: Boolean(target.suspended_at), galleryAllowed: target.gallery_upload_allowed === true, galleryPermissionRevision: target.gallery_permission_revision ?? 0 }
+  const previous = { role: target.staff_role, suspended: Boolean(target.suspended_at), galleryAllowed: target.gallery_upload_allowed === true, galleryPermissionRevision: target.gallery_permission_revision ?? 0, freePostingAllowed: freePostingGranted(target), directPublishAllowed: directPublishingGranted(target) }
   if (data.operation === 'transfer_ownership') {
     if (!accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Choose an active account for ownership.')
     const owners = await tx.user.findMany({ where: { staff_role: 'owner' }, select: { id: true }, take: 2 })
@@ -129,20 +139,39 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
     if (data.allowed && !accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore access before approving gallery uploads.')
     if (previous.galleryAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { gallery_upload_allowed: data.allowed, gallery_permission_revision: previous.galleryPermissionRevision + 1 } })
     if (!data.allowed) await tx.listing.updateMany({ where: { lister_id: target.id, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', revision: { increment: 1 } } })
+  } else if (data.operation === 'set_free_posting_permission' || data.operation === 'set_direct_publish_permission') {
+    if (data.allowed && !accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore account access before enabling publishing privileges.')
+    const at = new Date()
+    if (data.operation === 'set_free_posting_permission') {
+      if (previous.freePostingAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { listing_fee_exempt: data.allowed, listing_fee_exempt_by: data.allowed ? actorId : null, listing_fee_exempt_at: data.allowed ? at : null, listing_fee_exempt_reason: data.allowed ? data.reason : null } })
+    } else {
+      if (previous.directPublishAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { direct_publish_allowed: data.allowed, direct_publish_by: data.allowed ? actorId : null, direct_publish_at: data.allowed ? at : null, direct_publish_reason: data.allowed ? data.reason : null } })
+      if (!data.allowed) await tx.listing.updateMany({ where: { lister_id: target.id, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
+    }
   } else if (data.operation === 'suspend_user') {
-    await tx.user.update({ where: { id: target.id }, data: { suspended_at: new Date(), suspension_reason: data.reason, gallery_upload_allowed: false, gallery_permission_revision: previous.galleryPermissionRevision + 1 } })
+    await tx.user.update({ where: { id: target.id }, data: { suspended_at: new Date(), suspension_reason: data.reason, gallery_upload_allowed: false, gallery_permission_revision: previous.galleryPermissionRevision + 1, listing_fee_exempt: false, listing_fee_exempt_by: null, listing_fee_exempt_at: null, listing_fee_exempt_reason: null, direct_publish_allowed: false, direct_publish_by: null, direct_publish_at: null, direct_publish_reason: null } })
     await tx.authSession.updateMany({ where: { user_id: target.id, OR: [{ revoked_at: null }, { revoked_at: { isSet: false } }] }, data: { revoked_at: new Date() } })
     await revokeAccountPush(tx, target.id)
     await tx.listing.updateMany({ where: { lister_id: target.id, listing_status: 'active' }, data: { listing_status: 'suspended', revision: { increment: 1 } } })
   } else if (data.operation === 'restore_user') {
     await tx.user.update({ where: { id: target.id }, data: { suspended_at: null, suspension_reason: null } })
   } else throw new ApiError(400, 'INVALID_REQUEST', 'Choose a user access action.')
-  const audit = await tx.adminAudit.create({ data: { actor_id: actorId, action: data.operation, target_type: 'user', target_id: target.id, reason: data.reason, metadata: { previous, ...(data.operation === 'set_gallery_permission' ? { allowed: data.allowed } : {}), ...(data.operation === 'change_role' ? { role: data.role } : {}), ownerOverride: selfGallery, moneyMoved: false } } })
+  const audit = await tx.adminAudit.create({ data: { actor_id: actorId, action: data.operation, target_type: 'user', target_id: target.id, reason: data.reason, metadata: { previous, ...(['set_gallery_permission', 'set_free_posting_permission', 'set_direct_publish_permission'].includes(data.operation) && 'allowed' in data ? { allowed: data.allowed } : {}), ...(data.operation === 'change_role' ? { role: data.role } : {}), ownerOverride: selfPrivilege, moneyMoved: false } } })
   if (data.operation === 'set_gallery_permission' && previous.galleryAllowed !== data.allowed) {
     await tx.notification.createMany({ data: [{ user_id: target.id, kind: 'gallery_permission',
       title: data.allowed ? 'Gallery uploads approved' : 'Gallery upload permission removed',
-      body: data.allowed ? 'An administrator approved gallery photos and videos for your account. Open Create Listing to choose your files. Each listing still requires human review.' : 'Gallery uploads are no longer approved. Your drafts and files are retained; affected published gallery listings need review before they can appear again.',
+      body: data.allowed ? 'An administrator approved gallery photos and videos for your account. Open Create Listing to choose your files. Publication follows your separate review and fee settings.' : 'Gallery uploads are no longer approved. Your drafts and files are retained; affected published gallery listings need review before they can appear again.',
       href: data.allowed ? '/marketplace/listing/create?gallery=1' : '/marketplace/listing',
+    }] })
+  }
+  if (data.operation === 'set_free_posting_permission' || data.operation === 'set_direct_publish_permission') {
+    const free = data.operation === 'set_free_posting_permission'
+    const before = free ? previous.freePostingAllowed : previous.directPublishAllowed
+    if (before !== data.allowed) await tx.notification.createMany({ data: [{ user_id: target.id, kind: 'publishing_permission',
+      title: free ? (data.allowed ? 'Free posting enabled' : 'Free posting disabled') : (data.allowed ? 'Direct publishing enabled' : 'Direct publishing disabled'),
+      body: free ? (data.allowed ? 'Your new listing submissions can receive a publication-fee waiver. This is separate from upload permission and listing review.' : 'New submissions require their normal publication fee. Existing recorded waivers are retained.')
+        : (data.allowed ? 'Complete eligible listings can publish without manual review. File, media and fee checks still apply.' : 'Direct publication is disabled. Previously unchecked live listings return to the review queue.'),
+      href: '/marketplace/listing',
     }] })
   }
   return audit.id
@@ -172,7 +201,7 @@ export async function executeAdminCommand(actorId: string, input: unknown): Prom
     if (receipt) return receipt
     let auditId: string
     if (data.operation === 'review_manual_inspection') auditId = await inspectionCommand(tx, actorId, data)
-    else if (['change_role', 'set_gallery_permission', 'suspend_user', 'restore_user', 'transfer_ownership'].includes(data.operation)) auditId = await userCommand(tx, actorId, data)
+    else if (['change_role', 'set_gallery_permission', 'set_free_posting_permission', 'set_direct_publish_permission', 'suspend_user', 'restore_user', 'transfer_ownership'].includes(data.operation)) auditId = await userCommand(tx, actorId, data)
     else auditId = await moderateListingInTransaction(tx, actorId, data.targetId, data.operation === 'suspend_listing' ? 'suspend' : data.operation as 'approve_document' | 'reject_document' | 'publish' | 'waive_fee' | 'revoke_fee_waiver', data.reason, { expectedRevision: data.expectedRevision, ownerOverride: 'ownerOverride' in data && data.ownerOverride, document })
     await recordMutation(tx, command, auditId)
     return auditId

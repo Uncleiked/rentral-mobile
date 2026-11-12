@@ -18,6 +18,16 @@ model User {
   suspension_reason String?
   gallery_upload_allowed Boolean? @default(false)
   gallery_permission_revision Int? @default(0)
+
+  // Separate, audited publication privileges; legacy accounts default to disabled.
+  listing_fee_exempt Boolean? @default(false)
+  listing_fee_exempt_by String?
+  listing_fee_exempt_at DateTime?
+  listing_fee_exempt_reason String?
+  direct_publish_allowed Boolean? @default(false)
+  direct_publish_by String?
+  direct_publish_at DateTime?
+  direct_publish_reason String?
   closed_at DateTime?
   push_consent_version Int? @default(0)
   analytics_consent Boolean? @default(false)
@@ -98,6 +108,9 @@ model Listing {
   fee_waived_at DateTime?
   fee_waived_by String?
   fee_waiver_reason String?
+  publication_mode String? // manual_review | trusted_publisher
+  direct_publish_proof Json? // factual grant/document binding; never human review
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

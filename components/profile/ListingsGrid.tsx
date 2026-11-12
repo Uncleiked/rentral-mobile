@@ -16,14 +16,14 @@ export function ListingsGrid({ listings, owner = false }: ListingsGridProps) {
         </div>
         <p className="text-sm font-semibold text-text-primary">No listings yet</p>
         <p className="text-sm text-text-muted max-w-xs">
-          Listings will appear here once this profile posts its first verified asset.
+          {owner ? 'Save a draft or create a listing to manage it here.' : 'Public listings will appear here when they are available.'}
         </p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 gap-4">
       {listings.map((listing) => (
         <ListingCard key={listing.id} listing={listing} owner={owner} />
       ))}

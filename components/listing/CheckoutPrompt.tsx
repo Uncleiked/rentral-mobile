@@ -8,7 +8,7 @@ import { assertWizardCurrent, executeWebListingCommand } from '@/lib/listings/ca
 
 type Phase = 'idle' | 'uploading' | 'saving'
 
-export function CheckoutPrompt({ actorId }: { actorId: string }) {
+export function CheckoutPrompt({ actorId, directPublishAllowed = false, freePostingAllowed = false }: { actorId: string; directPublishAllowed?: boolean; freePostingAllowed?: boolean }) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
   const active = useRef(true)
@@ -75,14 +75,14 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
           Submit your listing
         </h2>
         <p className="text-sm text-text-secondary">
-          Your listing will appear in the marketplace after verification is complete.
+          {directPublishAllowed ? 'Direct publishing is enabled. Your listing can go live when media processing and publication requirements are complete.' : 'Your listing is saved to Your Listings while an administrator reviews it.'}
         </p>
       </div>
 
       <div className="rounded-2xl border border-border-subtle bg-surface-card px-6 py-6 min-w-0 max-w-full wrap-anywhere text-text-primary">
         <div className="flex items-center justify-between border-b border-border-subtle pb-4 min-w-0 flex-wrap gap-3">
           <span className="text-sm font-medium text-text-secondary">Publication status</span>
-          <span className="text-sm font-semibold text-text-primary">Pending review</span>
+          <span className="text-sm font-semibold text-text-primary">{directPublishAllowed ? 'Direct publishing enabled' : 'Review required'}</span>
         </div>
 
         <div className="mt-4 flex items-center gap-3">
@@ -91,7 +91,7 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
           </span>
           <div>
             <p className="text-sm font-semibold text-text-primary">Recording location checked</p>
-            <p className="mt-1 text-xs text-text-muted">Submission rechecks your address against the locked video location. Document review and the publication fee remain separate.</p>
+            <p className="mt-1 text-xs text-text-muted">Submission rechecks your address against the locked video location. {directPublishAllowed ? 'Your direct publishing permission applies.' : 'Human review remains required.'} {freePostingAllowed ? 'Free posting is enabled for your account.' : 'The publication fee applies unless waived by an administrator.'}</p>
           </div>
         </div>
 
@@ -114,7 +114,7 @@ export function CheckoutPrompt({ actorId }: { actorId: string }) {
           disabled={phase !== 'idle'}
           className="flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg transition-all hover:bg-accent-hover active:scale-98 disabled:cursor-not-allowed disabled:opacity-70 min-h-11 max-w-full whitespace-normal break-words"
         >
-          {phase === 'uploading' ? 'Uploading walkthrough...' : phase === 'saving' ? 'Saving listing...' : 'Submit for Review'}
+          {phase === 'uploading' ? 'Uploading walkthrough...' : phase === 'saving' ? 'Saving listing...' : directPublishAllowed ? 'Publish listing' : 'Submit for Review'}
         </button>
       </div>
     </div>

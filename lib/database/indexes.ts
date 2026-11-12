@@ -138,6 +138,8 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
     closed_at: { bsonType: ['date', 'null'] },
     suspended_at: nullableDate, suspension_reason: { bsonType: ['string', 'null'], maxLength: 2000 },
     gallery_upload_allowed: { bsonType: ['bool', 'null'] },
+    listing_fee_exempt: { bsonType: ['bool', 'null'] }, listing_fee_exempt_by: { bsonType: ['string', 'null'] }, listing_fee_exempt_at: nullableDate, listing_fee_exempt_reason: { bsonType: ['string', 'null'], maxLength: 2000 },
+    direct_publish_allowed: { bsonType: ['bool', 'null'] }, direct_publish_by: { bsonType: ['string', 'null'] }, direct_publish_at: nullableDate, direct_publish_reason: { bsonType: ['string', 'null'], maxLength: 2000 },
     gallery_permission_revision: { bsonType: ['int', 'long', 'null'], minimum: 0 },
     push_consent_version: { bsonType: ['int', 'long', 'null'], minimum: 0 },
     analytics_consent: { bsonType: ['bool', 'null'] }, analytics_consent_at: { bsonType: ['date', 'null'] },
@@ -150,6 +152,7 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
     lister_id: id, category: { enum: ['house', 'car', 'boat'] }, listing_status: { enum: ['draft', 'pending_verification', 'active', 'suspended'] },
     base_rent_amount: { bsonType: ['double', 'int', 'long', 'null'], minimum: 1, maximum: 9999999999 },
     media_source: { enum: ['recorded', 'approved_gallery', null] },
+    publication_mode: { enum: ['manual_review', 'trusted_publisher', null] }, direct_publish_proof: { bsonType: ['object', 'null'] },
     gallery_permission_revision: { bsonType: ['int', 'long', 'null'], minimum: 0 },
     gallery_media: { bsonType: ['array', 'null'], maxItems: 11, items: {
       bsonType: 'object', required: ['kind', 'path', 'objectId', 'digest', 'sizeBytes', 'contentType'], additionalProperties: false,

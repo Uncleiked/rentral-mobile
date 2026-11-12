@@ -58,3 +58,9 @@ it('refuses invalid instructions before running a command or invalidating pages'
   expect(mocks.execute).not.toHaveBeenCalled()
   expect(mocks.revalidate).not.toHaveBeenCalled()
 })
+
+it.each(['set_free_posting_permission', 'set_direct_publish_permission'])('refreshes owner submission and inventory screens after %s commits', async operation => {
+  expect((await POST(request({ ...command, operation }))).status).toBe(200)
+  for (const path of ['/admin', '/marketplace/listing/create', '/marketplace/listing', '/marketplace/notifications', '/marketplace']) expect(mocks.revalidate).toHaveBeenCalledWith(path)
+  expect(mocks.revalidate).toHaveBeenCalledWith('/marketplace/listing/[id]', 'page')
+})

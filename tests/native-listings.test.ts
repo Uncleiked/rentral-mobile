@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
-const mocks = vi.hoisted(() => ({ identity: vi.fn(), account: vi.fn(), findMany: vi.fn(), transaction: vi.fn(), location: vi.fn(), verification: vi.fn(), create: vi.fn(), update: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(), readCapture: vi.fn(), bindCapture: vi.fn(), geocode: vi.fn() }))
+const mocks = vi.hoisted(() => ({ identity: vi.fn(), account: vi.fn(), findMany: vi.fn(), saved: vi.fn(), transaction: vi.fn(), location: vi.fn(), verification: vi.fn(), create: vi.fn(), update: vi.fn(), prepareStorage: vi.fn(), claimStorage: vi.fn(), readCapture: vi.fn(), bindCapture: vi.fn(), geocode: vi.fn() }))
+vi.mock('@/lib/listings/publishing', () => ({ applySubmissionPublishing: vi.fn(async () => undefined) }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: mocks.identity }))
 vi.mock('@/lib/accounts/bootstrap', () => ({ ensureAccountHandle: mocks.account }))
 vi.mock('@/lib/action-helpers', () => ({ revalidateProfilePaths: vi.fn(), requireUserId: vi.fn() }))
-vi.mock('@/lib/db', () => ({ default: { listing: { findMany: mocks.findMany }, $transaction: mocks.transaction } }))
+vi.mock('@/lib/db', () => ({ default: { listing: { findMany: mocks.findMany, findFirst: mocks.saved }, $transaction: mocks.transaction } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepareStorage, claimStorageObjects: mocks.claimStorage }))
 vi.mock('@/lib/listings/capture', () => ({ readCaptureForSubmission: mocks.readCapture, bindCaptureToListing: mocks.bindCapture }))
@@ -37,6 +38,7 @@ function post(body: unknown) {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.stubEnv('MUX_ENABLED', 'false')
+  mocks.saved.mockResolvedValue({ listing_status: 'pending_verification' })
   mocks.identity.mockResolvedValue({ userId: 'actor-1', mode: 'bearer' })
   mocks.prepareStorage.mockResolvedValue([storedVideo])
   mocks.claimStorage.mockResolvedValue(undefined)
@@ -128,4 +130,11 @@ describe('native owner listing transport', () => {
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ success: false, code: 'SAVE_UNCERTAIN' })
   })
+})
+
+it('returns the actual saved publication state when a trusted submission is already live', async () => {
+  mocks.saved.mockResolvedValue({ listing_status: 'active' })
+  const response = await POST(post({ mode: 'submit', listing }))
+  expect(response.status).toBe(201)
+  expect(await response.json()).toMatchObject({ data: { id: listingId, status: 'active' } })
 })

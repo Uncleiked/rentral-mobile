@@ -9,7 +9,7 @@ export class MutationConflictError extends Error {
   constructor() { super('This request identifier belongs to different instructions. Reconcile the original request before starting another.'); this.name = 'MutationConflictError' }
 }
 
-type Scope = 'listing_submit' | 'listing_draft_save' | 'booking_create' | 'admin_command' | 'manual_inspection_request' | 'organization_submit' | 'organization_review'
+type Scope = 'listing_publish' | 'listing_submit' | 'listing_draft_save' | 'booking_create' | 'admin_command' | 'manual_inspection_request' | 'organization_submit' | 'organization_review'
 export type MutationCommand = Readonly<{ id: string; actor_id: string; scope: Scope; client_id: string; input_hash: string }>
 
 function canonical(value: unknown): string {

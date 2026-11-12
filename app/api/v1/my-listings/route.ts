@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import prisma from '@/lib/db'
 import { requireApiIdentity } from '@/lib/api/auth'
 import { ApiError, apiFailure, apiSearchParams, apiSuccess, readApiJson } from '@/lib/api/http'
 import { ensureAccountHandle } from '@/lib/accounts/bootstrap'
@@ -33,6 +34,8 @@ export async function POST(request: Request): Promise<Response> {
     }
     const result = await saveListingForUser(identity.userId, input.listing)
     if (!result.success) throw new ApiError(result.status ?? (result.uncertain ? 503 : result.code ? 409 : 400), result.code ?? (result.uncertain ? 'SAVE_UNCERTAIN' : 'LISTING_REJECTED'), result.error)
-    return apiSuccess({ id: result.listingId, status: 'pending_verification' }, 201)
+    const saved = await prisma.listing.findFirst({ where: { id: result.listingId, lister_id: identity.userId }, select: { listing_status: true } })
+    if (!saved) throw new ApiError(409, 'LISTING_UNAVAILABLE', 'The saved listing is unavailable. Refresh Your Listings.')
+    return apiSuccess({ id: result.listingId, status: saved.listing_status }, 201)
   } catch (error) { return apiFailure(error, 'my-listings') }
 }

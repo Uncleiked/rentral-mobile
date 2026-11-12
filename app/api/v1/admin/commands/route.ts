@@ -16,12 +16,14 @@ export async function POST(request: Request): Promise<Response> {
     // or cause a client to send a new grant after a successful decision.
     try {
       revalidatePath('/admin')
-      if (data.operation === 'set_gallery_permission') {
+      if (['set_gallery_permission', 'set_free_posting_permission', 'set_direct_publish_permission', 'suspend_user', 'restore_user'].includes(data.operation)) {
         revalidatePath('/marketplace/listing/create')
         revalidatePath('/marketplace/listing')
         revalidatePath('/marketplace/notifications')
         revalidatePath('/marketplace')
       }
+      revalidatePath('/marketplace/listing/[id]', 'page')
+      revalidatePath('/marketplace/profile/[username]', 'page')
     } catch {
       console.warn('[admin-command] Decision saved; affected pages may need a refresh.')
     }

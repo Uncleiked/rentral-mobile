@@ -1,5 +1,52 @@
 ## Progress Tracker
 
+## Admin publishing and draft workflow extension - 2026-11-12
+
+Implemented independent administrator grants for gallery uploads, free posting and
+trusted direct publishing. Each has current role checks, audited reasons, revision
+control and original-command receipts. Defaults remain unprivileged; account
+suspension clears grants. Revoking direct publication returns eligible live/pending
+direct inventory to manual review without restoring suspended/archived records.
+
+Admin listing search now spans submitted records server-side by username (including
+@handle), email, title, address or ID; filters/category/source/fee/archive/sort,
+25-row cursor pages, member-to-listings navigation and scoped CSV exports added.
+Exports cap at1,000 with explicit truncation and omit private identity/docs/GPS/bank
+fields. Private immutable photo/video previews have60-second signed links. Current
+manual publication still requires exact human document approval. Review queues
+exclude trusted submissions waiting on fees/media; All submitted still shows them.
+Recent dashboard metrics explicitly describe their50-record sample.
+
+All admitted users can save incomplete private drafts after selecting a category.
+Creation/gallery pages expose top Save draft and Save and exit, clear save/dirty/
+recovery feedback, and correct owner resume links. Your listings separates Drafts,
+Submitted, Live, Needs attention and Archived with search/counts. Submission keeps
+the same saved row and returns its actual status. Corrected custom titles, gallery
+posters and saved gallery house drafts falsely appearing dirty (boat-only captain
+metadata had survived local defaults but was removed by secure category recovery).
+
+Trusted publishing bypasses human approval while retaining current admission,
+authority-document/media bindings, capture/address evidence or explicit gallery
+exemption, video readiness and exact real fee/waiver checks. No fake DocumentReview
+or payment is created. Future free-posting grants stamp waivers only on new validated
+submissions. Owner Finish publishing has current-grant/revision checks and receipt
+recovery. Public detail labels distinguish permission-based publication.
+
+Verification: npm lint and typecheck PASS; full isolated tests2,078PASS,113SKIP
+across6opt-in integration files. Admin Chrome22workflows across4viewports verified
+(87/88initialpass;1fixturehotreload interruption plus finalviewportcases8/8rerun).
+Owner Chrome8workflows across4viewports32/32PASS, including partial save at all4
+wizardstages, gallery save/reload state and directpublish lost-response readback.
+Final production build verification is recorded in admin-workflow-review.md.
+
+Docker daemon unavailable: owned Mongo integration assertions remain skipped,
+including6newgrant/payment/media scenarios. No hosted DB/env/provider/setup/reset/
+index/deployment changes. Local Prisma6.19.3 client regenerated; briefly stopped
+only this repository's verified DLL-holding Next dev process, then restored
+localhost:3000. Source and context are saved locally. See admin-publishing-workflow.md
+for operations and test commands; deployment is separate.
+
+
 ## Website consistency and responsive pass - 2026-11-12
 
 Corrected the conflicting global light component palette that caused the

@@ -396,3 +396,12 @@ Phase 4 — Settlement: 3 Core Features (Handshake UI, ST_DWithin Logic, Realtim
 Phase 5 — Continuous Lifecycle: 3 Core Features (Year 2+ CRON Renewals, Gemini Move-Out Unfreezing, PostHog Dashboards)
 
 Total Architectural Milestones: 18 distinct, highly testable engineering phases.
+
+## Admin and owner workflow extension - 2026-11-12
+
+Implemented the accepted independent gallery/free/direct grants, global submitted
+listing search/filter/export and protected media review, plus private partial-draft
+save/resume and owner trusted-publishing completion. See
+admin-publishing-workflow.md for final decisions and verification limits. Human
+approval remains the default; selected publishers can bypass it while retaining
+all factual asset, admission and fee checks. Hosted data remains unchanged.

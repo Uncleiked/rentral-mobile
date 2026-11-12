@@ -12,9 +12,13 @@ export function decisionsFor(selection: AdminSelection, permissions: readonly st
     ...(can('listing:waive') ? [{ value: 'waive_fee', label: 'Waive publication fee' }, { value: 'revoke_fee_waiver', label: 'Revoke fee waiver' }] : []),
   ]
   if (selection.value.closed) return []
-  if (selection.value.id === actorId || selection.value.role === 'owner') return selection.value.id === actorId && owner && can('gallery:manage') ? [{ value: 'set_gallery_permission', label: 'Gallery upload permission' }] : []
+  if (selection.value.id === actorId || selection.value.role === 'owner') return selection.value.id === actorId && owner ? [
+    ...(can('gallery:manage') ? [{ value: 'set_gallery_permission', label: 'Gallery upload permission' }, { value: 'set_direct_publish_permission', label: 'Direct publication permission' }] : []),
+    ...(can('listing:waive') ? [{ value: 'set_free_posting_permission', label: 'Free posting permission' }] : []),
+  ] : []
   return [
-    ...(can('gallery:manage') && !selection.value.suspended ? [{ value: 'set_gallery_permission', label: 'Gallery upload permission' }] : []),
+    ...(can('gallery:manage') && !selection.value.suspended ? [{ value: 'set_gallery_permission', label: 'Gallery upload permission' }, { value: 'set_direct_publish_permission', label: 'Direct publication permission' }] : []),
+    ...(can('listing:waive') && !selection.value.suspended ? [{ value: 'set_free_posting_permission', label: 'Free posting permission' }] : []),
     ...(can('staff:manage') && !selection.value.suspended ? [{ value: 'change_role', label: 'Change staff role' }] : []),
     ...(can('user:manage') ? [{ value: selection.value.suspended ? 'restore_user' : 'suspend_user', label: selection.value.suspended ? 'Restore suspended account' : 'Suspend account' }] : []),
     ...(can('owner:transfer') && !selection.value.suspended ? [{ value: 'transfer_ownership', label: 'Transfer platform ownership to this account' }] : []),
@@ -24,7 +28,7 @@ export function decisionsFor(selection: AdminSelection, permissions: readonly st
 export function adminTabs(permissions: readonly string[]): { id: AdminTab; label: string }[] {
   return [
     ...(permissions.includes('listing:review') || permissions.includes('listing:waive') ? [{ id: 'listings' as const, label: 'Listings' }] : []),
-    ...(permissions.some(permission => ['user:manage', 'staff:manage', 'gallery:manage'].includes(permission)) ? [{ id: 'members' as const, label: 'Members & permissions' }] : []),
+    ...(permissions.some(permission => ['user:manage', 'staff:manage', 'gallery:manage', 'listing:waive'].includes(permission)) ? [{ id: 'members' as const, label: 'Members & permissions' }] : []),
     ...(permissions.includes('user:manage') ? [{ id: 'organizations' as const, label: 'Organizations' }] : []),
     ...(permissions.includes('inspection:review') ? [{ id: 'inspections' as const, label: 'Inspections' }] : []),
     ...(permissions.includes('operations:read') ? [{ id: 'audit' as const, label: 'Audit trail' }] : []),

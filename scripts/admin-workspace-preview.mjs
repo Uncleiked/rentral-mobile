@@ -16,6 +16,8 @@ if (dirname(resolve(fixture)) !== resolve(parent)) throw new Error('Unexpected f
 writeFileSync(join(fixture, 'index.html'), '<!doctype html><html lang="en" style="--font-sans:Inter,system-ui,sans-serif"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Isolated administration UI verification</title></head><body style="background:var(--color-background-app);font-family:var(--font-sans)"><div id="root"></div><script type="module" src="/preview.jsx"></script></body></html>')
 const link = join(fixture, 'mock-link.jsx')
 writeFileSync(link, 'import React from "react"; export default function Link(props) { return React.createElement("a", props) }')
+const image = join(fixture, 'mock-image.jsx')
+writeFileSync(image, 'import React from "react"; export default function Image({ unoptimized, priority, fill, ...props }) { return React.createElement("img", props) }')
 const source = root.replaceAll('\\', '/')
 writeFileSync(join(fixture, 'fonts.css'), [
   ['400', '400Regular', 'Inter_400Regular.ttf'], ['500', '500Medium', 'Inter_500Medium.ttf'],
@@ -32,8 +34,8 @@ createRoot(document.getElementById('root')).render(<main style={{maxWidth:1440, 
 const server = await createServer({
   configFile: false, cacheDir: join(fixture, '.vite'), root: fixture, envDir: false, envPrefix: 'RENTRAL_UNUSED_UI_PREVIEW_', logLevel: 'warn',
   esbuild: { jsx: 'automatic' },
-  resolve: { alias: [{ find: 'next/link', replacement: link }, { find: '@', replacement: root }] },
-  server: { host: '127.0.0.1', port: 4184, strictPort: true, fs: { allow: [root] } },
+  resolve: { alias: [{ find: 'next/link', replacement: link }, { find: 'next/image', replacement: image }, { find: '@', replacement: root }] },
+  server: { host: '127.0.0.1', port: 4184, strictPort: true, hmr: false, fs: { allow: [root] } },
 })
 await server.listen()
 console.log('Isolated admin presentation fixture: http://127.0.0.1:4184 (browser-intercepted synthetic records only)')

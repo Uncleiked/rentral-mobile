@@ -13,22 +13,23 @@ import { clearWebListingCommand, normalizeWebListingCommand, persistWebListingCo
 import { folderIdFromPath, videoExtensionForMime } from '@/lib/storage'
 import { clearGalleryRecovery, galleryFileFingerprint, persistGalleryRecovery, readGalleryRecovery, readGalleryUpload, reselectedGalleryFileMatches, type GalleryBrowserRecovery, type GalleryUploadMarker } from '@/lib/listings/gallery-upload-recovery'
 import type { DraftPayload } from '@/store/useRentralStore'
+import { galleryDraftSnapshot } from '@/lib/listings/gallery-draft-state'
 
 type Photo = { name: string; path: string | null; file: File | null; preview: string | null }
-type Props = { actorId: string; allowed: boolean; permissionRevision: number; draft: DraftPayload | null }
+type Props = { actorId: string; allowed: boolean; permissionRevision: number; draft: DraftPayload | null; directPublishAllowed?: boolean; freePostingAllowed?: boolean }
 const button = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm font-semibold disabled:opacity-50'
 const card = 'min-w-0 rounded-2xl border border-border-subtle bg-surface-card p-5 sm:p-6'
 const messageFor = (error: unknown) => error instanceof Error ? error.message : 'This result could not be confirmed. Keep the original request and check its status.'
 
 function defaults(category: ListingCategory, draft: DraftPayload | null): ListingFieldValues {
-  const values: ListingFieldValues = { address: draft?.address ?? '', basePrice: draft?.basePrice ?? '', rentalIntent: 'rent', hostCapacity: 'owner', pricePeriod: category === 'house' ? 'year' : 'day', hasCaptain: false }
+  const values: ListingFieldValues = { address: draft?.address ?? '', basePrice: draft?.basePrice ?? '', rentalIntent: 'rent', hostCapacity: 'owner', pricePeriod: category === 'house' ? 'year' : 'day', ...(category === 'boat' ? { hasCaptain: false } : {}) }
   for (const [key, value] of Object.entries(draft?.metadata ?? {})) {
     if (Object.hasOwn(LISTING_METADATA_SCHEMAS[category].shape, key) && (typeof value === 'string' || typeof value === 'boolean')) values[key] = value
   }
   return values
 }
 
-export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, draft }: Props) {
+export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, draft, directPublishAllowed = false, freePostingAllowed = false }: Props) {
   const router = useRouter()
   const [category, setCategory] = useState<ListingCategory>(draft?.category ?? 'house')
   const [photos, setPhotos] = useState<Photo[]>((draft?.galleryPhotos ?? []).map(path => ({ path, file: null, name: path.split('/').at(-1) ?? 'Saved photo', preview: null })))
@@ -41,6 +42,8 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
   const [draftId, setDraftId] = useState<string | null>(draft?.id ?? null)
   const [revision, setRevision] = useState<number | null>(draft?.revision ?? null)
   const [folderId, setFolderId] = useState(() => folderIdFromPath(draft?.videoPath ?? draft?.galleryPhotos?.[0] ?? draft?.documentPath ?? null) ?? crypto.randomUUID())
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const savedSnapshot = useRef(galleryDraftSnapshot({ category: draft?.category ?? 'house', form: defaults(draft?.category ?? 'house', draft), photos: (draft?.galleryPhotos ?? []).map(path => ({ path, name: '' })), videoPath: draft?.videoPath ?? null, videoName: null, documentPath: draft?.documentPath ?? null, documentName: null }))
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [pending, setPending] = useState<WebListingCommand | null>(null)
@@ -79,6 +82,7 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
         }
       }
       catch { setRecoveryError(true); setMessage('Your saved listing instruction could not be read. Review Your Listings before clearing browser site storage.') }
+      if (savedRecovery.current) setHasUnsavedChanges(galleryDraftSnapshot(savedRecovery.current) !== savedSnapshot.current)
       setHydrated(true)
     })
     return () => { current = false; active.current = false; for (const url of previews.current) URL.revokeObjectURL(url); previews.current = [] }
@@ -90,16 +94,24 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
     if (!hydrated || otherWorkspace || recoveryError) return
     return subscribe({ formState: { values: true }, callback: ({ values }) => {
       if (sending.current || currentUpload.current || !savedRecovery.current || !active.current) return
-      try { savedRecovery.current = persistGalleryRecovery({ ...savedRecovery.current, form: values }) }
+      try { savedRecovery.current = persistGalleryRecovery({ ...savedRecovery.current, form: values }); setHasUnsavedChanges(galleryDraftSnapshot(savedRecovery.current) !== savedSnapshot.current) }
       catch (error) { setRecoveryError(true); setMessage(messageFor(error)) }
     } })
   }, [hydrated, otherWorkspace, recoveryError, subscribe])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges && !pending && !pendingUpload) return
+    const preventLoss = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', preventLoss)
+    return () => window.removeEventListener('beforeunload', preventLoss)
+  }, [hasUnsavedChanges, pending, pendingUpload])
 
   function remember(patch: Partial<GalleryBrowserRecovery>, expectedPendingPath?: string): GalleryBrowserRecovery {
     stillCurrent()
     if (!savedRecovery.current) throw new Error('Open the saved gallery workspace before changing its recovery.')
     const saved = persistGalleryRecovery({ ...savedRecovery.current, form: getValues(), ...patch }, expectedPendingPath)
     savedRecovery.current = saved
+    setHasUnsavedChanges(galleryDraftSnapshot(saved) !== savedSnapshot.current)
     return saved
   }
 
@@ -228,12 +240,13 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
     setVideo(null); setVideoPath(row.videoPath); setDocument(null); setDocumentPath(row.documentPath)
     setVideoName(null); setDocumentName(null)
     const form = defaults(row.category, { ...row, metadata: row.metadata })
+    savedSnapshot.current = galleryDraftSnapshot({ category: row.category, form, photos: (row.galleryPhotos ?? []).map(path => ({ path, name: '' })), videoPath: row.videoPath, videoName: null, documentPath: row.documentPath, documentName: null })
     remember({ draftId: row.id, revision: row.revision, category: row.category, form, photos: (row.galleryPhotos ?? []).map(path => ({ path, name: path.split('/').at(-1) ?? 'Saved photo' })),
       videoPath: row.videoPath, videoName: null, documentPath: row.documentPath, documentName: null, pendingUpload: null, needsRefresh: false })
     reset(form)
     setNeedsRefresh(false)
   }
-  async function send(command: WebListingCommand): Promise<void> {
+  async function send(command: WebListingCommand, exitAfter = false): Promise<void> {
     setCanRetry(false)
     let confirmed = false
     try {
@@ -242,8 +255,9 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
       confirmed = true; stillCurrent(); remember({ draftId: result.id, needsRefresh: true }); clearWebListingCommand(actorId, command.listing.clientId)
       if (!active.current) return
       setPending(null); setCanRetry(false); setDraftId(result.id); setNeedsRefresh(true)
-      if (command.mode === 'submit') { clearGalleryRecovery(actorId); router.push(`/marketplace/listing/${result.id}`); return }
+      if (command.mode === 'submit') { clearGalleryRecovery(actorId); router.push(`/marketplace/listing?submitted=${encodeURIComponent(result.id)}`); return }
       await refreshSaved(result.id)
+      if (exitAfter) { router.push(`/marketplace/listing?status=draft&saved=${encodeURIComponent(result.id)}`); return }
       if (active.current) setMessage('Gallery draft saved. You can safely return to it from Your Listings.')
     } catch (error) {
       if (confirmed) throw new Error('The listing was saved, but its latest details could not refresh. Refresh the saved record before editing further.')
@@ -252,7 +266,7 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
       throw error
     }
   }
-  async function save(mode: 'draft' | 'submit'): Promise<void> {
+  async function save(mode: 'draft' | 'submit', exitAfter = false): Promise<void> {
     if (!allowed || pending || currentUpload.current || recoveryError || needsRefresh || otherWorkspace) return
     clearErrors()
     const values = getValues()
@@ -285,7 +299,7 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
       category, mediaSource: 'approved_gallery', galleryPhotos: uploadedPhotos.map(photo => photo.path), metadata, address: String(address ?? ''), basePrice: String(basePrice ?? ''),
       ...(mode === 'draft' ? { wizardStep: 'details' } : {}), ...(uploadedVideo ? { videoPath: uploadedVideo } : {}), ...(uploadedDocument ? { documentPath: uploadedDocument } : {}) } })
     persistWebListingCommand(actorId, command); setPending(command); setCanRetry(false)
-    await send(command)
+    await send(command, exitAfter)
   }
   async function checkPending(): Promise<void> {
     if (!pending) return
@@ -295,7 +309,7 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
       if (pending.listing.draftId && result.id !== pending.listing.draftId) throw new Error('The recovered result belongs to another listing.')
       stillCurrent(); remember({ draftId: result.id, needsRefresh: true }); clearWebListingCommand(actorId, pending.listing.clientId)
       stillCurrent(); setPending(null); setCanRetry(false); setDraftId(result.id)
-      if (pending.mode === 'submit') { clearGalleryRecovery(actorId); router.push(`/marketplace/listing/${result.id}`); return }
+      if (pending.mode === 'submit') { clearGalleryRecovery(actorId); router.push(`/marketplace/listing?submitted=${encodeURIComponent(result.id)}`); return }
       setNeedsRefresh(true); await refreshSaved(result.id); setMessage('Your original draft was saved. It was not sent again.')
     } catch (error) {
       if (error instanceof CaptureRequestError && error.status === 404) { if (active.current) { setCanRetry(true); setMessage('No saved receipt exists yet. You may explicitly resend the exact original request.') } return }
@@ -305,7 +319,11 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
   const blocked = busy || Boolean(pending) || Boolean(pendingUpload) || Boolean(otherWorkspace) || recoveryError || needsRefresh || !allowed || !hydrated
 
   return <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 sm:px-6">
-    <header><Link href="/marketplace/listing" className="text-sm text-text-muted min-h-11 max-w-full break-words inline-flex items-center">← Your Listings</Link><p className="mt-6 text-xs font-semibold uppercase tracking-widest text-accent-hover">Approved gallery uploader</p><h1 className="mt-3 text-2xl font-semibold break-words">{draftId ? 'Gallery listing draft' : 'Create a gallery listing'}</h1><p className="mt-3 text-sm leading-6 text-text-secondary">Choose photos and an optional video. Your admin-approved upload permission replaces recording and address-location checks. A human still reviews your listing and authority document.</p><p className="mt-2 text-xs leading-5 text-text-muted">This listing will be labelled as gallery media with an unverified recording location. Inspections use manual review.</p></header>
+    <header><Link href="/marketplace/listing" className="text-sm text-text-muted min-h-11 max-w-full break-words inline-flex items-center">← Your Listings</Link><p className="mt-6 text-xs font-semibold uppercase tracking-widest text-accent-hover">Approved gallery uploader</p><h1 className="mt-3 text-2xl font-semibold break-words">{draftId ? 'Gallery listing draft' : 'Create a gallery listing'}</h1><p className="mt-3 text-sm leading-6 text-text-secondary">Choose photos and an optional video. Your admin-approved upload permission replaces recording and address-location checks. {directPublishAllowed ? 'Your account can publish directly once all required checks are complete.' : 'A human reviews your listing and authority document before publication.'}</p><p className="mt-2 text-xs leading-5 text-text-muted">This listing will be labelled as gallery media with an unverified recording location. Inspections use manual review.</p></header>
+    <section className={card + ' flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'} aria-label="Draft saving">
+      <div className="min-w-0"><h2 className="text-sm font-semibold">{hasUnsavedChanges ? 'Changes not saved to your account' : draftId ? 'Draft saved to your account' : 'Save your progress at any time'}</h2><p className="mt-1 text-xs leading-5 text-text-muted">{pending || pendingUpload || needsRefresh ? 'Confirm the original request below before editing again.' : 'Save incomplete details now and add media or documents later. Browser recovery is separate from a saved account draft.'}</p></div>
+      <div className="flex shrink-0 flex-wrap gap-2"><button type="button" className={button} disabled={blocked} onClick={() => { void run(() => save('draft')) }}>Save draft</button><button type="button" className={button} disabled={blocked} onClick={() => { void run(() => save('draft', true)) }}>Save and exit</button></div>
+    </section>
     {!allowed && <p role="alert" className="rounded-xl border border-glass-border-warning p-4 text-sm text-text-secondary">Gallery permission is no longer active. Your saved draft is retained. Contact an administrator before submitting.</p>}
     {otherWorkspace && <section className={card}><h2 className="font-semibold break-words">Another gallery draft has browser recovery</h2><p className="mt-3 text-sm leading-6 text-text-secondary">Its form, confirmed files and original upload path are kept. Resume that workspace before preparing different media.</p><Link className={button + ' mt-4'} href={`/marketplace/listing/create?gallery=1${otherWorkspace.draftId || otherWorkspace.routeDraftId ? `&draft=${otherWorkspace.draftId ?? otherWorkspace.routeDraftId}` : ''}`}>Resume original gallery recovery</Link></section>}
     {message && <p role="status" className="break-words rounded-xl border border-border-subtle p-4 text-sm leading-6 text-text-secondary">{message}</p>}
@@ -325,7 +343,7 @@ export function GalleryListingWorkspace({ actorId, allowed, permissionRevision, 
         <label className="mt-5 block text-xs text-text-muted min-w-0 max-w-full">Optional video<input className={listingInputClass + ' mt-2'} type="file" accept="video/mp4,video/quicktime,video/webm" onChange={event => { selectFile('video', event.target.files?.[0] ?? null); event.target.value = '' }} /></label>{(video || videoPath || videoName) && <p className="mt-3 break-all text-xs text-text-secondary">{video?.name ?? videoName ?? 'Saved video'} <button type="button" className={button + ' ml-2'} onClick={() => removeFile('video')}>Remove video</button></p>}</section>
       <section className={card}><ListingFields category={category} register={register} errors={errors} /></section>
       <section className={card}><h2 className="font-semibold break-words">Ownership or listing authority</h2><p className="mt-3 text-sm leading-6 text-text-muted">Provide the title deed, Certificate of Occupancy or signed authority for an administrator to review privately.</p><label className="mt-4 block text-xs text-text-muted min-w-0 max-w-full">Private authority document<input className={listingInputClass + ' mt-2'} type="file" accept="application/pdf,image/jpeg,image/png" onChange={event => { selectFile('document', event.target.files?.[0] ?? null); event.target.value = '' }} /></label>{(document || documentPath || documentName) && <p className="mt-3 break-all text-xs text-text-secondary">{document?.name ?? documentName ?? documentPath?.split('/').at(-1)} <button type="button" className={button + ' ml-2'} onClick={() => removeFile('document')}>Remove authority document</button></p>}</section>
-      <div className="flex flex-wrap gap-3"><button type="button" className={button} onClick={() => { void run(() => save('draft')) }}>{busy ? 'Saving…' : 'Save gallery draft'}</button><button className={button + ' bg-accent-primary text-text-inverse'}>{busy ? 'Submitting…' : 'Submit for human review'}</button></div><p className="text-xs leading-5 text-text-muted">Publication requires human approval and either the publication fee or an explicit admin waiver. Selecting files does not publish your listing.</p>
+      <div className="flex flex-wrap gap-3"><button type="button" className={button} onClick={() => { void run(() => save('draft')) }}>{busy ? 'Saving…' : 'Save gallery draft'}</button><button className={button + ' bg-accent-primary text-text-inverse'}>{busy ? 'Submitting…' : directPublishAllowed ? 'Publish listing' : 'Submit for review'}</button></div><p className="text-xs leading-5 text-text-muted">{directPublishAllowed ? 'Direct publishing is enabled for your account. Required media and document checks still apply.' : 'Publication requires human approval.'} {freePostingAllowed ? 'Your account can post for free.' : 'The publication fee applies unless an administrator grants a waiver.'} Selecting files does not publish your listing.</p>
     </fieldset></form>
   </div>
 }

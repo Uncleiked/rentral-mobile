@@ -28,6 +28,7 @@ import { expireListingReservations } from '@/lib/bookings/service'
 import { z } from 'zod'
 import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
 import { assertGalleryPermission, prepareGalleryMedia } from '@/lib/listings/gallery'
+import { applySubmissionPublishing } from '@/lib/listings/publishing'
 
 const METADATA_SCHEMAS = {
   house: houseMetadataSchema,
@@ -178,6 +179,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       if (videoPath && muxEnabled()) {
         await tx.mediaAsset.create({ data: { listing_id: row.id, source_path: videoPath, mux_asset_id: null, playback_id: null } })
       }
+      await applySubmissionPublishing(tx, userId, row.id, storedObjects)
       await recordMutation(tx, command, row.id)
       return { row, replayed: false }
     })

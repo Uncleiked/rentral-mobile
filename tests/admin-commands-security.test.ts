@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-type Account = { id: string; revision: number; staff_role: string | null; closed_at: Date | null; suspended_at: Date | null; gallery_upload_allowed: boolean; gallery_permission_revision: number }
+type Account = { id: string; revision: number; staff_role: string | null; closed_at: Date | null; suspended_at: Date | null; gallery_upload_allowed: boolean; gallery_permission_revision: number; listing_fee_exempt?: boolean; listing_fee_exempt_by?: string | null; listing_fee_exempt_at?: Date | null; listing_fee_exempt_reason?: string | null; direct_publish_allowed?: boolean; direct_publish_by?: string | null; direct_publish_at?: Date | null; direct_publish_reason?: string | null }
 const state = vi.hoisted(() => ({ users: new Map<string, Account>(), receipts: new Map<string, Record<string, unknown>>(), audits: vi.fn(), listingUpdate: vi.fn(), userUpdate: vi.fn(), sessionUpdate: vi.fn(), bookingUpdate: vi.fn(), moderate: vi.fn(), transaction: vi.fn(), revokePush: vi.fn(), notify: vi.fn(), lostCommit: false, revokeAtLock: false, booking: {} as Record<string, unknown> }))
 const owner = '11111111-1111-4111-8111-111111111111', member = '22222222-2222-4222-8222-222222222222', admin = '33333333-3333-4333-8333-333333333333', renter = '44444444-4444-4444-8444-444444444444', bookingId = '55555555-5555-4555-8555-555555555555', nonce = '66666666-6666-4666-8666-666666666666', auditId = '77777777-7777-4777-8777-777777777777'
 const reason = 'Reviewed supporting records and explicitly approved this platform decision.'
@@ -69,6 +69,46 @@ describe('owner administration authorization and original-command receipts', () 
     state.users.get(owner)!.suspended_at = new Date()
     await expect(executeAdminCommand(owner, command('waive_fee'))).rejects.toMatchObject({ status: 403 })
     expect(state.transaction).not.toHaveBeenCalled()
+  })
+  it.each(['set_free_posting_permission', 'set_direct_publish_permission'])('records an independent %s grant with complete issuer evidence and receipt replay', async operation => {
+    const input = command(operation, { allowed: true })
+    await executeAdminCommand(owner, input)
+    await executeAdminCommand(owner, input)
+    const prefix = operation === 'set_free_posting_permission' ? 'listing_fee_exempt' : 'direct_publish'
+    expect(state.users.get(member)).toMatchObject({ [prefix === 'listing_fee_exempt' ? prefix : prefix + '_allowed']: true, [prefix + '_by']: owner, [prefix + '_at']: expect.any(Date), [prefix + '_reason']: reason })
+    expect(state.users.get(member)!.gallery_upload_allowed).toBe(false)
+    expect(state.userUpdate).toHaveBeenCalledTimes(1)
+    expect(state.listingUpdate).not.toHaveBeenCalled()
+    expect(state.audits).toHaveBeenCalledTimes(1)
+    expect(state.notify).toHaveBeenCalledTimes(1)
+  })
+  it('removing free posting preserves existing per-listing waivers', async () => {
+    Object.assign(state.users.get(member)!, { listing_fee_exempt: true, listing_fee_exempt_by: owner, listing_fee_exempt_at: new Date(), listing_fee_exempt_reason: reason })
+    await executeAdminCommand(owner, command('set_free_posting_permission', { allowed: false }))
+    expect(state.users.get(member)!.listing_fee_exempt).toBe(false)
+    expect(state.users.get(member)!.listing_fee_exempt_by).toBeNull()
+    expect(state.listingUpdate).not.toHaveBeenCalled()
+  })
+  it('revoking direct publishing returns only live or pending direct inventory to manual review', async () => {
+    await executeAdminCommand(owner, command('set_direct_publish_permission', { allowed: false }))
+    expect(state.listingUpdate).toHaveBeenCalledExactlyOnceWith({ where: { lister_id: member, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
+  })
+  it.each(['set_free_posting_permission', 'set_direct_publish_permission'])('requires an explicit owner acknowledgment for self %s', async operation => {
+    await expect(executeAdminCommand(owner, command(operation, { targetId: owner, allowed: true }))).rejects.toMatchObject({ status: 403 })
+    state.users.get(owner)!.revision = 0
+    await executeAdminCommand(owner, command(operation, { targetId: owner, allowed: true, ownerOverride: true }))
+    expect(state.audits).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ metadata: expect.objectContaining({ ownerOverride: true }) }) }))
+  })
+  it.each(['set_free_posting_permission', 'set_direct_publish_permission'])('refuses %s on suspended targets', async operation => {
+    state.users.get(member)!.suspended_at = new Date()
+    await expect(executeAdminCommand(owner, command(operation, { allowed: true }))).rejects.toMatchObject({ code: 'ACCOUNT_UNAVAILABLE' })
+    expect(state.userUpdate).not.toHaveBeenCalled()
+  })
+  it('does not expand finance into publishing grant administration', async () => {
+    state.users.get(admin)!.staff_role = 'finance'
+    await expect(executeAdminCommand(admin, command('set_free_posting_permission', { allowed: true }))).rejects.toMatchObject({ status: 403 })
+    await expect(executeAdminCommand(admin, command('set_direct_publish_permission', { allowed: true }))).rejects.toMatchObject({ status: 403 })
+    await expect(executeAdminCommand(admin, command('set_gallery_permission', { allowed: true }))).rejects.toMatchObject({ status: 403 })
   })
   it('records gallery revocation and removes only active gallery inventory', async () => {
     Object.assign(state.users.get(member)!, { gallery_upload_allowed: true, gallery_permission_revision: 4 })

@@ -10,6 +10,8 @@ export const adminCommandSchema = z.discriminatedUnion('operation', [
   listingCommand('approve_document'), listingCommand('reject_document'), listingCommand('publish'), listingCommand('suspend_listing'), listingCommand('waive_fee'), listingCommand('revoke_fee_waiver'),
   z.object({ ...commandBase, operation: z.literal('change_role'), role: assignableStaffRoleSchema }).strict(),
   z.object({ ...commandBase, operation: z.literal('set_gallery_permission'), allowed: z.boolean(), ownerOverride: z.boolean().optional().default(false) }).strict(),
+  z.object({ ...commandBase, operation: z.literal('set_free_posting_permission'), allowed: z.boolean(), ownerOverride: z.boolean().optional().default(false) }).strict(),
+  z.object({ ...commandBase, operation: z.literal('set_direct_publish_permission'), allowed: z.boolean(), ownerOverride: z.boolean().optional().default(false) }).strict(),
   z.object({ ...commandBase, operation: z.literal('suspend_user') }).strict(),
   z.object({ ...commandBase, operation: z.literal('restore_user') }).strict(),
   z.object({ ...commandBase, operation: z.literal('review_manual_inspection'), decision: z.enum(['approve', 'reject']) }).strict(),
@@ -20,10 +22,10 @@ export const adminCommandSchema = z.discriminatedUnion('operation', [
 export type AdminCommand = z.infer<typeof adminCommandSchema>
 export const adminCommandReceiptSchema = z.object({ clientId: z.uuid(), auditId: z.uuid(), committed: z.literal(true) }).strict()
 export const adminUserSchema = z.object({ id: z.uuid(), revision: z.number().int().nonnegative(), email: z.string().email(), username: z.string().max(24).nullable(), role: adminRoleSchema,
-  suspended: z.boolean(), closed: z.boolean(), galleryAllowed: z.boolean(), galleryPermissionRevision: z.number().int().nonnegative(), createdAt: timestamp }).strict()
+  suspended: z.boolean(), closed: z.boolean(), galleryAllowed: z.boolean(), freePostingAllowed: z.boolean().default(false), directPublishAllowed: z.boolean().default(false), galleryPermissionRevision: z.number().int().nonnegative(), createdAt: timestamp }).strict()
 export const adminListingSchema = z.object({ id: z.uuid(), revision: z.number().int().nonnegative(), category: z.enum(['house', 'car', 'boat']), title: z.string().max(200), address: z.string().max(300),
-  status: z.string().max(80), source: z.enum(['recorded', 'approved_gallery']), archived: z.boolean(), createdAt: timestamp,
-  lister: z.object({ id: z.uuid(), username: z.string().max(24).nullable() }).strict(),
+  status: z.string().max(80), publicationMode: z.enum(['manual_review', 'trusted_publisher']).default('manual_review'), source: z.enum(['recorded', 'approved_gallery']), archived: z.boolean(), createdAt: timestamp,
+  lister: z.object({ id: z.uuid(), username: z.string().max(24).nullable(), freePostingAllowed: z.boolean().default(false), directPublishAllowed: z.boolean().default(false) }).strict(),
   document: z.object({ present: z.boolean(), status: z.string().max(80), approvalMatches: z.boolean() }).strict(),
   media: z.object({ hasVideo: z.boolean(), photoCount: z.number().int().min(0).max(10), status: z.string().max(80).nullable() }).strict(),
   locationStatus: z.string().max(80).nullable(), fee: z.object({ waived: z.boolean(), paid: z.boolean() }).strict(),

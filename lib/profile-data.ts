@@ -48,6 +48,7 @@ export type ListingSummary = {
   galleryPhotoUrls?: string[]
   badges: string[]
   status: string
+  archivedAt?: string | null
 }
 
 const LISTING_STATUS_BADGES: Record<string, string> = {
@@ -63,8 +64,11 @@ export function capitalizeCategory(category: string): string {
 }
 
 export function deriveListingTitle(category: string, metadata: ListingMetadataJson): string {
-  if (category === 'house' && metadata.bedrooms) return `${metadata.bedrooms} Bed House • ${metadata.sizeSqm} sqm`
-  if (category === 'car' && metadata.fuelType) return `${metadata.fuelType} Car • ${metadata.seats} Seats`
+  if (typeof metadata.listingTitle === 'string' && metadata.listingTitle.trim()) return metadata.listingTitle.trim()
+  if (category === 'house' && metadata.bedrooms !== undefined && metadata.bedrooms !== null && metadata.bedrooms !== '') {
+    return `${metadata.bedrooms} Bed House${metadata.sizeSqm ? ` \u2022 ${metadata.sizeSqm} sqm` : ''}`
+  }
+  if (category === 'car' && metadata.fuelType) return `${metadata.fuelType} Car${metadata.seats ? ` \u2022 ${metadata.seats} Seats` : ''}`
   if (category === 'boat' && metadata.vesselType) return `${metadata.vesselType}`
   return `${capitalizeCategory(category)} Listing`
 }
@@ -96,7 +100,7 @@ export async function getListingsForProfile(
       // so the query can use the (listing_status, createdAt) index.
       ...(options?.includeDrafts ? {} : { listing_status: { in: PUBLIC_LISTING_STATUSES } }),
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: {
       id: true,
       category: true,
@@ -105,6 +109,7 @@ export async function getListingsForProfile(
       poster_path: true,
       video_path: true,
       listing_status: true,
+      archived_at: true,
       ...galleryListingSelect,
       lister: { select: galleryUserSelect },
     },
@@ -119,12 +124,10 @@ export async function getListingsForProfile(
     const useMux = muxEnabled() && !isDraft && Boolean(row.video_path)
     return {
       id: row.id,
-      title: isDraft
-        ? `${capitalizeCategory(row.category)} — Draft`
-        : deriveListingTitle(row.category, metadata),
+      title: deriveListingTitle(row.category, metadata),
       price: formatListingPrice(row.base_rent_amount),
-      priceDenomination: listingPriceDenomination(row.category),
-      posterUrl: row.poster_path && (!useMux || row.media_source === 'approved_gallery') ? listingMediaUrl(row.id, 'poster') : null,
+      priceDenomination: typeof metadata.pricePeriod === 'string' && metadata.pricePeriod ? metadata.pricePeriod : listingPriceDenomination(row.category),
+      posterUrl: row.poster_path && (!useMux || row.media_source === 'approved_gallery') ? listingMediaUrl(row.id, 'poster') : galleryPhotoPaths(row).length ? listingPhotoUrl(row.id, 0) : null,
       videoUrl: !useMux && row.video_path ? listingMediaUrl(row.id, 'video') : null,
       useMux: useMux && media?.status === 'ready',
       media,
@@ -132,6 +135,7 @@ export async function getListingsForProfile(
       galleryPhotoUrls: galleryPhotoPaths(row).map((_path, index) => listingPhotoUrl(row.id, index)),
       badges: [statusBadge, capitalizeCategory(row.category), ...(row.media_source === 'approved_gallery' ? ['Admin-approved gallery'] : [])],
       status: row.listing_status,
+      ...(options?.includeDrafts ? { archivedAt: row.archived_at?.toISOString() ?? null } : {}),
     }
   })
 }

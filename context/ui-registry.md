@@ -828,3 +828,30 @@ states, exact evidence links and explicit independent approval checklists.
 UI verification uses the actual four bundled Inter weights and320/390/768/1440px.
 The isolated admin fixture uses only synthetic records and blocked external calls;
 it is not an authenticated production route or an authorization bypass.
+### Admin queue, permission decisions and owner drafts - 2026-11-12
+
+Files: components/admin/AdminListingQueue.tsx, AdminRecordReview.tsx,
+AdminMediaPreview.tsx, components/listing/OwnerListingsWorkspace.tsx,
+DirectPublicationPanel.tsx and the recording/gallery save controls.
+
+- Preserve the dark semantic card pattern: min-w-0, rounded-2xl,
+  border-border-subtle, bg-surface-card, p-5 sm:p-6.
+- Queue fields: minimum44px, rounded-xl, text-base then sm:text-sm;
+  bg-background-app with text-text-primary and accent focus outlines.
+- Keep the primary search/status/category controls visible. Group source/fee/
+  archive/sort/auto-refresh in a disclosure. Default to human-review work.
+- Listing results stack with wrapping title/host/reference metadata. Selected
+  detail is a split column on desktop and a focused stacked section on phones.
+- Independent permissions use existing accessible AdminToggle switch patterns;
+  show current state, requested state, reason and explicit Record decision.
+  Never imply a switch alone saved an audited capability.
+- Private media previews load on demand; expiry/error/reload actions remain next
+  to the preview. Gallery location warnings are factual and separate from review.
+- Owner filter chips wrap and expose aria-pressed with counts. Draft resume,
+  submitted next steps and archive labels must remain distinct.
+- Save draft/Save and exit stay visible above long forms; feedback distinguishes
+  unsaved changes, browser recovery and confirmed server save.
+- Direct publication uses a bounded inline panel, clear blocked/pending state,
+  a single main action and exact receipt readback/retry when outcome is uncertain.
+- Recent dashboard counters must be identified as recent samples. CSV download
+  feedback states scope, row count and truncation rather than implying a full dump.

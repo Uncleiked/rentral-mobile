@@ -1,90 +1,83 @@
-# Memory - Website UI consistency and responsiveness
+# Memory - Admin publishing, review inventory and owner drafts
 
-Last updated: 2026-11-12 Africa/Lagos.
+Updated: 2026-11-12 Africa/Lagos. Active repository:
+C:/Users/Mudian Consult/Documents/RentralMobile (not default rentral).
 
-## Active project and constraints
+## Current delivery
 
-Work in C:/Users/Mudian Consult/Documents/RentralMobile, not default rentral.
-User explicitly selected npm (npm.cmd inPowerShell), MongoDB/Prisma6.19.3 and
-JWT email/password plus optional Google web signin. Keep hosted DB data/env/
-provider settings unchanged. Never print secrets, reset data or apply setup.
-No deployment or remote settings change was requested/performed in this UI pass.
+Completed user's admin workflow extension while preserving dark UI: server-wide
+listing search by username/@handle/email/title/address/ID, filters,25-row cursor
+pagination, member-to-listings navigation, scoped1,000-row CSV with truncation,
+private immutable60-second media previews and explicit publication checklists.
+Admin grant commands independently control gallery uploads, future free posting
+and trusted direct publishing. Existing roles unchanged; owner self-change requires
+explicit detailed override, other admins cannot self-grant. Revisions, current role
+checks, audits and exact original-command receipts reused.
 
-## What was built
+All admitted users can save partial private drafts after category selection.
+Top Save draft/Save and exit, clear dirty/server-save/recovery status and owner
+Drafts/Submitted/Live/Needs attention/Archived inventory added. Correct custom
+listing titles, gallery photos/resume/archive behavior. Browserfoundandfixed a
+house draft dirty bug caused by boat-onlyhasCaptain local default surviving until
+secure category recovery. Submission keeps same row, returnsactualstatus and is
+visible underSubmitted when no longerDraft.
 
-User requested entire website UI consistency/responsiveness, showing unreadable
-/onboarding/organization. Root cause: later shadcn lightroot background/foreground
-overrode Rentral's darkbody colors; duplicate radius scale and fontself-reference
-also caused drift. app/globals.css now maps generic aliases to canonical --rentral
-palette, preserves original8/12/16/24/32px radii, adds commonfocus/media/form
-bounds and >=16px mobile textentry. app/layout localfont defines --font-rentral,
-consumed by --font-sans, and declaresdark. Sonner usesdark+semantic tokens and
-drops the orphan useTheme hook.
+## Critical decisions
 
-New AccountPage and account-styles sharedpatterns cover signin/signup, recovery/
-reset/emailconfirm/Googlecompletion andorganizationadmission. Orgfieldslabels,
-documentgroups/responsivedetails andstatus/recoveryactions standardized.
-Sharedshell/publicpage gutters, compactnavigation below1280, bottomsafearea
-spacing and44px controltargets aligned. Feedmetadata/actions wrap, filterfields
-stack onphones andcompact save/sharefeedback remainswithincard.
+Direct publishing skips human document approval only. It retains current active
+account/approvedorganization, exact immutable authoritydocument/media/captureaddress
+(or galleryexemption), video processing readiness and actual exact successful fee
+payment or explicitwaiver. No fake payment/DocumentReview. New publishing proof
+binds owner+grant+documentdigest; publicdetailpolicylabel truthful. Trustedintent
+awaitingpayment/video stayssaved outsidehumanreviewqueue; allsubmitted/membersearch
+findsit. Owner Finishpublishing has revision+receiptreadback/retry, no automatic
+providerhook. Freeposting stamped only on future validatedsubmissions; removing
+permission preserves recordedwaivers. Revokingdirect demotes nonarchivedactiveand
+pendingdirect inventory, preserves suspended/archive enforcement. Negative human
+moderation switchesmanualmode. Account suspension clearsall3grants.
 
-Broadwebworkspace presentationpass acrosslisting/booking/account/profile/
-privacy/matching/messages/notifications/admin/finance/commerce/lease/cards/forms/
-actions. No authactions/APIs/permission/businesspayloadchanges. Phone messages
-nowhideinboxwhilelistingcomposer/threadselected. Profilemodalhasnamedrole,
-focuscontainment/Escape/focusrestore/bodyscrolllock/boundedheight. Primaryprofile
-button matches sharedcase/typography. Sharedformclasshelpers only changed in
-lib/listing-form.ts, lib/matching/client.ts, lib/commerce/client.ts.
+Optional Usergrant and Listingpublication fields added to Prisma/schema validators;
+legacy missing fields grantnothing. No new dependency or hosted migration/setup/
+index applied. npm11+Node24, Prisma6.19.3 Mongo connector, email/password JWT plus
+optionalGoogle remainauthoritative. Private env unchanged; never printsecrets.
 
 ## Verification
 
-Final npm.cmd run build PASS includingTypeScript,108staticpages.
-Full Vitest:2002PASS,107SKIP (6opt-in/integrationfiles).
-Web ESLint including finaladjustments PASS,0warnings.
-ExistingadminsyntheticUI suite:38/40initialpass;2desktopload/reloadtimeouts
-bothPASSseparatelywith120sfixtureallowance. All40distinctcasesverified.
-Actual Next homepage12/12browsercasesPASS atdesktop/phone/320/tablet.
-60presentationcases:12realcomponentviews at320/390/768/1024/1440 PASS
-foroverflow,darkbodycontrast,mobilefontsize/browsererrors. Keyboardcompactmenu/
-profilemodal focus,Escape and320pxfit PASS. FeedSaveerror/Sharecopiedfeedback
-andopenedfilterpanel PASSat320px withsyntheticclipboard.
-Screenshotsinoutput/playwright:organization390/1440,profiledialog320,
-feedfilters320 andother390viewimages. Organization/profile screenshots inspected.
-Actual native-share acceptance and native devices were not tested.
+Final npm.cmd run buildPASS (Next16.4.5,TypeScript,110staticpages).
+Full Vitest2,078PASS,113SKIP across6opt-inintegrationfiles;161filesPASS.
+Full npm.cmd run lint and typecheckPASS. git diff --checkPASS.
+Admin22workflows at4viewports verified:87/88initialrun,1tabletfixtureHMRinterruption
+passedtargetedrerunplusfinalscreenshots8/8. Owner8workflows at4viewports32/32PASS,
+includingall4partialdraftstages, gallerysavedstateanddirectlostresponse/reloadreadback.
+Syntheticbrowserharnessneverloads.env/databases/providers;32ownercaseshadnopageerrors,
+provideroutboundcallsorhorizontaloverflow. SixnewguardedownedMongoacceptancecases
+savedbutnotrun: Dockerdaemonunavailable. Hosted/provider/native-deviceacceptance
+isnotclaimed. No deployment, commit, push, hosteddatamutationorcredentialschange.
 
-## Browser fixture details
+## Local runtime and repeatable checks
 
-New scripts/ui-consistency-preview.mjs is loopback4186, syntheticUI only: envDir
-false, no.env, noDB/providerconfig, mockNextserveractions andAPI data. Empty
-clientenv simulates browser-onlyconfiguration. The preview generates its repeatable responsive-audit.js. Generated artifacts
-and .playwright-cli logs are ignored to prevent cache commits. Scriptparents inoutput/playwright/
-fixtures; test-results gets removed by ordinary Playwright runs, so don't put
-long-livedpreviewsource there. EachVitefixture hasuniquecacheDir, includingthe
-existingadmin-workspace-preview script, avoidingHMR/dependencycachestate resets.
+A normalbuildinitiallyneededPrismaregenerationandWindowslockeditsDLL. Identified
+onlytheexactRentraMobiledevengineholder(PID15988,parent35136)andstoppedthatverified
+tree. Generatedpinnedclientnormally, completedbuildandrestorednpm.cmdrundevelopment
+onlocalhost:3000 (toolsession93414). Finalbuildreusedverifiedcacheandpassedwithout
+anotherrestart. Do not fake cache snapshots or upgradePrisma to evade locks.
 
-Cached PlaywrightCLIentry:
-C:/Users/Mudian Consult/AppData/Local/npm-cache/_npx/31e32ef8478fbf80/node_modules/@playwright/cli/playwright-cli.js
-Use own sessionrentral-ui, notclose-all. Output audit scripts are under
-output/playwright. Dockerdaemon unavailable, so no DB-backedauthenticatedbrowser
-fixture was run; userdatasetwas untouched. Preview/browserstoppedatcompletion;
-leave user's Next3000/otherappservers alone.
+npm.cmd run test:admin-ui
+npm.cmd exec -- playwright test --config playwright.owner-ui.config.mjs
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run build
+WithworkingDocker: npm.cmd run test:mongo -- --admin-only usesownedreplicasetfixture;
+neverpointfixtureat.env.localorhostedDBandneverrundb:setupasatest.
 
-## Saved state and next step
+## Saved documentation and next steps
 
-UI source andcontextbaseline/review/progress saved locally, uncommitted.
-HEAD atstart6fcd412. ExistingdirtyGoogleDBsetupguide/progress/memory fromprevious
-diagnosis preserved; no dependency/lockfile/env/db changes inUIwork.
-context/ui-consistency-review.md documentscoverage/limits; ui-registry/rules/
-tokensrecordcurrentbaselines. Commit/push/deploy required to updateVercel.
-Usercanreviewcurrentchangeslocallyfirst. No further UI issue remains fromchecks.
-
-## Prior login context
-
-Production previously logged DATABASE_UNAVAILABLE whilelocalAtlasread-onlyping
-andbasemarkers/Google/orgpreparationpassed. User Atlas screenshot showedonly
-individualcomputerIPentries. Guidedpermanent0.0.0.0/0withtemporaryswitchOFF
-afteruserexplicitlyrequestednonexpiringaccess; explainedwiderexposure/credentials/
-TLS andpaidstatic-egressalternative. AgentdidnotchangeAtlas/Vercelsettings.
-Laterusercouldvieworganizationonboarding; nofullGoogle-accountloginacceptance
-wasperformedhere. Committed86049d9callbackoriginfix and6fcd412fixed-codereadiness
-diagnostics remain intact. Don'trepeatDBsetup orremoveauth/storagegates.
+context/admin-publishing-workflow.md is the operations/implementation guide;
+context/admin-workflow-review.md holds honestacceptanceevidenceandlimits.
+context/ui-registry.md, progress-tracker.md andbuild-plan.md updated.
+Allsourceandnewtestfilesaresavedlocally; usermustcommit/deploythemtoupdateVercel.
+Beforedeploymentacceptance, runownedMongo suitewhenDockerisavailable. No other
+implementationworkremainsfortheacceptedrequest. Existinggallerypermissionalone
+doesnotretroactivelygrantfree/direct; adminusesMembers->permissiondecision->switch,
+reasonandRecorddecision.

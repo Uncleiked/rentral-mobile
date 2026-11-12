@@ -86,8 +86,10 @@ function DoneScreen() {
   )
 }
 
-export function CreateListingWizard({ draft, actorId }: { draft: DraftPayload | null; actorId: string }) {
+export function CreateListingWizard({ draft, actorId, directPublishAllowed = false, freePostingAllowed = false }: { draft: DraftPayload | null; actorId: string; directPublishAllowed?: boolean; freePostingAllowed?: boolean }) {
   const step = useRentralStore((state) => state.step)
+  const category = useRentralStore(state => state.category)
+  const capture = useRentralStore(state => state.capture)
   const storedActor = useRentralStore((state) => state.actorId)
   const generation = useRentralStore(state => state.generation)
   const mutationBusy = useRentralStore((state) => state.mutationBusy)
@@ -124,7 +126,8 @@ export function CreateListingWizard({ draft, actorId }: { draft: DraftPayload | 
 
       <fieldset disabled={mutationBusy || Boolean(pendingCommand || recoveryError)} aria-busy={mutationBusy}>
       {step !== 'done' && (
-        <div className="mx-auto mb-6 flex w-full max-w-md justify-end">
+        <div className="mx-auto mb-6 flex w-full max-w-md flex-col gap-2 rounded-2xl border border-border-subtle bg-surface-card p-4">
+          <p className="text-xs leading-5 text-text-secondary">{!category ? 'Choose an asset type to enable saving. Incomplete listings can be saved at every step.' : capture.isRecording || (capture.hasStarted && !capture.isComplete) ? 'Finish or stop your current recording before saving. Your other details are kept.' : 'You can save now and add missing media, details or documents later. Drafts stay private.'}</p>
           <SaveDraftButton actorId={actorId} />
         </div>
       )}
@@ -133,7 +136,7 @@ export function CreateListingWizard({ draft, actorId }: { draft: DraftPayload | 
       {step === 'capture' && <CaptureCanvas actorId={actorId} />}
       {step === 'details' && <MetadataForm key={`${actorId}:${generation}`} actorId={actorId} />}
       {step === 'documents' && <DocumentUploadZone />}
-      {step === 'checkout' && <CheckoutPrompt actorId={actorId} />}
+      {step === 'checkout' && <CheckoutPrompt actorId={actorId} directPublishAllowed={directPublishAllowed} freePostingAllowed={freePostingAllowed} />}
       {step === 'done' && <DoneScreen />}
       </fieldset>
     </div>

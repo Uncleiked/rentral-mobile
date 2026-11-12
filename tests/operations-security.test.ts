@@ -20,10 +20,10 @@ const listingId = '11111111-1111-4111-8111-111111111111'
 const captureId = '22222222-2222-4222-8222-222222222222'
 function eligibleListing() {
   return { id: listingId, lister_id: 'host', listing_status: 'pending_verification', text_address: 'Synthetic Yaba address', document_path: 'host/folder/title.pdf',
-    lister: { id: 'host', kyc_verified: true, username: 'host' }, documentReview: { status: 'approved', reviewed_by: 'other-staff', approved_path: 'host/folder/title.pdf', approved_digest: 'd'.repeat(64), findings: {} },
+    lister: { id: 'host', kyc_verified: true, username: 'host', account_type: 'individual' }, documentReview: { status: 'approved', reviewed_by: 'other-staff', approved_path: 'host/folder/title.pdf', approved_digest: 'd'.repeat(64), findings: {} },
     capture_id: captureId, video_path: 'host/folder/video.mp4', privateLocation: { capture_id: captureId, geometry: { type: 'Point', coordinates: [3.4, 6.45] } },
     verification: { capture_id: captureId, spatial_status: 'matched', address_hash: addressFingerprint('Synthetic Yaba address'), distance_meters: 25 },
-    media: { status: 'ready', source_path: 'host/folder/video.mp4' }, payments: [{ amount_kobo: BigInt(100000), currency: 'NGN', user_id: 'host', provider_environment: 'test' as string | null }] }
+    media: { status: 'ready', source_path: 'host/folder/video.mp4' }, payments: [{ listing_id: listingId, kind: 'listing_fee', status: 'succeeded', amount_kobo: BigInt(100000), currency: 'NGN', user_id: 'host', provider_environment: 'test' as string | null }] }
 }
 
 beforeEach(() => {
@@ -61,7 +61,7 @@ describe('server-owned staff access and publication', () => {
     await expect(moderateListing('staff', listingId, 'publish', 'Reviewed owner closure')).rejects.toMatchObject({ code: 'ACCOUNT_UNAVAILABLE' })
     expect(mocks.updateListing).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
     await moderateListing('staff', listingId, 'suspend', 'Keep the historical listing unavailable')
-    expect(mocks.updateListing).toHaveBeenCalledWith(expect.objectContaining({ data: { listing_status: 'suspended' } }))
+    expect(mocks.updateListing).toHaveBeenCalledWith(expect.objectContaining({ data: { listing_status: 'suspended', publication_mode: 'manual_review' } }))
   })
   it('uses current persisted roles and ignores obsolete environment allowlists', async () => {
     expect(await isAdminId('staff')).toBe(true); expect(await isAdminId('sta')).toBe(false); expect(await isAdminId('Staff')).toBe(false)
@@ -79,10 +79,10 @@ describe('server-owned staff access and publication', () => {
   it('locks the listing and identity before publishing and records the decision', async () => {
     await moderateListing('staff', listingId, 'publish', 'Synthetic test moderation reason')
     expect(mocks.lock).toHaveBeenCalledTimes(3)
-    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
+    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active', publication_mode: 'manual_review' } })
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ actor_id: 'staff', action: 'publish' }) }))
   })
-  it.each(['account', 'document', 'human', 'address', 'distance', 'media', 'fee', 'feeAmount', 'feeOwner', 'status'])('fails closed when publication lacks %s', async missing => {
+  it.each(['account', 'document', 'human', 'address', 'distance', 'media', 'fee', 'feeAmount', 'feeOwner', 'feeKind', 'feeStatus', 'feeListing', 'status'])('fails closed when publication lacks %s', async missing => {
     const listing = eligibleListing()
     if (missing === 'account') listing.lister.id = ''
     if (missing === 'document') listing.documentReview.status = 'needs_review'
@@ -93,6 +93,9 @@ describe('server-owned staff access and publication', () => {
     if (missing === 'fee') listing.payments = []
     if (missing === 'feeAmount') listing.payments[0].amount_kobo = BigInt(1)
     if (missing === 'feeOwner') listing.payments[0].user_id = 'other'
+    if (missing === 'feeKind') listing.payments[0].kind = 'inspection'
+    if (missing === 'feeStatus') listing.payments[0].status = 'pending'
+    if (missing === 'feeListing') listing.payments[0].listing_id = 'another-listing'
     if (missing === 'status') listing.listing_status = 'draft'
     mocks.findListing.mockResolvedValue(listing)
     await expect(moderateListing('staff', listingId, 'publish', 'Synthetic reason')).rejects.toThrow('Publication requires')
@@ -104,7 +107,7 @@ describe('server-owned staff access and publication', () => {
     listing.lister.username = ''
     mocks.findListing.mockResolvedValue(listing)
     await moderateListing('staff', listingId, 'publish', 'Reviewed listing evidence')
-    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
+    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active', publication_mode: 'manual_review' } })
   })
   it('requires the current configured mode for new publication and preserves old fee records', async () => {
     vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_live_owned_fixture'); vi.stubEnv('PAYSTACK_ENVIRONMENT', 'live')
@@ -117,7 +120,7 @@ describe('server-owned staff access and publication', () => {
     expect(mocks.updateListing).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
     const current = eligibleListing(); current.payments[0].provider_environment = 'live'; mocks.findListing.mockResolvedValue(current)
     await moderateListing('staff', listingId, 'publish', 'Reviewed matching live collection and asset evidence')
-    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
+    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active', publication_mode: 'manual_review' } })
   })
   it('fails closed on new publication when payment configuration is disabled', async () => {
     vi.stubEnv('PAYMENTS_ENABLED', 'false')
@@ -142,7 +145,7 @@ describe('server-owned staff access and publication', () => {
       fee_waived_at: new Date(), fee_waived_by: listingId, fee_waiver_reason: 'Approved publication without collecting a listing fee.' })
     await moderateListing('staff', listingId, 'publish', 'Human reviewed approved gallery and waiver')
     expect(mocks.gallery).toHaveBeenCalled(); expect(mocks.capture).not.toHaveBeenCalled()
-    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active' } })
+    expect(mocks.updateListing).toHaveBeenCalledWith({ where: { id: listingId }, data: { listing_status: 'active', publication_mode: 'manual_review' } })
   })
   it('still requires video processing for an approved gallery video and fails closed on permission revocation', async () => {
     mocks.findListing.mockResolvedValue({ ...eligibleListing(), media_source: 'approved_gallery', capture_id: null })
