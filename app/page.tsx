@@ -60,6 +60,8 @@ export default function Home(): React.JSX.Element {
           <p className="mt-5 text-xs leading-relaxed text-text-muted">A little inspiration for what’s next. Photography is illustrative; browse the marketplace for available listings.</p>
         </section>
 
+        <div className="home-motion-ribbon" aria-hidden="true"><div className="home-motion-track">{[0,1].map(index=><span key={index}>Spaces to settle. <i /> Roads to explore. <i /> Room to breathe. <i /> Find your next. <i /></span>)}</div></div>
+
         <section id="how-it-works" className="home-trust-section" aria-labelledby="trust-title">
           <div className="home-container">
             <div className="home-trust-heading" data-reveal>
@@ -84,7 +86,7 @@ export default function Home(): React.JSX.Element {
           <div className="home-host-copy" data-reveal>
             <p className="home-eyebrow text-accent-hover">For the people with something to share</p>
             <h2 id="host-title">Your space.<br />Their next chapter.</h2>
-            <p>A home, a car, a boat. Turn what you have into someone’s next possibility. Create your profile, record a walkthrough, and submit your listing for review. A fee applies per published listing.</p>
+            <p>A home, a car, a boat. Turn what you have into someone’s next possibility. Create your profile, share a walkthrough, and show people what makes your listing worth a closer look. Any publication fee is shown before you submit.</p>
             <Link href="/marketplace/listing/create" className="home-button-primary">Start your listing <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
             <span className="home-host-note"><BadgeCheck className="h-4 w-4" aria-hidden="true" /> Sign in to create your first listing.</span>
           </div>

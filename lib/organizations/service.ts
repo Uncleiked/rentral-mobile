@@ -9,7 +9,9 @@ import { assertStaffPermission, hasStaffPermission } from '@/lib/auth/roles'
 import { accountIsActive } from '@/lib/accounts/availability'
 import { claimStorageObjects, prepareListingStorage, type PreparedStorageObject } from '@/lib/storage-claims/service'
 import { signedStorageUrl } from '@/lib/local-storage/urls'
-import { organizationSubmissionSchema, organizationReviewSchema, organizationViewSchema, type OrganizationView } from '@/lib/contracts/organizations'
+import { organizationSubmissionSchema, organizationReviewSchema, organizationViewSchema, organizationQueueSearchSchema, organizationQueuePageSchema, type OrganizationView } from '@/lib/contracts/organizations'
+
+import { organizationQueueCursor, organizationQueuePipeline, organizationQueueResultSchema } from './queue'
 
 function view(row: OrganizationApplication): OrganizationView {
   return organizationViewSchema.parse({ id: row.id, userId: row.user_id, revision: row.revision, legalName: row.legal_name,
@@ -75,8 +77,23 @@ async function staff(actorId: string): Promise<void> {
 }
 export async function organizationQueue(actorId: string) {
   await staff(actorId)
-  const rows = await prisma.organizationApplication.findMany({ orderBy: [{ submitted_at: 'desc' }, { id: 'desc' }], take: 50 })
+  const rows = await prisma.organizationApplication.findMany({ where: { status: 'pending' }, orderBy: [{ submitted_at: 'asc' }, { id: 'asc' }], take: 50 })
+  await staff(actorId)
   return { items: rows.map(view) }
+}
+export async function searchOrganizationQueue(actorId: string, value: unknown) {
+  const input = organizationQueueSearchSchema.parse(value)
+  await staff(actorId)
+  const raw = await prisma.organizationApplication.aggregateRaw({ pipeline: organizationQueuePipeline(input), options: { maxTimeMS: 10000 } })
+  const result = organizationQueueResultSchema.parse(raw)[0]
+  const hits = result?.items.slice(0, input.limit) ?? []
+  const rows = hits.length ? await prisma.organizationApplication.findMany({ where: { id: { in: hits.map(hit => hit.id) }, ...(input.status === 'all' ? {} : { status: input.status }) } }) : []
+  const byId = new Map(rows.map(row => [row.id, row]))
+  const items = hits.flatMap(hit => { const row = byId.get(hit.id); return row ? [view(row)] : [] })
+  await staff(actorId)
+  const hasMore = (result?.items.length ?? 0) > input.limit
+  return organizationQueuePageSchema.parse({ items, total: result?.total[0]?.count ?? 0, hasMore,
+    nextCursor: hasMore && hits.length ? organizationQueueCursor(hits[hits.length - 1], input) : null })
 }
 export async function reviewOrganization(actorId: string, input: unknown) {
   await staff(actorId)

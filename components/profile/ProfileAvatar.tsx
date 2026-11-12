@@ -24,7 +24,7 @@ export function ProfileAvatar({ username, avatarUrl, accountType, size = "lg" }:
   if (avatarUrl) {
     return (
       <div className={clsx("relative rounded-full overflow-hidden flex-shrink-0 border-2", ringClass, sizeClass)}>
-        <Image src={avatarUrl} alt={username} fill className="object-cover" />
+        <Image src={avatarUrl} alt={username} fill sizes={size === "lg" ? "96px" : "44px"} className="object-cover object-center" />
       </div>
     );
   }

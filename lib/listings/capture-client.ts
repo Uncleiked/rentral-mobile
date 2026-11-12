@@ -71,7 +71,8 @@ export async function executeWebListingCommand(identity: WizardIdentity, command
     }
     const result = await listingRequest(identity.actorId, '/api/v1/my-listings', listingMutationResultSchema, saved)
     assertWizardCurrent(identity)
-    if (saved.listing.draftId && result.id !== saved.listing.draftId || result.status !== (saved.mode === 'draft' ? 'draft' : 'pending_verification')) throw new CaptureRequestError('The listing save could not be confirmed.', 200, 'INVALID_RESPONSE')
+    const expectedStatus = saved.mode === 'draft' ? result.status === 'draft' : result.status === 'pending_verification' || result.status === 'active'
+    if (saved.listing.draftId && result.id !== saved.listing.draftId || !expectedStatus) throw new CaptureRequestError('The listing save could not be confirmed.', 200, 'INVALID_RESPONSE')
     return result
   } catch (reason) {
     // A retried unknown result remains recoverable even after a later refusal.

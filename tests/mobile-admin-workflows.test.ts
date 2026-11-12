@@ -110,3 +110,14 @@ it('retries manual inspection only after exact original receipt404 using the per
     [`/bookings/${target}/manual-inspection`, { method: 'POST', body: { clientId, evidence }, expectedUserId: actor }],
   ])
 })
+
+it.each(['set_free_posting_permission','set_direct_publish_permission'] as const)('persists and confirms the independent %s command through the same audited receipt flow', async operation => {
+  const input = adminCommandSchema.parse({ operation, clientId, targetId: target, expectedRevision: 4, reason: 'Reviewed the independent publishing permission request.', allowed: true })
+  fixture.api.mockImplementationOnce(async (_path, options) => {
+    expect(JSON.parse(fixture.values.get('rentral.admin.pending.' + actor)!).command).toEqual(input)
+    expect(options).toMatchObject({ method: 'POST', body: input, expectedUserId: actor })
+    return receipt
+  })
+  expect(await submitNewAdminCommand(actor,input)).toEqual({receipt,cleanupPending:false})
+  expect(await loadPendingAdminCommand(actor)).toBeNull()
+})

@@ -1,10 +1,14 @@
 import { revalidatePath } from 'next/cache'
 import { requireApiIdentity } from '@/lib/api/auth'
-import { apiFailure, apiSuccess, readApiJson } from '@/lib/api/http'
-import { organizationQueue, reviewOrganization } from '@/lib/organizations/service'
+import { apiFailure, apiSuccess, apiSearchParams, readApiJson } from '@/lib/api/http'
+import { organizationQueue, searchOrganizationQueue, reviewOrganization } from '@/lib/organizations/service'
 export const runtime = 'nodejs'
 export async function GET(request: Request): Promise<Response> {
-  try { const actor = await requireApiIdentity(request, { admission: false }); return apiSuccess(await organizationQueue(actor.userId)) }
+  try {
+    const actor = await requireApiIdentity(request, { admission: false })
+    const input = apiSearchParams(request)
+    return apiSuccess(await (Object.keys(input).length ? searchOrganizationQueue(actor.userId, input) : organizationQueue(actor.userId)))
+  }
   catch (error) { return apiFailure(error, 'admin/organizations') }
 }
 export async function POST(request: Request): Promise<Response> {

@@ -1,3 +1,5 @@
+import { privateImageVariant } from '@/lib/media/private-image'
+import { PRIVATE_IMAGE_WIDTHS } from '@/lib/media/image-loader'
 import { z } from 'zod'
 import prisma from '@/lib/db'
 import { requireUserId } from '@/lib/action-helpers'
@@ -19,6 +21,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const input = inputSchema.safeParse({ id: (await params).id, kind: new URL(request.url).searchParams.get('kind') })
     if (!input.success) return Response.json({ error: 'Not found.' }, { status: 404, headers })
     const { id, kind } = input.data
+    const requestedWidth = new URL(request.url).searchParams.get('w')
+    const width = requestedWidth === null ? null : Number(requestedWidth)
+    if (width !== null && (kind === 'video' || !PRIVATE_IMAGE_WIDTHS.some(size => size === width) || String(width) !== requestedWidth)) return Response.json({ error: 'Invalid image size.' }, { status: 400, headers })
     const listing = await prisma.listing.findFirst({
       where: { id, lister: { is: activeAccountWhere }, OR: [{ lister_id: userId }, { listing_status: 'active' }] },
       select: { lister_id: true, video_path: true, poster_path: true, ...galleryListingSelect, lister: { select: galleryUserSelect } },
@@ -31,7 +36,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         (kind === 'video' && muxEnabled() && listing.lister_id !== userId)) {
       return Response.json({ error: 'Not found.' }, { status: 404, headers })
     }
-    const { data, error } = await createAdminClient().storage.from(LISTINGS_MEDIA_BUCKET).createSignedUrl(path, 300)
+    const storage = createAdminClient().storage.from(LISTINGS_MEDIA_BUCKET)
+    if (width !== null) {
+      const image = await privateImageVariant(storage, path, width)
+      return new Response(new Uint8Array(image), { headers: { ...headers, 'Content-Type': 'image/webp', 'X-Content-Type-Options': 'nosniff', Vary: 'Cookie, Authorization' } })
+    }
+    const { data, error } = await storage.createSignedUrl(path, 300)
     if (error || !data?.signedUrl) return Response.json({ error: 'Media unavailable. Please try again.' }, { status: 503, headers })
     // Storage handles byte ranges; do not buffer large videos in the Next server.
     return new Response(null, { status: 307, headers: { ...headers, Location: data.signedUrl } })

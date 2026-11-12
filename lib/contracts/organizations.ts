@@ -30,3 +30,15 @@ export const organizationUploadSchema = z.object({ path: z.string().max(500) }).
 export const organizationLinkSchema = z.object({ url: z.string().url().max(3000), expiresAt: z.string().datetime() }).strict()
 export type OrganizationView = z.infer<typeof organizationViewSchema>
 export type OrganizationReview = z.infer<typeof organizationReviewSchema>
+
+export const organizationQueueSearchSchema = z.object({
+  query: z.string().trim().max(254).optional().default(''),
+  status: z.enum(['pending', 'approved', 'changes_requested', 'rejected', 'all']).optional().default('pending'),
+  sort: z.enum(['oldest', 'newest']).optional().default('oldest'),
+  cursor: z.string().min(1).max(600).regex(/^[A-Za-z0-9_-]+$/).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(25),
+}).strict()
+export const organizationQueuePageSchema = z.object({ items: z.array(organizationViewSchema).max(50),
+  total: z.number().int().nonnegative().safe(), nextCursor: z.string().max(600).nullable(), hasMore: z.boolean(),
+}).strict()
+export type OrganizationQueueSearch = z.infer<typeof organizationQueueSearchSchema>

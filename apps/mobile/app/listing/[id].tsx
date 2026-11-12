@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Image, Share, StyleSheet, Text, View } from 'react-native'
+import { Share, StyleSheet, Text, View } from 'react-native'
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Page } from '../../src/components/Page'
 import { Button } from '../../src/components/Button'
@@ -19,6 +19,7 @@ import { z } from 'zod'
 import type { ListingDetails } from '../../src/lib/types'
 import { colors, fonts, radius, space } from '../../src/theme'
 import { GalleryPhotos } from '../../src/components/gallery-photos'
+import { ListingPhoto } from '../../src/components/listing-photo'
 
 export default function ListingScreen() {
   const { actorId, isCurrent } = useActorGuard()
@@ -62,7 +63,7 @@ export default function ListingScreen() {
   const description = typeof value?.metadata.description === 'string' ? value.metadata.description.trim() : ''
   return <Page title={value?.title ?? 'Your next move'} subtitle={value?.location} refreshing={listing.loading} onRefresh={() => { listing.refresh(); media.refresh() }}>
     {listing.loading || listing.error ? <StatusView loading={listing.loading} title={listing.error ? 'Listing unavailable' : undefined} message={listing.error ?? undefined} onRetry={listing.error ? listing.refresh : undefined} /> : value ? <>
-      {videoUrl ? <Walkthrough uri={videoUrl} /> : media.data?.galleryPhotoUrls?.length ? null : posterUrl ? <Image source={{ uri: posterUrl }} alt={value.title} style={styles.poster} /> : <StatusView loading={media.loading} message={media.error ?? 'No listing media available yet.'} onRetry={media.error ? media.refresh : undefined} />}
+      {videoUrl ? <Walkthrough uri={videoUrl} /> : media.data?.galleryPhotoUrls?.length ? null : posterUrl ? <ListingPhoto uri={posterUrl} alt={value.title} /> : <StatusView loading={media.loading} message={media.error ?? 'No listing media available yet.'} onRetry={media.error ? media.refresh : undefined} />}
       {media.data?.galleryPhotoUrls?.length ? <GalleryPhotos urls={media.data.galleryPhotoUrls} /> : null}
       {value.mediaSource === 'approved_gallery' ? <Text style={styles.muted}>Gallery listing approved for human review. No recording location check is claimed; inspections use manual review.</Text> : null}
       <View style={styles.priceRow}><Text style={styles.price}>{listingPriceLabel(value.price)}<Text style={styles.period}> / {value.pricePeriod}</Text></Text><Text style={styles.intent}>{value.intent}</Text></View>
@@ -80,7 +81,7 @@ export default function ListingScreen() {
   </Page>
 }
 const styles = StyleSheet.create({
-  poster: { width: '100%', aspectRatio: 4 / 3, borderRadius: radius.xl }, priceRow: { gap: space.sm }, price: { fontFamily: fonts.bold, fontSize: 29, color: colors.accentBright }, period: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted }, intent: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted, textTransform: 'capitalize' },
+  priceRow: { gap: space.sm }, price: { fontFamily: fonts.bold, fontSize: 29, color: colors.accentBright }, period: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted }, intent: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted, textTransform: 'capitalize' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }, badge: { borderRadius: radius.pill, color: colors.secondary, backgroundColor: colors.glass, paddingVertical: space.sm, paddingHorizontal: space.md, fontFamily: fonts.medium, fontSize: 12 }, notice: { color: colors.warning, fontFamily: fonts.medium, fontSize: 13, lineHeight: 22 },
   section: { gap: space.lg }, heading: { color: colors.text, fontFamily: fonts.semibold, fontSize: 20 }, detail: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: space.md, gap: space.lg }, label: { flex: 1, color: colors.muted, fontFamily: fonts.regular, fontSize: 13 }, value: { flex: 1, textAlign: 'right', color: colors.secondary, fontFamily: fonts.medium, fontSize: 13 }, body: { color: colors.secondary, fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 }, muted: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, lineHeight: 20 }, error: { color: colors.warning, fontFamily: fonts.medium, fontSize: 13, lineHeight: 22 },
 })

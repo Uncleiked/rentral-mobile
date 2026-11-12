@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Linking, Platform, StyleSheet, Text, View } from 'react-native'
-import { Host, Picker } from '@expo/ui'
+import { Host, Picker, Switch } from '@expo/ui'
 import { Stack, useFocusEffect } from 'expo-router'
 import * as Crypto from 'expo-crypto'
 import { adminCommandSchema, adminDashboardSchema, adminListingSchema, adminUsersSchema, type AdminCommand, type AdminListing, type AdminUser } from '../../../lib/contracts/admin'
@@ -16,11 +16,11 @@ import { checkPendingAdminCommand, dismissPendingAdminCommand, loadPendingAdminC
 import { errorMessage } from '../src/lib/api'
 import { memberStatus } from '../src/lib/member-format'
 import { config } from '../src/lib/config'
+import { nativeAdminOperationLabels as operationLabels, nativePublishingChoices } from '../src/lib/admin-publishing-policy'
 import { previewPrivateDocument } from '../src/lib/private-document'
 import { colors, fonts, radius, space } from '../src/theme'
 
 type Tab = 'listings' | 'people' | 'inspections' | 'audit'
-const operationLabels: Record<AdminCommand['operation'], string> = { approve_document: 'Approve document', reject_document: 'Reject document', publish: 'Publish listing', suspend_listing: 'Suspend listing', waive_fee: 'Waive listing fee', revoke_fee_waiver: 'Revoke fee waiver', change_role: 'Change staff role', set_gallery_permission: 'Change gallery permission', suspend_user: 'Suspend account', restore_user: 'Restore account', review_manual_inspection: 'Review manual inspection', transfer_ownership: 'Transfer ownership' }
 
 export default function AdminScreen() {
   const { session } = useAuth(), actorId = session?.user.id ?? ''
@@ -117,7 +117,12 @@ export default function AdminScreen() {
   }
   function userCard(user: AdminUser) {
     return <View key={user.id} style={styles.card}><Text selectable style={styles.heading}>{user.username ? `@${user.username}` : user.email}</Text><Text selectable style={styles.help}>{user.email}</Text><Text style={styles.help}>{user.role} · {user.closed ? 'Closed' : user.suspended ? 'Suspended' : 'Active'} · Gallery {user.galleryAllowed ? 'approved' : 'not approved'}</Text>
-      {has('gallery:manage') && !user.closed ? <Button title={user.galleryAllowed ? 'Revoke gallery permission' : 'Approve gallery uploads'} secondary disabled={disabled || (user.id === actorId && user.role === 'owner' && !ownerOverride)} onPress={() => propose('set_gallery_permission', user.id, user.revision, { allowed: !user.galleryAllowed, ...(user.id === actorId && user.role === 'owner' ? { ownerOverride } : {}) })} /> : null}
+      {nativePublishingChoices(user, actorId, dashboard.data?.role ?? 'member', dashboard.data?.permissions ?? []).map(choice => <View key={choice.operation} style={styles.permission}>
+        <Text style={styles.help}>{choice.label}: saved {choice.current ? 'enabled' : 'disabled'}</Text>
+        <Host matchContents colorScheme="dark" seedColor={colors.accentBright}><Switch label={choice.label} value={proposal?.targetId === user.id && proposal.operation === choice.operation && 'allowed' in proposal ? proposal.allowed : choice.current}
+          disabled={disabled || Boolean(dashboard.error) || (choice.ownerOverride && !ownerOverride)} onValueChange={allowed => propose(choice.operation, user.id, user.revision, { allowed, ...(choice.ownerOverride ? { ownerOverride } : {}) })} /></Host>
+        <Text style={styles.help}>{choice.help} The switch prepares a decision; confirm it below to save.</Text>
+      </View>)}
       {has('user:manage') && !user.closed && user.role !== 'owner' ? <Button title={user.suspended ? 'Restore account' : 'Suspend account'} secondary disabled={disabled || user.id === actorId} onPress={() => propose(user.suspended ? 'restore_user' : 'suspend_user', user.id, user.revision)} /> : null}
       {has('staff:manage') && user.role !== 'owner' && !user.closed ? <><Text style={styles.help}>Choose the new role below before reviewing the change.</Text><Button title={`Set role to ${role}`} secondary disabled={disabled || user.id === actorId} onPress={() => propose('change_role', user.id, user.revision, { role })} /></> : null}
     </View>
@@ -135,7 +140,7 @@ export default function AdminScreen() {
         </View> : null}
         <ChoiceChips label="Workspace" value={tab} options={[{ value: 'listings', label: 'Listings' }, { value: 'people', label: 'People' }, { value: 'inspections', label: 'Inspections' }, { value: 'audit', label: 'Audit' }]} disabled={busy} onChange={setTab} />
         {tab !== 'audit' ? <View style={styles.card}><Field label="Decision reason" value={reason} onChangeText={setReason} multiline maxLength={2000} editable={!disabled} placeholder="Explain the evidence and why this decision is appropriate." /><Text style={styles.help}>At least 15 characters; an owner override or manual inspection decision needs 30. The reason is retained in the audit.</Text></View> : null}
-        {proposal ? <View style={styles.card}><Text style={styles.heading}>Review this decision</Text><Text selectable style={styles.help}>{[operationLabels[proposal.operation], `Target ${proposal.targetId}`, `Revision ${proposal.expectedRevision}`, proposal.reason].join('\n')}</Text>{'ownerOverride' in proposal && proposal.ownerOverride ? <Text style={styles.warning}>This is an explicit owner override for your own listing.</Text> : null}<Button title="Confirm reviewed decision" busy={busy} onPress={() => { void confirm() }} /><Button title="Cancel this decision" secondary disabled={busy} onPress={() => setProposal(null)} /></View> : null}
+        {proposal ? <View style={styles.card}><Text style={styles.heading}>Review this decision</Text><Text selectable style={styles.help}>{[operationLabels[proposal.operation], `Target ${proposal.targetId}`, `Revision ${proposal.expectedRevision}`, ...('allowed' in proposal ? ['Requested state: ' + (proposal.allowed ? 'enabled' : 'disabled')] : []), proposal.reason].join('\n')}</Text>{'ownerOverride' in proposal && proposal.ownerOverride ? <Text style={styles.warning}>This is an explicit owner override for your own access or listing.</Text> : null}<Button title="Confirm reviewed decision" busy={busy} onPress={() => { void confirm() }} /><Button title="Cancel this decision" secondary disabled={busy} onPress={() => setProposal(null)} /></View> : null}
         {tab === 'listings' ? <>
           {selected ? <View style={styles.card}><Text style={styles.heading}>{selected.title}</Text><Text selectable style={styles.help}>{selected.address}</Text><Text style={styles.help}>{[
             `${memberStatus(selected.status)} · ${selected.source === 'approved_gallery' ? 'Approved gallery; no recorded GPS proof' : 'Recorded asset'}`,
@@ -153,8 +158,8 @@ export default function AdminScreen() {
           </View> : <Text style={styles.help}>Select a listing to inspect its current document, media, fee and publication status.</Text>}
           {dashboard.data.listings.length ? dashboard.data.listings.map(item => <View key={item.id} style={styles.card}><Text style={styles.heading}>{item.title}</Text><Text style={styles.help}>{memberStatus(item.status)} · {item.source === 'approved_gallery' ? 'Gallery review' : 'Recorded asset'}</Text><Button title={`Review ${item.title}`} secondary disabled={disabled} onPress={() => { setSelectedId(item.id); setOwnerOverride(false) }} /></View>) : <StatusView title="No listings in this queue" message="Listings awaiting review will appear here." />}
         </> : tab === 'people' ? <>
-          {has('user:manage') || has('gallery:manage') || has('staff:manage') ? <><Field label="Find member by email or username" value={query} onChangeText={setQuery} maxLength={254} editable={!disabled} autoCapitalize="none" /><Button title="Search members" secondary disabled={disabled} onPress={() => setSearch(query.trim())} />
-            {dashboard.data.role === 'owner' ? <><Text style={styles.help}>Changing your own gallery permission requires an explicit owner override and a detailed reason.</Text><Button title={ownerOverride ? 'Owner-self override enabled — disable' : 'Enable owner-self gallery override'} secondary disabled={disabled} onPress={() => setOwnerOverride(value => !value)} /></> : null}
+          {has('user:manage') || has('gallery:manage') || has('listing:waive') || has('staff:manage') ? <><Field label="Find member by email or username" value={query} onChangeText={setQuery} maxLength={254} editable={!disabled} autoCapitalize="none" /><Button title="Search members" secondary disabled={disabled} onPress={() => setSearch(query.trim())} />
+            {dashboard.data.role === 'owner' ? <><Text style={styles.help}>Changing your own publishing permissions requires an explicit owner override and a detailed reason.</Text><Button title={ownerOverride ? 'Owner-self override enabled — disable' : 'Enable owner-self publishing override'} secondary disabled={disabled} onPress={() => setOwnerOverride(value => !value)} /></> : null}
             {has('staff:manage') ? <><Text style={styles.help}>New staff role</Text><Host matchContents colorScheme="dark" seedColor={colors.accentBright}><Picker selectedValue={role} onValueChange={value => setRole(String(value))} enabled={!disabled} testID="admin-staff-role">{['member', 'moderator', 'finance', 'analyst', 'admin'].map(value => <Picker.Item key={value} value={value} label={value} />)}</Picker></Host></> : null}
             {people.loading && search !== null ? <StatusView loading message="Finding members…" /> : people.error ? <StatusView title="Member search unavailable" message={people.error} onRetry={() => { void people.refresh(true).catch(() => undefined) }} /> : (search === null ? dashboard.data.users : people.data?.items ?? []).length ? (search === null ? dashboard.data.users : people.data?.items ?? []).map(userCard) : <StatusView title="No matching members" message="Try the member's full email or username." />}
           </> : <Text style={styles.help}>Your role does not manage member permissions.</Text>}
@@ -174,4 +179,4 @@ export default function AdminScreen() {
     </Page>
   </KeyboardAvoidingView>
 }
-const styles = StyleSheet.create({ keyboard: { flex: 1, backgroundColor: colors.background }, card: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.xl, padding: space.xl, gap: space.lg }, heading: { color: colors.text, fontFamily: fonts.semibold, fontSize: 18 }, help: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 22 }, warning: { color: colors.warning, fontFamily: fonts.medium, fontSize: 13, lineHeight: 22 } })
+const styles = StyleSheet.create({ permission: { gap: space.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.md }, keyboard: { flex: 1, backgroundColor: colors.background }, card: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.xl, padding: space.xl, gap: space.lg }, heading: { color: colors.text, fontFamily: fonts.semibold, fontSize: 18 }, help: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 22 }, warning: { color: colors.warning, fontFamily: fonts.medium, fontSize: 13, lineHeight: 22 } })

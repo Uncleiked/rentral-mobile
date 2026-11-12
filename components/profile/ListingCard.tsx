@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import { AssetPhoto } from '@/components/listing/AssetPhoto'
 import Link from 'next/link'
 import { ImageIcon, PencilLine, ArrowUpRight } from 'lucide-react'
 import type { ListingSummary } from '@/lib/profile-data'
@@ -18,7 +18,7 @@ export function ListingCard({ listing, owner = false }: ListingCardProps) {
   const label = owner ? ownerListingStatus(listing) : listing.mediaSource === 'approved_gallery' ? 'Gallery media' : listing.media?.status === 'ready' ? 'Video ready' : 'Walkthrough'
   return <article className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-card text-text-primary">
     <div className="relative aspect-[4/3] w-full">
-      {poster ? <Image src={poster} alt={listing.title} fill unoptimized sizes="(min-width: 1024px) 33vw, (min-width: 360px) 50vw, 100vw" className="object-cover" /> : listing.videoUrl || listing.useMux ? <ListingVideo listingId={listing.id} useMux={listing.useMux} src={listing.videoUrl} muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-glass-light text-text-muted"><ImageIcon className="h-6 w-6" aria-hidden="true" /><span className="text-xs">Media can be added later</span></div>}
+      {poster ? <AssetPhoto src={poster} alt={listing.title} sizes="(min-width: 1024px) 33vw, (min-width: 360px) 50vw, 100vw" /> : listing.videoUrl || listing.useMux ? <ListingVideo listingId={listing.id} useMux={listing.useMux} src={listing.videoUrl} muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-glass-light text-text-muted"><ImageIcon className="h-6 w-6" aria-hidden="true" /><span className="text-xs">Media can be added later</span></div>}
       <span className="absolute left-2 top-2 max-w-[calc(100%-16px)] rounded-full border border-glass-border-light bg-glass-dark px-2.5 py-1 text-[10px] font-semibold text-text-primary backdrop-blur-sm">{label}</span>
       <Link href={href} aria-label={isDraft && owner ? `Continue editing ${listing.title}` : `View ${listing.title}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-accent-primary" />
     </div>

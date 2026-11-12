@@ -10,9 +10,9 @@ const inspectionId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const auditId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 const reason = 'Reviewed the account and its supporting evidence for the gallery upload exception.'
 
-async function fixture(page: Page, options: { unknown?: boolean; missingReceipt?: boolean; conflict?: boolean; protectedOwner?: boolean; organizations?: boolean; extendedInventory?: boolean; truncatedExport?: boolean; searchFailure?: boolean; mediaFailure?: boolean; directIntent?: boolean; finance?: boolean } = {}) {
+async function fixture(page: Page, options: { unknown?: boolean; missingReceipt?: boolean; conflict?: boolean; protectedOwner?: boolean; organizations?: boolean; extendedInventory?: boolean; truncatedExport?: boolean; searchFailure?: boolean; mediaFailure?: boolean; directIntent?: boolean; finance?: boolean; auditHistory?: boolean; auditFailure?: boolean; auditRevoked?: boolean; overviewFailure?: boolean; overviewRevoked?: boolean } = {}) {
   const organizationCommands: OrganizationReview[] = []
-  const commands: AdminCommand[] = [], outbound: string[] = [], errors: string[] = [], listingQueries: URLSearchParams[] = [], exportQueries: URLSearchParams[] = [], mediaRequests: string[] = []
+  const commands: AdminCommand[] = [], outbound: string[] = [], errors: string[] = [], listingQueries: URLSearchParams[] = [], exportQueries: URLSearchParams[] = [], mediaRequests: string[] = [], auditQueries: URLSearchParams[] = [], overviewReads: string[] = []
   const now = new Date().toISOString()
   const user = (id: string, email: string, role: AdminDashboard['role']) => ({ id, revision: 0, email, username: 'synthetic', role, suspended: false, closed: false, galleryAllowed: false, freePostingAllowed: false, directPublishAllowed: false, galleryPermissionRevision: 0, createdAt: now })
   const dashboard: AdminDashboard = {
@@ -45,6 +45,12 @@ async function fixture(page: Page, options: { unknown?: boolean; missingReceipt?
     legalName: 'Synthetic Harbour Living Limited', registrationType: 'company', registrationNumber: 'RC FIXTURE',
     representativeName: 'Synthetic Representative', representativeRole: 'Director', documentKind: 'cac_certificate',
     supportingKind: null, status: 'pending', reviewReason: null, submittedAt: now, reviewedAt: null }
+  const auditRows = options.auditHistory ? Array.from({ length: 60 }, (_, index) => ({
+    id: '90000000-0000-4000-8000-' + String(index + 1).padStart(12, '0'), action: index % 2 ? 'set_gallery_permission' : 'publish',
+    targetType: index % 2 ? 'user' : 'listing', targetId: index % 2 ? memberId : listingId,
+    reason: index === 55 ? 'Historic grant evidence retained for an older member decision.' : 'Recorded synthetic decision ' + (index + 1) + ' with independent supporting evidence.',
+    actorId, actorUsername: index === 55 ? 'historic_staff' : 'queue_staff', createdAt: new Date(Date.UTC(2026, 10, 12, 12) - index * 86400000).toISOString(),
+  })) : []
   const receipts = new Set<string>()
   let conflicted = false
   page.on('pageerror', error => errors.push(error.message))
@@ -55,6 +61,27 @@ async function fixture(page: Page, options: { unknown?: boolean; missingReceipt?
     if (!url.pathname.startsWith('/api/v1/files/')) expect(request.headers()['x-rentral-account']).toBe(actorId)
     const success = (data: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data }) })
     if (url.pathname === '/api/v1/admin') return success(dashboard)
+    if (url.pathname === '/api/v1/admin/overview') {
+      overviewReads.push(url.pathname)
+      if (options.overviewFailure || options.overviewRevoked && overviewReads.length > 1) return route.fulfill({ status: options.overviewFailure ? 503 : 403, contentType: 'application/json', body: JSON.stringify({ success: false, code: options.overviewFailure ? 'DATABASE_UNAVAILABLE' : 'STAFF_REQUIRED', error: options.overviewFailure ? 'Synthetic review counts unavailable.' : 'Staff access changed. Refresh the workspace.' }) })
+      return success({ generatedAt: now, queues: options.finance ? [] : [
+        { id: 'listings', label: 'Listings awaiting review', count: filteredListings(new URLSearchParams({ status: 'review' })).length, oldestAt: now, href: '/admin', tab: 'listings' },
+        { id: 'organizations', label: 'Organization applications', count: options.organizations && application.status === 'pending' ? 1 : 0, oldestAt: options.organizations ? now : null, href: '/admin', tab: 'organizations' },
+        { id: 'inspections', label: 'Manual inspection evidence', count: dashboard.inspections.length, oldestAt: now, href: '/admin', tab: 'inspections' },
+        { id: 'reports', label: 'Open booking reports', count: 0, oldestAt: null, href: '/marketplace/admin', tab: null },
+      ] })
+    }
+    if (url.pathname === '/api/v1/admin/audit') {
+      auditQueries.push(new URLSearchParams(url.searchParams))
+      if (options.auditFailure || options.auditRevoked && auditQueries.length > 1) return route.fulfill({ status: options.auditFailure ? 503 : 403, contentType: 'application/json', body: JSON.stringify({ success: false, code: options.auditFailure ? 'DATABASE_UNAVAILABLE' : 'STAFF_REQUIRED', error: options.auditFailure ? 'Synthetic audit history unavailable.' : 'Staff access changed. Refresh the workspace.' }) })
+      const query = (url.searchParams.get('query') ?? '').toLowerCase(), target = url.searchParams.get('targetType') ?? 'all'
+      const from = url.searchParams.get('from'), to = url.searchParams.get('to')
+      const rows = auditRows.filter(item => (target === 'all' || target === item.targetType) && (!from || item.createdAt.slice(0, 10) >= from) && (!to || item.createdAt.slice(0, 10) <= to) &&
+        (!query || [item.action, item.targetId, item.reason, item.actorUsername, item.actorUsername === 'historic_staff' ? 'historic@example.invalid' : 'staff@example.invalid'].some(value => value.toLowerCase().includes(query))))
+      if (url.searchParams.get('sort') === 'oldest') rows.reverse()
+      const offset = Number(url.searchParams.get('cursor') ?? '0'), limit = Number(url.searchParams.get('limit') ?? '25'), hasMore = offset + limit < rows.length
+      return success({ items: rows.slice(offset, offset + limit), total: rows.length, hasMore, nextCursor: hasMore ? String(offset + limit) : null })
+    }
     if (url.pathname === `/api/v1/admin/organizations/${application.id}/document`) return success({ url: 'http://127.0.0.1:4184/api/v1/files/compliance-docs/synthetic-registration.pdf?token=fixture', expiresAt: new Date(Date.now() + 60000).toISOString() })
     if (url.pathname === '/api/v1/admin/organizations' && options.organizations) {
       if (request.method() === 'POST') {
@@ -62,7 +89,9 @@ async function fixture(page: Page, options: { unknown?: boolean; missingReceipt?
         organizationCommands.push(command); application.revision += 1; application.status = command.decision === 'approve' ? 'approved' : command.decision === 'reject' ? 'rejected' : 'changes_requested'
         return success({ clientId: command.clientId, resourceId: application.id, committed: true })
       }
-      return success({ items: [application] })
+      const query = (url.searchParams.get('query') ?? '').toLowerCase(), status = url.searchParams.get('status') ?? 'pending'
+      const matched = (status === 'all' || status === application.status) && (!query || [application.legalName, application.registrationNumber, application.representativeName, 'member@example.invalid'].some(value => value.toLowerCase().includes(query)))
+      return success({ items: matched ? [application] : [], total: matched ? 1 : 0, hasMore: false, nextCursor: null })
     }
     if (url.pathname === '/api/v1/admin/organizations') return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false, code: 'ORGANIZATION_SETUP_REQUIRED', error: 'Organization review is not prepared in this synthetic fixture.' }) })
     if (url.pathname === '/api/v1/admin/users') {
@@ -137,7 +166,7 @@ async function fixture(page: Page, options: { unknown?: boolean; missingReceipt?
   await expect(page.getByRole('heading', { name: 'Review and manage Rentral', exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: options.finance ? 'Audit trail' : 'Listings', exact: true })).toBeVisible()
   if (!options.finance) await expect(page.getByRole('heading', { name: 'Listing review queue', exact: true })).toBeVisible()
-  return { commands, organizationCommands, outbound, errors, dashboard, listingQueries, exportQueries, mediaRequests }
+  return { commands, organizationCommands, outbound, errors, dashboard, listingQueries, exportQueries, mediaRequests, auditQueries, overviewReads }
 }
 async function member(page: Page, email = 'member@example.invalid') {
   await page.getByRole('tab', { name: 'Members & permissions', exact: true }).click()
@@ -319,6 +348,8 @@ test('organization approval requires independent evidence checks and opening its
   await page.screenshot({ path: info.outputPath('admin-organization-review.png'), fullPage: true })
   await save.click()
   await expect(page.getByText('Organization decision recorded. Current applications are shown.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Current review workload', exact: true }).getByRole('button', { name: /Organization applications/ })).toContainText('No records waiting')
+  expect(state.overviewReads.length).toBeGreaterThan(1)
   expect(state.organizationCommands).toHaveLength(1)
   expect(state.organizationCommands[0]).toMatchObject({ decision: 'approve', expectedRevision: 0, checklist: { registrationMatches: true, registerChecked: true, authorityConfirmed: true } })
   expect(state.errors).toEqual([]); expect(state.outbound).toEqual([])
@@ -517,4 +548,76 @@ test('private media failures offer a retry while keeping permission and publicat
   await expect.poll(() => state.mediaRequests.length).toBe(2)
   await expect(review.getByRole('button', { name: 'Record decision', exact: true })).toBeDisabled()
   expect(state.commands).toHaveLength(0); expect(state.errors).toEqual([]); expect(state.outbound).toEqual([])
+})
+
+
+test('review workload uses full totals and returns directly to the pending queue', async ({ page }) => {
+  const state = await fixture(page, { extendedInventory: true, organizations: true })
+  const overview = page.getByRole('region', { name: 'Current review workload', exact: true })
+  const listingQueue = overview.getByRole('button', { name: /Listings awaiting review/ })
+  await expect(listingQueue).toContainText('28')
+  await page.getByRole('combobox', { name: 'Listing status', exact: true }).selectOption('active')
+  await expect(page.getByRole('button', { name: /Live Toyota rental/ })).toBeVisible()
+  await listingQueue.click()
+  await expect(page.getByRole('combobox', { name: 'Listing status', exact: true })).toHaveValue('review')
+  await expect(page.getByText('Showing 1-25 of 28 matching listings.', { exact: true })).toBeVisible()
+  await overview.getByRole('button', { name: /Organization applications/ }).click()
+  await expect(page.getByRole('tab', { name: 'Organizations', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: 'Organization applications', exact: true })).toBeVisible()
+  await expect(overview.getByRole('link', { name: /Open booking reports/ })).toHaveAttribute('href', '/marketplace/admin')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(state.commands).toHaveLength(0); expect(state.errors).toEqual([]); expect(state.outbound).toEqual([])
+})
+test('audit history reaches older pages and applies actor, record and UTC date filters', async ({ page }) => {
+  const state = await fixture(page, { auditHistory: true })
+  await page.getByRole('tab', { name: 'Audit trail', exact: true }).click()
+  await expect(page.getByText('60 matching decisions across all recorded history.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Next history page', exact: true }).click()
+  await page.getByRole('button', { name: 'Next history page', exact: true }).click()
+  await expect(page.getByText('Historic grant evidence retained for an older member decision.', { exact: true })).toBeVisible()
+  await page.getByRole('searchbox', { name: 'Search audit history', exact: true }).fill('historic@example.invalid')
+  await page.getByRole('combobox', { name: 'Record type', exact: true }).selectOption('user')
+  await page.getByLabel('From date (UTC)', { exact: true }).fill('2026-09-01')
+  await page.getByLabel('To date (UTC)', { exact: true }).fill('2026-11-12')
+  await page.getByRole('combobox', { name: 'History order', exact: true }).selectOption('oldest')
+  await page.getByRole('button', { name: 'Search history', exact: true }).click()
+  await expect(page.getByText('1 matching decisions across all recorded history.', { exact: true })).toBeVisible()
+  expect(Object.fromEntries(state.auditQueries.at(-1)!)).toMatchObject({ query: 'historic@example.invalid', targetType: 'user', from: '2026-09-01', to: '2026-11-12', sort: 'oldest' })
+  expect(state.auditQueries.at(-1)!.has('cursor')).toBe(false)
+  await page.getByRole('button', { name: 'Search history', exact: true }).click()
+  await expect(page.getByText('1 matching decisions across all recorded history.', { exact: true })).toBeVisible()
+  expect(await page.locator('textarea').count()).toBe(0)
+  const count = state.auditQueries.length
+  await page.getByLabel('From date (UTC)', { exact: true }).fill('2026-12-01')
+  await page.getByRole('button', { name: 'Search history', exact: true }).click()
+  await expect(page.getByText('The end date must follow the start date.', { exact: true })).toBeVisible()
+  expect(state.auditQueries.length).toBe(count)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(state.commands).toHaveLength(0); expect(state.errors).toEqual([]); expect(state.outbound).toEqual([])
+})
+test('review overview and audit failures stay explicit and revoked history clears previous records', async ({ page }) => {
+  const state = await fixture(page, { auditHistory: true, auditRevoked: true, overviewFailure: true })
+  await expect(page.getByText('Synthetic review counts unavailable.', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Audit trail', exact: true }).click()
+  await expect(page.getByText('60 matching decisions across all recorded history.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Refresh audit history', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Audit history unavailable', exact: true })).toBeVisible()
+  await expect(page.getByText('Staff access changed. Refresh the workspace.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Recorded synthetic decision 1 with independent supporting evidence.', { exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(state.commands).toHaveLength(0); expect(state.errors).toEqual([]); expect(state.outbound).toEqual([])
+})
+test('unconfirmed decisions disable review workload navigation and history filters', async ({ page }) => {
+  const state = await fixture(page, { unknown: true })
+  const review = await member(page)
+  await review.getByRole('switch', { name: 'Allow gallery uploads', exact: true }).check()
+  await review.getByRole('textbox', { name: 'Reason for this decision', exact: true }).fill(reason)
+  await review.getByRole('button', { name: 'Record decision', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Unconfirmed admin instruction', exact: true })).toBeVisible()
+  const overview = page.getByRole('region', { name: 'Current review workload', exact: true })
+  await expect(overview.getByRole('button', { name: /Listings awaiting review/ })).toBeDisabled()
+  await expect(overview.getByRole('link', { name: /Open booking reports/ })).toHaveAttribute('aria-disabled', 'true')
+  await page.getByRole('tab', { name: 'Audit trail', exact: true }).click()
+  await expect(page.getByRole('searchbox', { name: 'Search audit history', exact: true })).toBeDisabled()
+  expect(state.commands).toHaveLength(1); expect(state.errors).toEqual([]); expect(state.outbound).toEqual([])
 })

@@ -133,3 +133,24 @@ it('captures current typed draft values and strips unknown legacy fields without
   const current = useRentralStore.getState(), command = normalizeWebListingCommand({ mode: 'draft', listing: { clientId: nonce, category: 'house', wizardStep: 'details', address: current.address, basePrice: current.basePrice, metadata: current.metadata.house } })
   expect(command.listing).toMatchObject({ clientId: nonce, address: 'Newly typed current address', basePrice: '900000', metadata: { bedrooms: '4', listingTitle: 'Current unsaved title' } })
 })
+
+it.each(['pending_verification', 'active'])('accepts a confirmed submitted listing with the factual %s state', async status => {
+  const command = useRentralStore.getState().prepareListingCommand(submitCommand())
+  const fetch = vi.fn().mockResolvedValueOnce(response(dto('sealed'))).mockResolvedValueOnce(response({ id: listingId, status }))
+  vi.stubGlobal('fetch', fetch)
+  expect(await executeWebListingCommand(identity(), command)).toEqual({ id: listingId, status })
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(fetch.mock.calls[1][1].body).toBe(JSON.stringify(command))
+})
+it.each(['draft', 'suspended', 'rented', 'on_hold', 'invented'])('does not mistake submitted response state %s for successful publication', async status => {
+  const command = useRentralStore.getState().prepareListingCommand(submitCommand())
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(dto('sealed'))).mockResolvedValueOnce(response({ id: listingId, status })))
+  await expect(executeWebListingCommand(identity(), command)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  expect(readWebListingCommand(actor)).toEqual(command)
+})
+it('still requires a draft response for a save-draft command', async () => {
+  const command = useRentralStore.getState().prepareListingCommand(partial())
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ id: listingId, status: 'active' })))
+  await expect(executeWebListingCommand(identity(), command)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  expect(readWebListingCommand(actor)).toEqual(command)
+})

@@ -1,3 +1,4 @@
+import { escapeAdminText } from '@/lib/admin/search'
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
@@ -76,7 +77,7 @@ export async function getAdminDashboard(actorId: string) {
 export async function searchAdminUsers(actorId: string, query: string) {
   await requireMemberLookup(actorId)
   const value = query.trim().toLowerCase()
-  const rows = await prisma.user.findMany({ where: value ? { OR: [{ email: { startsWith: value } }, { username: { startsWith: value } }, ...(/^[a-f0-9-]{36}$/i.test(value) ? [{ id: value }] : [])] } : {}, select: userSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 })
+  const rows = await prisma.user.findMany({ where: value ? { OR: [{ email: { startsWith: escapeAdminText(value) } }, { username: { startsWith: escapeAdminText(value.startsWith('@') && value.length > 1 ? value.slice(1) : value) } }, ...(/^[a-f0-9-]{36}$/i.test(value) ? [{ id: value }] : [])] } : {}, select: userSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 })
   await requireMemberLookup(actorId)
   return adminUsersSchema.parse({ items: rows.map(userView) })
 }

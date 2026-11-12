@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ user: vi.fn(), find: vi.fn(), sign: vi.fn(), bucket: vi.fn() }))
+const mocks = vi.hoisted(() => ({ user: vi.fn(), find: vi.fn(), sign: vi.fn(), bucket: vi.fn(), variant: vi.fn() }))
+vi.mock('@/lib/media/private-image', () => ({ privateImageVariant: mocks.variant }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.user }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: mocks.find } } }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: mocks.bucket } }) }))
@@ -113,4 +114,11 @@ describe('private listing previews', () => {
     expect(await response.text()).not.toContain('credentials')
     expect(mocks.sign).not.toHaveBeenCalled()
   })
+})
+
+describe('private responsive image authorization',()=>{
+ const request=(kind:string,width:string)=>GET(new Request('https://rentral.test/api/listings/'+id+'/source?kind='+kind+'&w='+width),{params:Promise.resolve({id})})
+ it('authorizes the listing before deriving a no-store sameorigin image',async()=>{mocks.variant.mockResolvedValue(Buffer.from('fixture-webp'));const response=await request('poster','640');expect(response.status).toBe(200);expect(response.headers.get('content-type')).toBe('image/webp');expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('vary')).toContain('Cookie');expect(mocks.variant).toHaveBeenCalledWith(expect.any(Object),listing.poster_path,640);expect(mocks.sign).not.toHaveBeenCalled()})
+ it('never derives inaccessible or unsafe media',async()=>{mocks.find.mockResolvedValue(null);expect((await request('poster','320')).status).toBe(404);expect(mocks.variant).not.toHaveBeenCalled();mocks.user.mockResolvedValue(null);expect((await request('poster','320')).status).toBe(401);expect(mocks.variant).not.toHaveBeenCalled()})
+ it.each([['video','320'],['poster','1'],['poster','999999'],['poster','0320']])('rejects invalid image transform %s/%s before database lookup',async(kind,width)=>{expect((await request(kind,width)).status).toBe(400);expect(mocks.find).not.toHaveBeenCalled();expect(mocks.variant).not.toHaveBeenCalled()})
 })

@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CaptureRequestError, listingRequest } from '@/lib/listings/capture-client'
-import { organizationLinkSchema, organizationQueueSchema, organizationReceiptSchema, organizationReviewSchema, type OrganizationView } from '@/lib/contracts/organizations'
+import { organizationLinkSchema, organizationQueuePageSchema, organizationReceiptSchema, organizationReviewSchema, type OrganizationView } from '@/lib/contracts/organizations'
 import { clearOrganizationPending, readOrganizationPending, saveOrganizationPending, type OrganizationPending } from '@/lib/organizations/recovery'
 
 const panel = 'min-w-0 rounded-2xl border border-border-subtle bg-surface-card p-5 sm:p-6'
 const button = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle px-4 py-3 text-sm font-semibold disabled:opacity-50'
-const field = 'mt-2 block w-full min-w-0 rounded-xl border border-border-subtle bg-background-app p-3 text-sm text-text-primary'
-export function OrganizationAdminQueue({ actorId, disabled = false }: { actorId: string; disabled?: boolean }) {
+const field = 'mt-2 block min-h-11 w-full min-w-0 max-w-full rounded-xl border border-border-subtle bg-background-app p-3 text-base text-text-primary focus-visible:outline-2 focus-visible:outline-accent-primary sm:text-sm'
+export function OrganizationAdminQueue({ actorId, disabled = false, onDecisionRecorded }: { actorId: string; disabled?: boolean; onDecisionRecorded?: () => void }) {
   const [items, setItems] = useState<OrganizationView[]>([])
   const [selected, setSelected] = useState<OrganizationView | null>(null)
   const [checklist, setChecklist] = useState({ registrationMatches: false, registerChecked: false, authorityConfirmed: false })
@@ -16,21 +16,34 @@ export function OrganizationAdminQueue({ actorId, disabled = false }: { actorId:
   const [busy, setBusy] = useState(false), [ready, setReady] = useState(false), [message, setMessage] = useState('')
   const [document, setDocument] = useState<{ url: string; expiresAt: string; supporting: boolean } | null>(null), [opened, setOpened] = useState(false)
   const [pending, setPending] = useState<OrganizationPending | null>(null), [canRetry, setCanRetry] = useState(false), [recoveryError, setRecoveryError] = useState(false)
-  const active = useRef(true), sending = useRef(false)
+  const [query, setQuery] = useState(''), [search, setSearch] = useState('')
+  const [status, setStatus] = useState('pending'), [sort, setSort] = useState('oldest')
+  const [cursor, setCursor] = useState<string | null>(null), [history, setHistory] = useState<(string | null)[]>([])
+  const [total, setTotal] = useState(0), [nextCursor, setNextCursor] = useState<string | null>(null), [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(true), [queueError, setQueueError] = useState(''), [loadedAt, setLoadedAt] = useState<string | null>(null)
+  const active = useRef(true), sending = useRef(false), sequence = useRef(0)
   const load = useCallback(async () => {
-    const result = await listingRequest(actorId, '/api/v1/admin/organizations', organizationQueueSchema)
-    if (active.current) { setItems(result.items); setReady(true) }
-  }, [actorId])
+    const current = ++sequence.current
+    setLoading(true); setQueueError('')
+    try {
+      const params = new URLSearchParams({ query: search, status, sort, limit: '25', ...(cursor ? { cursor } : {}) })
+      const result = await listingRequest(actorId, '/api/v1/admin/organizations?' + params, organizationQueuePageSchema)
+      if (active.current && current === sequence.current) { setItems(result.items); setLoadedAt(new Date().toISOString()); setTotal(result.total); setNextCursor(result.nextCursor); setHasMore(result.hasMore); setReady(true) }
+    } catch (error) {
+      if (active.current && current === sequence.current) { setItems([]); setTotal(0); setNextCursor(null); setHasMore(false); setQueueError(error instanceof Error ? error.message : 'Organization applications could not be loaded.') }
+      throw error
+    } finally { if (active.current && current === sequence.current) setLoading(false) }
+  }, [actorId, search, status, sort, cursor])
+  useEffect(() => { const timer = setTimeout(() => { void load().catch(() => undefined) }, 0); return () => clearTimeout(timer) }, [load])
   useEffect(() => {
     active.current = true
-    void load().catch(error => { if (active.current) setMessage(error instanceof Error ? error.message : 'Organization review is unavailable.') })
     let current = true
     void Promise.resolve().then(() => {
       if (!current) return
       try { setPending(readOrganizationPending(actorId, 'review')) } catch { setRecoveryError(true); setMessage('A saved organization decision needs recovery. Keep browser data and review its audit history.') }
     })
-    return () => { current = false; active.current = false }
-  }, [actorId, load])
+    return () => { current = false; active.current = false; sequence.current += 1 }
+  }, [actorId])
   async function run(work: () => Promise<void>): Promise<void> {
     if (sending.current) return
     sending.current = true; setBusy(true); setMessage('')
@@ -40,15 +53,19 @@ export function OrganizationAdminQueue({ actorId, disabled = false }: { actorId:
   function select(item: OrganizationView): void {
     if (disabled || busy || pending || recoveryError) return
     setSelected(item); setChecklist({ registrationMatches: false, registerChecked: false, authorityConfirmed: false }); setReason(''); setDecision('request_changes'); setDocument(null); setOpened(false); setMessage('')
+    requestAnimationFrame(() => { const review = window.document.getElementById('organization-selected-application'); review?.focus({ preventScroll: true }); if (window.innerWidth < 1024) review?.scrollIntoView({ block: 'start', behavior: 'instant' }) })
   }
   async function send(instruction: OrganizationPending): Promise<void> {
     if (instruction.scope !== 'review') return
     setCanRetry(false)
+    let confirmed = false
     try {
       const result = await listingRequest(actorId, '/api/v1/admin/organizations', organizationReceiptSchema, instruction.command)
       if (result.clientId !== instruction.command.clientId) throw new Error('The decision receipt does not match the original instruction.')
-      clearOrganizationPending(actorId, 'review', result.clientId); setPending(null); setSelected(null); setDocument(null); await load(); setMessage('Organization decision recorded. Current applications are shown.')
+      confirmed = true
+      clearOrganizationPending(actorId, 'review', result.clientId); setPending(null); setSelected(null); setDocument(null); onDecisionRecorded?.(); await load(); setMessage('Organization decision recorded. Current applications are shown.')
     } catch (error) {
+      if (confirmed) throw new Error('The organization decision was saved, but applications could not refresh. Refresh this queue before another decision.')
       if (error instanceof CaptureRequestError && error.status >= 400 && error.status < 500 && error.code !== 'INVALID_RESPONSE') {
         clearOrganizationPending(actorId, 'review', instruction.command.clientId); setPending(null)
         if (error.code === 'ORGANIZATION_CHANGED') { setSelected(null); setDocument(null); await load() }
@@ -65,11 +82,13 @@ export function OrganizationAdminQueue({ actorId, disabled = false }: { actorId:
   }
   async function check(): Promise<void> {
     if (!pending) return
+    let confirmed = false
     try {
       const result = await listingRequest(actorId, '/api/v1/admin/organizations/receipts/' + pending.command.clientId, organizationReceiptSchema)
       if (result.clientId !== pending.command.clientId) throw new Error('The original decision receipt does not match.')
-      clearOrganizationPending(actorId, 'review', result.clientId); setPending(null); setCanRetry(false); setSelected(null); await load(); setMessage('The original organization decision was confirmed without replay.')
-    } catch (error) { if (error instanceof CaptureRequestError && error.status === 404) { setCanRetry(true); setMessage('No committed receipt exists. Resend only the exact saved decision if you wish.'); return } throw error }
+      confirmed = true
+      clearOrganizationPending(actorId, 'review', result.clientId); setPending(null); setCanRetry(false); setSelected(null); onDecisionRecorded?.(); await load(); setMessage('The original organization decision was confirmed without replay.')
+    } catch (error) { if (confirmed) throw new Error('The original organization decision was confirmed. Refresh applications before another decision.'); if (error instanceof CaptureRequestError && error.status === 404) { setCanRetry(true); setMessage('No committed receipt exists. Resend only the exact saved decision if you wish.'); return } throw error }
   }
   async function prepareDocument(supporting = false): Promise<void> {
     if (!selected) return
@@ -78,15 +97,29 @@ export function OrganizationAdminQueue({ actorId, disabled = false }: { actorId:
     if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/v1/files/compliance-docs/')) throw new Error('The private document link could not be verified.')
     setDocument({ url: url.pathname + url.search, expiresAt: result.expiresAt, supporting })
   }
-  const blocked = disabled || busy || Boolean(pending) || recoveryError
-  const pendingItems = items.filter(item => item.status === 'pending')
+  function clearSelection(): void { setSelected(null); setDocument(null); setOpened(false); setReason('') }
+  function changeFilter(name: 'status' | 'sort', value: string): void {
+    if (name === 'status') setStatus(value); else setSort(value)
+    setCursor(null); setHistory([]); clearSelection()
+  }
+  const blocked = disabled || busy || Boolean(pending) || recoveryError || loading || Boolean(queueError)
+  const filtersBlocked = disabled || busy || Boolean(pending) || recoveryError
+  const first = items.length ? history.length * 25 + 1 : 0, last = items.length ? first + items.length - 1 : 0
   return <section className="space-y-5" aria-label="Organization applications">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold">Organization applications</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">Review CAC registration evidence and the representative’s authority. Registration approval opens marketplace access; asset ownership and listing publication require their own review.</p></div><button className={button} disabled={busy} onClick={() => { void run(load) }}>Refresh organizations</button></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold">Organization applications</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">Review CAC registration evidence and the representative’s authority. Registration approval opens marketplace access; asset ownership and listing publication require their own review.</p></div><button className={button} disabled={busy || loading} onClick={() => { void run(load) }}>Refresh organizations</button></div>
     {message && <p role="status" className={panel + ' text-sm leading-6 text-text-secondary'}>{message}</p>}
-    {!ready && <p className={panel + ' text-sm leading-6 text-text-muted'}>Organization review requires its separately prepared database collection. Existing admin tools remain available.</p>}
+    <form className={panel + ' grid min-w-0 gap-4 sm:grid-cols-2'} onSubmit={event => { event.preventDefault(); setSearch(query.trim()); setCursor(null); setHistory([]); clearSelection() }}>
+      <label className="min-w-0 text-xs font-medium text-text-muted sm:col-span-2">Search organizations<input type="search" maxLength={254} disabled={filtersBlocked} value={query} onChange={event => setQuery(event.target.value)} placeholder="Legal name, RC number or representative" className={field} /></label>
+      <label className="min-w-0 text-xs font-medium text-text-muted">Application status<select className={field} disabled={filtersBlocked} value={status} onChange={event => changeFilter('status', event.target.value)}><option value="pending">Pending review</option><option value="approved">Approved</option><option value="changes_requested">Changes requested</option><option value="rejected">Rejected</option><option value="all">All applications</option></select></label>
+      <label className="min-w-0 text-xs font-medium text-text-muted">Application sort order<select className={field} disabled={filtersBlocked} value={sort} onChange={event => changeFilter('sort', event.target.value)}><option value="oldest">Oldest first</option><option value="newest">Newest first</option></select></label>
+      <div className="flex min-w-0 flex-wrap gap-3 sm:col-span-2"><button className={button} disabled={filtersBlocked || loading}>Search applications</button><button type="button" className={button} disabled={filtersBlocked} onClick={() => { setQuery(''); setSearch(''); setStatus('pending'); setSort('oldest'); setCursor(null); setHistory([]); clearSelection() }}>Clear application filters</button></div>
+      <p className="text-xs leading-6 text-text-muted sm:col-span-2">Pending applications are shown oldest first so earlier requests remain discoverable. Search covers all matching applications, not only this page.</p>
+    </form>
+    {loading && <p role="status" className={panel + ' text-sm leading-6 text-text-muted'}>Loading organization applications...</p>}
+    {queueError && <div className={panel}><p role="alert" className="break-words text-sm leading-6 text-text-secondary">{queueError}</p><button type="button" className={button + ' mt-4'} disabled={filtersBlocked || loading} onClick={() => { void run(load) }}>Retry organization search</button></div>}
     {pending && <section className={panel}><h3 className="font-semibold">Confirm the original organization decision</h3><p className="mt-2 text-sm text-text-muted">New organization decisions are paused. Readback does not send another decision.</p><button className={button + ' mt-4'} disabled={busy} onClick={() => { void run(check) }}>Check original organization decision</button>{canRetry && <button className={button + ' mt-4'} disabled={busy || disabled} onClick={() => { void run(() => send(pending)) }}>Resend exact saved organization decision</button>}</section>}
-    {ready && <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"><div className="space-y-3"><p className="text-xs text-text-muted">{pendingItems.length} pending in this bounded view of {items.length} applications.</p>{items.length ? items.map(item => <button key={item.id + ':' + item.revision} className={panel + ' w-full text-left disabled:opacity-50'} disabled={blocked} onClick={() => select(item)}><span className="block break-words font-semibold">{item.legalName}</span><span className="mt-2 block text-xs text-text-muted">{item.registrationNumber} · {item.status.replaceAll('_', ' ')}</span></button>) : <p className={panel + ' text-sm text-text-muted'}>No organization applications have been submitted.</p>}</div>
-      {selected ? <form key={selected.id + ':' + selected.revision} className={panel + ' space-y-5'} onSubmit={event => { event.preventDefault(); void run(submit) }}><div><h3 className="break-words text-lg font-semibold">{selected.legalName}</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">{selected.registrationType.replaceAll('_', ' ')} · {selected.registrationNumber}<br />Representative: {selected.representativeName} · {selected.representativeRole}<br />Evidence: {selected.documentKind.replaceAll('_', ' ')}</p></div>
+    {ready && !queueError && <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"><div className="space-y-3"><p role="status" className="text-xs leading-6 text-text-muted">Showing {first}-{last} of {total} matching applications.</p>{items.length ? items.map(item => <button key={item.id + ':' + item.revision} className={panel + ' w-full text-left disabled:opacity-50'} disabled={blocked} onClick={() => select(item)}><span className="block break-words font-semibold">{item.legalName}</span><span className="mt-2 block text-xs text-text-muted">{item.registrationNumber} · {item.status.replaceAll('_', ' ')}</span><span className="mt-2 block text-xs text-text-muted">Submitted <time dateTime={item.submittedAt}>{new Date(item.submittedAt).toLocaleDateString()}</time>{item.status === 'pending' ? ' / Waiting ' + Math.max(0, Math.floor((new Date(loadedAt ?? item.submittedAt).getTime() - new Date(item.submittedAt).getTime()) / 86400000)) + ' days' : ''}</span></button>) : <p className={panel + ' text-sm text-text-muted'}>No applications match these filters. Try another name, registration number or status.</p>}</div>
+      {selected ? <form id="organization-selected-application" tabIndex={-1} aria-label="Review organization application" key={selected.id + ':' + selected.revision} className={panel + ' space-y-5'} onSubmit={event => { event.preventDefault(); void run(submit) }}><div><div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><h3 className="min-w-0 break-words text-lg font-semibold">{selected.legalName}</h3><button type="button" className={button} disabled={filtersBlocked} onClick={clearSelection}>Close application</button></div><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">{selected.registrationType.replaceAll('_', ' ')} · {selected.registrationNumber}<br />Representative: {selected.representativeName} · {selected.representativeRole}<br />Evidence: {selected.documentKind.replaceAll('_', ' ')}</p></div>
         <div className="flex flex-wrap gap-3"><button type="button" disabled={blocked} className={button} onClick={() => { void run(() => prepareDocument()) }}>Prepare registration document</button>{selected.supportingKind && <button type="button" className={button} disabled={blocked} onClick={() => { void run(() => prepareDocument(true)) }}>Prepare supporting document</button>}</div>
         {document && <p className="text-xs leading-6 text-text-muted"><a href={document.url} target="_blank" rel="noreferrer" onClick={() => { if (!document.supporting) setOpened(true) }} className="inline-flex min-h-11 items-center text-accent-hover underline">Download private document</a><br />Link expires at {new Date(document.expiresAt).toLocaleTimeString()}.</p>}
         {selected.reviewReason && <p className="whitespace-pre-wrap text-sm text-text-muted">{selected.reviewReason}</p>}
@@ -95,5 +128,6 @@ export function OrganizationAdminQueue({ actorId, disabled = false }: { actorId:
           <button className={button + ' w-full bg-accent-primary text-text-inverse'} disabled={blocked || reason.trim().length < 15 || decision === 'approve' && (!opened || !Object.values(checklist).every(Boolean))}>{busy ? 'Saving decision…' : 'Record organization decision'}</button></fieldset>}
         {selected.userId === actorId && <p className="text-sm text-text-muted">Another administrator must review your organization. An owner override cannot approve this application.</p>}
       </form> : <div className={panel + ' text-sm leading-6 text-text-muted'}>Select an application to review its private evidence and registration details.</div>}</div>}
+    {ready && !queueError && <nav className="flex min-w-0 flex-wrap items-center justify-between gap-3" aria-label="Organization result pages"><button type="button" className={button} disabled={filtersBlocked || loading || !history.length} onClick={() => { const pages = [...history]; setCursor(pages.pop() ?? null); setHistory(pages); clearSelection() }}>Previous applications</button><span className="text-xs text-text-muted">Page {history.length + 1}</span><button type="button" className={button} disabled={filtersBlocked || loading || !hasMore || !nextCursor} onClick={() => { setHistory(previous => [...previous, cursor]); setCursor(nextCursor); clearSelection() }}>Next applications</button></nav>}
   </section>
 }
