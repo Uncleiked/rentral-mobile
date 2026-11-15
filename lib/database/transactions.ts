@@ -2,8 +2,9 @@
 import prisma from '@/lib/db'
 import { traceTransaction } from './transaction-trace'
 import { databaseErrorDiagnostic } from './error-diagnostics'
+import { lockRecordRevision, type RevisionLockModel } from './revision-lock'
 
-export type LockModel = 'conversation' | 'user' | 'listing' | 'listingCapture' | 'booking' | 'paymentIntent' | 'mediaAsset' | 'dispute' | 'safetyNotice' | 'safetyAppeal' | 'renewal' | 'leaseTermination' | 'workerState' | 'paymentRecipient' | 'financialOperation' | 'providerReceipt' | 'matchProfile' | 'matchConnection' | 'matchReport' | 'commercialOrder' | 'sponsoredCampaign' | 'pushDevice' | 'pushDelivery'
+export type LockModel = RevisionLockModel
 const TRANSACTION_ATTEMPTS = 5
 const TRANSACTION_BUDGET_MS = 15000
 const TRANSACTION_MAX_WAIT_MS = 5000
@@ -50,31 +51,5 @@ export async function withTransaction<T>(operation: (tx: Prisma.TransactionClien
 
 /** A real write serializes competing transactions; reading or setting an unchanged value does not. */
 export async function lockRecord(tx: Prisma.TransactionClient, model: LockModel, id: string): Promise<boolean> {
-  const args = { where: { id }, data: { revision: { increment: 1 } } }
-  switch (model) {
-    case 'conversation': return (await tx.conversation.updateMany(args)).count === 1
-    case 'user': return (await tx.user.updateMany(args)).count === 1
-    case 'listing': return (await tx.listing.updateMany(args)).count === 1
-    case 'listingCapture': return (await tx.listingCapture.updateMany(args)).count === 1
-    case 'booking': return (await tx.booking.updateMany(args)).count === 1
-    case 'paymentIntent': return (await tx.paymentIntent.updateMany(args)).count === 1
-    case 'mediaAsset': return (await tx.mediaAsset.updateMany(args)).count === 1
-    case 'dispute': return (await tx.dispute.updateMany(args)).count === 1
-    case 'safetyNotice': return (await tx.safetyNotice.updateMany(args)).count === 1
-    case 'safetyAppeal': return (await tx.safetyAppeal.updateMany(args)).count === 1
-    case 'renewal': return (await tx.renewal.updateMany(args)).count === 1
-    case 'leaseTermination': return (await tx.leaseTermination.updateMany(args)).count === 1
-    case 'workerState': return (await tx.workerState.updateMany(args)).count === 1
-    case 'paymentRecipient': return (await tx.paymentRecipient.updateMany(args)).count === 1
-    case 'financialOperation': return (await tx.financialOperation.updateMany(args)).count === 1
-    case 'providerReceipt': return (await tx.providerReceipt.updateMany(args)).count === 1
-    case 'matchProfile': return (await tx.matchProfile.updateMany(args)).count === 1
-    case 'matchConnection': return (await tx.matchConnection.updateMany(args)).count === 1
-    case 'matchReport': return (await tx.matchReport.updateMany(args)).count === 1
-    case 'commercialOrder': return (await tx.commercialOrder.updateMany(args)).count === 1
-    case 'sponsoredCampaign': return (await tx.sponsoredCampaign.updateMany(args)).count === 1
-    case 'pushDevice': return (await tx.pushDevice.updateMany(args)).count === 1
-    case 'pushDelivery': return (await tx.pushDelivery.updateMany(args)).count === 1
-  }
+  return lockRecordRevision(tx, model, id)
 }
-

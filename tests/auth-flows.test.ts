@@ -86,10 +86,11 @@ describe('callback and proxy', () => {
     const form = new FormData()
     form.set('email', 'renter@example.test')
     form.set('password', 'test-password')
+    form.set('username', 'chosen_renter')
     form.set('accountType', 'individual')
     form.set('termsAccepted', 'on')
     expect(await signup(form)).toMatchObject({ success: true, redirectTo: '/marketplace' })
-    expect(mocks.signup).toHaveBeenCalledWith(expect.objectContaining({ email: 'renter@example.test', password: 'test-password' }))
+    expect(mocks.signup).toHaveBeenCalledWith(expect.objectContaining({ email: 'renter@example.test', password: 'test-password', username: 'chosen_renter' }))
   })
   it('does not redirect a signed-in user off-site', async () => {
     const response = await GET(new Request('https://rentral.example/auth/callback?code=valid&next=https://evil.example'))
@@ -147,4 +148,14 @@ describe('account access without KYC onboarding', () => {
     expect(mocks.updateUser).not.toHaveBeenCalled()
     expect(mocks.resetWithCode).toHaveBeenCalledWith({ token: 'expired-code', password: 'new-password' })
   })
+})
+
+it('does not create an email account without its chosen username or hide a taken-name response', async () => {
+  const form = new FormData()
+  form.set('email', 'renter@example.test'); form.set('password', 'test-password'); form.set('accountType', 'individual'); form.set('termsAccepted', 'on')
+  expect(await signup(form)).toEqual({ error: expect.stringContaining('username') })
+  expect(mocks.signup).not.toHaveBeenCalled()
+  form.set('username', 'chosen_member')
+  mocks.signup.mockResolvedValue({ data: { user: null, session: null }, error: new AuthError(409, 'USERNAME_TAKEN', 'Taken') })
+  expect(await signup(form)).toEqual({ error: 'That username is already taken. Choose another username.' })
 })

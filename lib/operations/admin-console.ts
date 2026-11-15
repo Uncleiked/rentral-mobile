@@ -1,12 +1,14 @@
 import { escapeAdminText } from '@/lib/admin/search'
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
+import { z } from 'zod'
+import { traceDatabaseQuery } from '@/lib/database/transaction-trace'
 import prisma from '@/lib/db'
 import { createAdminClient } from '@/lib/admin'
 import { ApiError } from '@/lib/api/http'
 import { accountIsActive } from '@/lib/accounts/availability'
 import { assertStaffPermission, currentStaffRole, hasStaffPermission } from '@/lib/auth/roles'
-import { permissionsForRole, type StaffPermission } from '@/lib/auth/roles-policy'
+import { STAFF_ROLES, permissionsForRole, type StaffPermission } from '@/lib/auth/roles-policy'
 import { revokeAccountPush } from '@/lib/auth/credential-state'
 import { assertOwnerAdminReady } from '@/lib/database/readiness'
 import { committedMutation, mutationCommand, recordMutation, transactionMutation } from '@/lib/database/mutations'
@@ -117,6 +119,36 @@ export function adminCommandPermission(command: AdminCommand): StaffPermission {
   return 'listing:review'
 }
 function changed(): never { throw new ApiError(409, 'ADMIN_TARGET_CHANGED', 'This record changed. Refresh its current state before creating another review.') }
+// Only administrative access fields built below cross this private boundary.
+const accessPatchSchema = z.object({
+  staff_role: z.enum(STAFF_ROLES).nullable(),
+  gallery_upload_allowed: z.boolean(), gallery_permission_revision: z.number().int().nonnegative().safe(),
+  listing_fee_exempt: z.boolean(), listing_fee_exempt_by: z.uuid().nullable(),
+  listing_fee_exempt_at: z.date().nullable(), listing_fee_exempt_reason: z.string().min(15).max(2000).nullable(),
+  direct_publish_allowed: z.boolean(), direct_publish_by: z.uuid().nullable(),
+  direct_publish_at: z.date().nullable(), direct_publish_reason: z.string().min(15).max(2000).nullable(),
+  suspended_at: z.date().nullable(), suspension_reason: z.string().min(15).max(2000).nullable(),
+}).partial().strict().refine(value => Object.keys(value).length > 0)
+type AccessPatch = z.input<typeof accessPatchSchema>
+async function writeMemberAccess(tx: Prisma.TransactionClient, id: string, patch: AccessPatch): Promise<void> {
+  z.uuid().parse(id)
+  const values = accessPatchSchema.parse(patch), fields: Record<string, Prisma.InputJsonValue | null> = {}
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) throw new Error('INVALID_ADMIN_ACCESS_PATCH')
+    fields[key] = value instanceof Date ? { $date: value.toISOString() }
+      : key === 'gallery_permission_revision' ? { $numberLong: String(value) } : value
+  }
+  await assertOwnerAdminReady()
+  // Existing actor/target locks, authorization, audit and receipt stay atomic.
+  // Scalar-only writes avoid Prisma's unrelated incoming-relation queries.
+  const result = await traceDatabaseQuery('User', 'adminAccessUpdate', () => tx.$runCommandRaw({
+    update: 'User', updates: [{ q: { _id: id }, u: { $set: fields, $currentDate: { updatedAt: true } }, multi: false, upsert: false }],
+  }))
+  // An unchanged role can be a matched no-op in the same millisecond.
+  if (!result || Array.isArray(result) || typeof result !== 'object' || result.ok !== 1 || result.n !== 1 ||
+      ![0, 1].includes(result.nModified as number) ||
+      (result.writeErrors !== undefined && (!Array.isArray(result.writeErrors) || result.writeErrors.length !== 0)) || result.writeConcernError != null) throw new Error('ADMIN_ACCESS_WRITE_UNCONFIRMED')
+}
 async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: AdminCommand): Promise<string> {
   const owner = await tx.user.findUnique({ where: { id: actorId }, select: { staff_role: true } })
   const selfPrivilege = ['set_gallery_permission', 'set_free_posting_permission', 'set_direct_publish_permission'].includes(data.operation) && actorId === data.targetId && owner?.staff_role === 'owner' && 'ownerOverride' in data && data.ownerOverride && data.reason.length >= 30
@@ -131,14 +163,14 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
     if (!accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Choose an active account for ownership.')
     const owners = await tx.user.findMany({ where: { staff_role: 'owner' }, select: { id: true }, take: 2 })
     if (owners.length !== 1 || owners[0].id !== actorId) throw new ApiError(409, 'OWNERSHIP_CHANGED', 'Ownership changed. Sign in again and review the current owner.')
-    await tx.user.update({ where: { id: actorId }, data: { staff_role: 'admin' } })
-    await tx.user.update({ where: { id: target.id }, data: { staff_role: 'owner' } })
+    await writeMemberAccess(tx, actorId, { staff_role: 'admin' })
+    await writeMemberAccess(tx, target.id, { staff_role: 'owner' })
   } else if (data.operation === 'change_role') {
     if (!accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore access before assigning a staff role.')
-    await tx.user.update({ where: { id: target.id }, data: { staff_role: data.role === 'member' ? null : data.role } })
+    await writeMemberAccess(tx, target.id, { staff_role: data.role === 'member' ? null : data.role })
   } else if (data.operation === 'set_gallery_permission') {
     if (data.allowed && !accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore access before approving gallery uploads.')
-    if (previous.galleryAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { gallery_upload_allowed: data.allowed, gallery_permission_revision: previous.galleryPermissionRevision + 1 } })
+    if (previous.galleryAllowed !== data.allowed) await writeMemberAccess(tx, target.id, { gallery_upload_allowed: data.allowed, gallery_permission_revision: previous.galleryPermissionRevision + 1 })
     if (!data.allowed) {
       await tx.listing.updateMany({ where: { lister_id: target.id, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', publication_mode: 'manual_review', revision: { increment: 1 } } })
       await tx.listing.updateMany({ where: { lister_id: target.id, media_source: 'approved_gallery', listing_status: 'pending_verification', publication_mode: 'trusted_publisher' }, data: { publication_mode: 'manual_review', revision: { increment: 1 } } })
@@ -147,18 +179,18 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
     if (data.allowed && !accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore account access before enabling publishing privileges.')
     const at = new Date()
     if (data.operation === 'set_free_posting_permission') {
-      if (previous.freePostingAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { listing_fee_exempt: data.allowed, listing_fee_exempt_by: data.allowed ? actorId : null, listing_fee_exempt_at: data.allowed ? at : null, listing_fee_exempt_reason: data.allowed ? data.reason : null } })
+      if (previous.freePostingAllowed !== data.allowed) await writeMemberAccess(tx, target.id, { listing_fee_exempt: data.allowed, listing_fee_exempt_by: data.allowed ? actorId : null, listing_fee_exempt_at: data.allowed ? at : null, listing_fee_exempt_reason: data.allowed ? data.reason : null })
     } else {
-      if (previous.directPublishAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { direct_publish_allowed: data.allowed, direct_publish_by: data.allowed ? actorId : null, direct_publish_at: data.allowed ? at : null, direct_publish_reason: data.allowed ? data.reason : null } })
+      if (previous.directPublishAllowed !== data.allowed) await writeMemberAccess(tx, target.id, { direct_publish_allowed: data.allowed, direct_publish_by: data.allowed ? actorId : null, direct_publish_at: data.allowed ? at : null, direct_publish_reason: data.allowed ? data.reason : null })
       if (!data.allowed) await tx.listing.updateMany({ where: { lister_id: target.id, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', AND: [{ OR: [{ media_source: 'recorded' }, { media_source: null }, { media_source: { isSet: false } }] }], OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
     }
   } else if (data.operation === 'suspend_user') {
-    await tx.user.update({ where: { id: target.id }, data: { suspended_at: new Date(), suspension_reason: data.reason, gallery_upload_allowed: false, gallery_permission_revision: previous.galleryPermissionRevision + 1, listing_fee_exempt: false, listing_fee_exempt_by: null, listing_fee_exempt_at: null, listing_fee_exempt_reason: null, direct_publish_allowed: false, direct_publish_by: null, direct_publish_at: null, direct_publish_reason: null } })
+    await writeMemberAccess(tx, target.id, { suspended_at: new Date(), suspension_reason: data.reason, gallery_upload_allowed: false, gallery_permission_revision: previous.galleryPermissionRevision + 1, listing_fee_exempt: false, listing_fee_exempt_by: null, listing_fee_exempt_at: null, listing_fee_exempt_reason: null, direct_publish_allowed: false, direct_publish_by: null, direct_publish_at: null, direct_publish_reason: null })
     await tx.authSession.updateMany({ where: { user_id: target.id, OR: [{ revoked_at: null }, { revoked_at: { isSet: false } }] }, data: { revoked_at: new Date() } })
     await revokeAccountPush(tx, target.id)
     await tx.listing.updateMany({ where: { lister_id: target.id, listing_status: 'active' }, data: { listing_status: 'suspended', revision: { increment: 1 } } })
   } else if (data.operation === 'restore_user') {
-    await tx.user.update({ where: { id: target.id }, data: { suspended_at: null, suspension_reason: null } })
+    await writeMemberAccess(tx, target.id, { suspended_at: null, suspension_reason: null })
   } else throw new ApiError(400, 'INVALID_REQUEST', 'Choose a user access action.')
   const audit = await tx.adminAudit.create({ data: { actor_id: actorId, action: data.operation, target_type: 'user', target_id: target.id, reason: data.reason, metadata: { previous, ...(['set_gallery_permission', 'set_free_posting_permission', 'set_direct_publish_permission'].includes(data.operation) && 'allowed' in data ? { allowed: data.allowed } : {}), ...(data.operation === 'change_role' ? { role: data.role } : {}), ownerOverride: selfPrivilege, moneyMoved: false } } })
   if (data.operation === 'set_gallery_permission' && previous.galleryAllowed !== data.allowed) {

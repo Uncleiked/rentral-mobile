@@ -131,3 +131,81 @@ it('retains current and historical organization registration evidence when delet
   expect(await storage.info('compliance-docs', document)).toMatchObject({ digest: info.digest })
   expect(mocks.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ state: 'deleting' }) }))
 })
+function preparedPhoto(name: string) {
+  const photoPath = 'owner/batch/' + name + '.jpg'
+  return { id: storageObjectId('listings-media', photoPath), bucket: 'listings-media' as const, path: photoPath, digest: 'a'.repeat(64), sizeBytes: 100, contentType: 'image/jpeg' }
+}
+it('claims a maximum gallery batch with one bounded write that retains every immutable object binding', async () => {
+  const objects = Array.from({ length: 10 }, (_, index) => preparedPhoto(String(index)))
+  const write = vi.fn().mockResolvedValue({ count: objects.length }), tx = { storageObject: { updateMany: write } } as unknown as Prisma.TransactionClient
+  await claimStorageObjects(tx, 'owner', objects)
+  expect(write).toHaveBeenCalledOnce()
+  const query = write.mock.calls[0][0]
+  expect(query.where).toMatchObject({ owner_id: 'owner', state: 'available' })
+  expect(query.where.OR).toHaveLength(objects.length)
+  for (const object of objects) expect(query.where.OR).toContainEqual({ id: object.id, bucket: object.bucket, digest: object.digest, size_bytes: object.sizeBytes, content_type: object.contentType })
+})
+it('rejects a partial batch claim instead of accepting the files that happened to match', async () => {
+  const write = vi.fn().mockResolvedValue({ count: 1 }), tx = { storageObject: { updateMany: write } } as unknown as Prisma.TransactionClient
+  await expect(claimStorageObjects(tx, 'owner', [preparedPhoto('one'), preparedPhoto('two')])).rejects.toMatchObject({ code: 'FILE_UNAVAILABLE' })
+  expect(write).toHaveBeenCalledOnce()
+})
+it('validates every proof before any write and refuses conflicting duplicate fingerprints', async () => {
+  const first = preparedPhoto('one'), write = vi.fn(), tx = { storageObject: { updateMany: write } } as unknown as Prisma.TransactionClient
+  for (const objects of [[first, { ...preparedPhoto('two'), sizeBytes: -1 }], [first, { ...first, digest: 'b'.repeat(64) }], [{ ...first, sizeBytes: -1 }, first]]) {
+    await expect(claimStorageObjects(tx, 'owner', objects)).rejects.toMatchObject({ code: 'FILE_UNAVAILABLE' })
+  }
+  expect(write).not.toHaveBeenCalled()
+})
+it('deduplicates equivalent case aliases and keeps an empty proof set free of writes', async () => {
+  const first = preparedPhoto('one'), write = vi.fn().mockResolvedValue({ count: 1 }), tx = { storageObject: { updateMany: write } } as unknown as Prisma.TransactionClient
+  await claimStorageObjects(tx, 'owner', [first, { ...first, path: 'owner/BATCH/ONE.JPG' }])
+  expect(write).toHaveBeenCalledOnce()
+  write.mockClear(); await claimStorageObjects(tx, 'owner', []); expect(write).not.toHaveBeenCalled()
+})
+
+
+async function galleryFixturePhotos(count: number): Promise<string[]> {
+  const storage = createLocalStorage(root), paths = Array.from({ length: count }, (_, index) => 'owner/concurrent/photo_' + index + '.jpg')
+  for (const path of paths) await storage.upload('listings-media', path, stream(new Uint8Array([255,216,255,224,0,0,0,0])), 'image/jpeg')
+  return paths
+}
+it('bounds gallery verification to four concurrent jobs while preserving the chosen photo order', async () => {
+  const paths = await galleryFixturePhotos(10), original = mocks.upsert.getMockImplementation()!
+  let active = 0, peak = 0, draining = false
+  const releases = new Map<string, () => void>()
+  mocks.upsert.mockImplementation(async (args: { create: Prisma.StorageObjectCreateInput }) => {
+    active += 1; peak = Math.max(peak, active)
+    try { if (!draining) await new Promise<void>(resolve => releases.set(String(args.create.path), resolve)); return original(args) }
+    finally { active -= 1 }
+  })
+  const pending = prepareGalleryPhotos('owner', paths)
+  try {
+    for (const batch of [paths.slice(0,4), paths.slice(4,8), paths.slice(8)]) {
+      await vi.waitFor(() => expect(batch.every(path => releases.has(path))).toBe(true))
+      for (const path of [...batch].reverse()) { releases.get(path)!(); releases.delete(path) }
+    }
+    expect((await pending).map(object => object.path)).toEqual(paths)
+    expect(peak).toBe(4); expect(active).toBe(0)
+  } finally { draining = true; for (const release of releases.values()) release(); await pending.catch(() => undefined) }
+})
+it('drains the current verification batch before rejecting and never starts later photos after a failure', async () => {
+  const paths = await galleryFixturePhotos(5), original = mocks.upsert.getMockImplementation()!
+  const jobs = new Map<string, { resolve: () => void; reject: (error: Error) => void }>()
+  let settled = false, draining = false
+  mocks.upsert.mockImplementation(async (args: { create: Prisma.StorageObjectCreateInput }) => {
+    if (!draining) await new Promise<void>((resolve, reject) => jobs.set(String(args.create.path), { resolve, reject }))
+    return original(args)
+  })
+  const pending = prepareGalleryPhotos('owner', paths).then(() => { settled = true; return null }, error => { settled = true; return error })
+  try {
+    await vi.waitFor(() => expect(jobs.size).toBe(4))
+    jobs.get(paths[0])!.reject(new Error('Owned verification failure'))
+    await Promise.resolve(); await Promise.resolve()
+    expect(settled).toBe(false)
+    for (const path of paths.slice(1,4)) jobs.get(path)!.resolve()
+    expect(await pending).toMatchObject({ message: 'Owned verification failure' })
+    expect(mocks.upsert).toHaveBeenCalledTimes(4)
+    expect(jobs.has(paths[4])).toBe(false)
+  } finally { draining = true; for (const job of jobs.values()) job.resolve(); await pending }
+})

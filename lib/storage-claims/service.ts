@@ -82,10 +82,18 @@ export async function prepareGalleryPhotos(ownerId: string, paths: readonly stri
   await assertStorageClaimsReady()
   if (paths.length > 10 || new Set(paths.map(path => path.toLowerCase())).size !== paths.length) throw new StorageError(400, 'INVALID_GALLERY', 'Choose up to ten different photos.')
   const objects: PreparedStorageObject[] = []
-  for (const path of paths) {
-    const object = await prepareObject(ownerId, 'listings-media', path)
-    if (!['image/jpeg', 'image/png'].includes(object.contentType)) throw new StorageError(415, 'INVALID_GALLERY_PHOTO', 'Choose an uploaded JPEG or PNG photo.')
-    objects.push(object)
+  // File verification has no business writes and runs outside retry transactions.
+  // Bound parallel I/O, keep source ordering, and drain started work on failure.
+  for (let start = 0; start < paths.length; start += 4) {
+    const results = await Promise.allSettled(paths.slice(start, start + 4).map(async path => {
+      const object = await prepareObject(ownerId, 'listings-media', path)
+      if (!['image/jpeg', 'image/png'].includes(object.contentType)) throw new StorageError(415, 'INVALID_GALLERY_PHOTO', 'Choose an uploaded JPEG or PNG photo.')
+      return object
+    }))
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason
+      objects.push(result.value)
+    }
   }
   return objects
 }
@@ -100,18 +108,27 @@ export async function prepareAvatarStorage(ownerId: string, inputUrl: string): P
 /** Call in the SAME transaction that writes every listing/avatar reference. */
 export async function claimStorageObjects(tx: Prisma.TransactionClient, ownerId: string, objects: readonly PreparedStorageObject[]): Promise<void> {
   await assertStorageClaimsReady()
-  const sorted = [...new Map(objects.map(object => [object.id, object])).values()].sort((a, b) => a.id.localeCompare(b.id))
-  for (const object of sorted) {
+  const unique = new Map<string, PreparedStorageObject>()
+  for (const object of objects) {
     requireOwnedStoragePath(object.bucket, object.path, ownerId)
     const policy = uploadPolicy(object.bucket, object.path, object.contentType)
     if (object.id !== storageObjectId(object.bucket, object.path) || !/^[a-f0-9]{64}$/.test(object.digest) ||
       !Number.isSafeInteger(object.sizeBytes) || object.sizeBytes <= 0 || object.sizeBytes > policy.maximumBytes) throw unavailable()
-    // A real write, not a no-op read, conflicts with another process's deletion
-    // transaction. The parent reference and this revision commit atomically.
-    const locked = await tx.storageObject.updateMany({ where: { id: object.id, owner_id: ownerId, bucket: object.bucket,
-      state: 'available', digest: object.digest, size_bytes: object.sizeBytes, content_type: object.contentType }, data: { revision: { increment: 1 } } })
-    if (locked.count !== 1) throw unavailable()
+    const previous = unique.get(object.id)
+    if (previous && (previous.bucket !== object.bucket || previous.path.toLowerCase() !== object.path.toLowerCase() ||
+      previous.digest !== object.digest || previous.sizeBytes !== object.sizeBytes || previous.contentType !== object.contentType)) throw unavailable()
+    unique.set(object.id, object)
   }
+  const sorted = [...unique.values()].sort((a, b) => a.id.localeCompare(b.id))
+  if (!sorted.length) return
+  const exact = sorted.map(object => ({ id: object.id, bucket: object.bucket, digest: object.digest, size_bytes: object.sizeBytes, content_type: object.contentType }))
+  // Each OR branch binds all immutable metadata to its own object. One real
+  // write locks the batch against deletion without two network trips per file.
+  const where = exact.length === 1 ? { ...exact[0], owner_id: ownerId, state: 'available' } : { owner_id: ownerId, state: 'available', OR: exact }
+  const locked = await tx.storageObject.updateMany({ where, data: { revision: { increment: 1 } } })
+  // A partial match must abort the caller's transaction, including all sibling
+  // revision writes and the parent listing/avatar reference.
+  if (locked.count !== sorted.length) throw unavailable()
 }
 
 /** Reserve an immutable path before any bytes are streamed, then publish its verified metadata. */

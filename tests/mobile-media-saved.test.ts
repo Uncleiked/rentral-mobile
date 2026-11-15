@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({ default: {
   listing: { findFirst: mocks.listing }, mediaAsset: { findUnique: mocks.media },
   savedListing: { upsert: mocks.save, deleteMany: mocks.remove },
 } }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockActiveAccount: async () => true }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ user: { updateMany: async () => ({ count: 1 }) }, listing: { findFirst: mocks.listing }, savedListing: { upsert: mocks.save } }) }))
 vi.mock('@/lib/admin', () => ({ createAdminClient: () => ({ storage: { from: () => ({ createSignedUrl: mocks.sign }) } }) }))
 vi.mock('@/lib/media/mux', () => ({ muxClient: () => ({ jwt: { signPlaybackId: mocks.muxSign } }) }))

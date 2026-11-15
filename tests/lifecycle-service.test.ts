@@ -9,6 +9,7 @@ vi.mock('@/lib/auth/roles', () => ({ assertStaffPermission: mocks.permission }))
 vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepare, claimStorageObjects: mocks.claim }))
 vi.mock('@/lib/bookings/availability', () => ({ bookingWindowAvailable: mocks.available }))
 vi.mock('@/lib/bookings/service', () => ({ expireListingReservations: mocks.expire }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockActiveAccount: mocks.active }))
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({
   user: { updateMany: mocks.active },
   booking: { findUnique: mocks.booking, findFirst: mocks.otherBooking, update: mocks.updateBooking },
@@ -33,7 +34,7 @@ function termination() { return { id: requestId, booking_id: id, requested_by: '
 beforeEach(() => {
   vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now)
   mocks.lock.mockResolvedValue(true); mocks.ready.mockResolvedValue(undefined); mocks.permission.mockResolvedValue(undefined)
-  mocks.active.mockResolvedValue({ count: 1 })
+  mocks.active.mockResolvedValue(true)
   mocks.prepare.mockResolvedValue([{ id: 'prepared-evidence' }]); mocks.claim.mockResolvedValue(undefined)
   mocks.available.mockResolvedValue(true); mocks.expire.mockResolvedValue(undefined)
   mocks.booking.mockResolvedValue(lease()); mocks.renewal.mockResolvedValue(renewal()); mocks.termination.mockResolvedValue(termination())
@@ -43,7 +44,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 
 it('denies a new extension after either account closes while retaining early termination of an existing lease', async () => {
-  mocks.active.mockResolvedValue({ count: 0 })
+  mocks.active.mockResolvedValue(false)
   await expect(requestRenewal('renter', { bookingId: id, reference: 'External-reference-1', recipientRoute: 'direct_landlord', requestedEndsAt: nextEnd.toISOString(), evidencePath: 'renter/folder/receipt.pdf' })).rejects.toMatchObject({ code: 'ACCOUNT_UNAVAILABLE' })
   expect(mocks.claim).not.toHaveBeenCalled(); expect(mocks.createRenewal).not.toHaveBeenCalled()
   await requestTermination('renter', { bookingId: id, requestedEndAt: '2030-01-15T10:00:00Z', reason: 'An existing obligation can still be ended safely.', evidencePath: 'renter/folder/agreement.pdf' })

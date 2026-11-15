@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { ApiError } from '@/lib/api/http'
 import { activeAccountWhere } from '@/lib/accounts/availability'
+import { lockActiveAccount } from '@/lib/database/revision-lock'
 import { assertOwnerAdminReady } from '@/lib/database/readiness'
 import { claimStorageObjects, prepareGalleryPhotos, prepareListingStorage, storageObjectId, type PreparedStorageObject } from '@/lib/storage-claims/service'
 import { galleryProofSchema, type GalleryMediaProof } from '@/lib/contracts/gallery'
@@ -22,12 +23,12 @@ export function galleryPhotoPaths(row: { gallery_media?: unknown }): string[] {
 /** A user-row write serializes attachment/publication with grant revocation. */
 export async function assertGalleryPermission(tx: Prisma.TransactionClient, ownerId: string, expectedRevision?: number): Promise<number> {
   await assertOwnerAdminReady()
+  if (!await lockActiveAccount(tx, ownerId)) throw denied()
   const owner = await tx.user.findFirst({ where: { id: ownerId, ...activeAccountWhere }, select: { gallery_upload_allowed: true, gallery_permission_revision: true } })
   const revision = owner?.gallery_permission_revision ?? 0
   if (!owner?.gallery_upload_allowed || !Number.isSafeInteger(revision) || revision < 0 || expectedRevision !== undefined && revision !== expectedRevision) throw denied()
-  const locked = await tx.user.updateMany({ where: { id: ownerId, ...activeAccountWhere, gallery_upload_allowed: true,
-    OR: revision === 0 ? [{ gallery_permission_revision: 0 }, { gallery_permission_revision: null }, { gallery_permission_revision: { isSet: false } }] : [{ gallery_permission_revision: revision }] }, data: { revision: { increment: 1 } } })
-  if (locked.count !== 1) throw denied()
+  // The grant epoch is read after the same-row write lock. Revocation or closure
+  // cannot commit concurrently; a conflicting transaction retries and rechecks it.
   return revision
 }
 

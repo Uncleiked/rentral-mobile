@@ -623,7 +623,7 @@ fixture('owned isolated MongoDB replica fixture', () => {
   it('registers and signs in with persisted password hashes and exposes only public account fields', async () => {
     const email = `${randomUUID()}@fixture.invalid`
     const password = 'Owned-fixture-password-123!'
-    const session = await registerAccount({ email: email.toUpperCase(), password })
+    const session = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: email.toUpperCase(), password })
     const stored = await prisma.user.findUniqueOrThrow({ where: { email } })
     expect(stored.password_hash).toMatch(/^scrypt-v1:[a-f0-9]{48}:[a-f0-9]{128}$/)
     expect(await verifyPassword(password, stored.password_hash)).toBe(true)
@@ -640,12 +640,30 @@ fixture('owned isolated MongoDB replica fixture', () => {
     expect((await authenticateAccess(session.access_token)).user.id).toBe(stored.id)
     expect((await loginAccount({ email, password })).user.id).toBe(stored.id)
     await expect(loginAccount({ email, password: 'Wrong-fixture-password' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS', status: 401 })
-    await expect(registerAccount({ email, password })).rejects.toMatchObject({ code: 'ACCOUNT_EXISTS', status: 409 })
-    await expect(registerAccount({ email: `${randomUUID()}@fixture.invalid`, password, staff_role: 'admin' })).rejects.toThrow()
+    await expect(registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email, password })).rejects.toMatchObject({ code: 'ACCOUNT_EXISTS', status: 409 })
+    await expect(registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password, staff_role: 'admin' })).rejects.toThrow()
+  }, 20000)
+
+  it('enforces one chosen normalized username under concurrent real registration', async () => {
+    const username = 'chosen_' + randomUUID().replaceAll('-', '').slice(0, 16)
+    const password = 'Owned-username-fixture-password-123!'
+    const results = await Promise.allSettled([
+      registerAccount({ email: randomUUID() + '@fixture.invalid', password, username: username.toUpperCase() }),
+      registerAccount({ email: randomUUID() + '@fixture.invalid', password, username }),
+    ])
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    const rejected = results.find(result => result.status === 'rejected')
+    expect(rejected?.status === 'rejected' ? rejected.reason : null).toMatchObject({ code: 'USERNAME_TAKEN', status: 409 })
+    expect(await prisma.user.count({ where: { username } })).toBe(1)
+    const stored = await prisma.user.findUniqueOrThrow({ where: { username } })
+    expect(await prisma.authSession.count({ where: { user_id: stored.id } })).toBe(1)
+    const absentEmail = randomUUID() + '@fixture.invalid'
+    await expect(registerAccount({ email: absentEmail, password })).rejects.toThrow()
+    expect(await prisma.user.count({ where: { email: absentEmail } })).toBe(0)
   }, 20000)
 
   it('binds JWT subject and session to a live MongoDB session and current staff permissions', async () => {
-    const session = await registerAccount({ email: `${randomUUID()}@fixture.invalid`, password: 'Owned-fixture-password-123!' })
+    const session = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password: 'Owned-fixture-password-123!' })
     const claims = await accessClaims(session.access_token)
     await expect(authenticateAccess(await accessToken(randomUUID(), claims.sessionId))).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 401 })
     await expect(authenticateAccess(await accessToken(session.user.id, randomUUID()))).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 401 })
@@ -658,7 +676,7 @@ fixture('owned isolated MongoDB replica fixture', () => {
   }, 20000)
 
   it('rotates a refresh token once under concurrent requests and denies revoked access and refresh tokens', async () => {
-    const session = await registerAccount({ email: `${randomUUID()}@fixture.invalid`, password: 'Owned-fixture-password-123!' })
+    const session = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password: 'Owned-fixture-password-123!' })
     const results = await Promise.allSettled([refreshSession(session.refresh_token), refreshSession(session.refresh_token)])
     const winners = results.filter(result => result.status === 'fulfilled')
     expect(winners).toHaveLength(1)
@@ -679,7 +697,7 @@ fixture('owned isolated MongoDB replica fixture', () => {
     const email = `${randomUUID()}@fixture.invalid`
     const password = 'Owned-fixture-password-123!'
     const replacement = 'Owned-fixture-replacement-456!'
-    const first = await registerAccount({ email, password })
+    const first = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email, password })
     const second = await loginAccount({ email, password })
     const resetTokens = [opaqueToken(), opaqueToken()]
     for (const token of resetTokens) await prisma.passwordReset.create({ data: {
@@ -1049,7 +1067,7 @@ fixture('owned isolated MongoDB replica fixture', () => {
     finally { network.mockRestore(); for (const key of Object.keys(values)) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key] } }
   }
   async function pushAccount() {
-    const session = await registerAccount({ email: `${randomUUID()}@fixture.invalid`, password: 'Owned-fixture-password-938!' })
+    const session = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password: 'Owned-fixture-password-938!' })
     return { userId: session.user.id, sid: (await accessClaims(session.access_token)).sessionId }
   }
   function pushEnrollment(projectId: string) {

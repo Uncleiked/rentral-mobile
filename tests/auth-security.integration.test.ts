@@ -16,6 +16,7 @@ import { processAuthEmailDelivery, runAuthEmailDeliveryBatch } from '@/lib/auth/
 import { ACCESS_SECONDS, accessClaims, opaqueToken, signingKey, tokenHash } from '@/lib/auth/token'
 import { verifyPassword } from '@/lib/auth/password'
 import { closeAccount } from '@/lib/accounts/lifecycle'
+import { completeVerifiedGoogle, finishGoogleAccount } from '@/lib/auth/google-accounts'
 import { exportAccountPage } from '@/lib/accounts/export'
 import { assertActiveAccounts } from '@/lib/accounts/availability'
 import { requestBooking } from '@/lib/bookings/service'
@@ -77,7 +78,7 @@ fixture('owned account security and encrypted delivery fixture', () => {
   })
 
   async function account() {
-    const session = await registerAccount({ email: `${randomUUID()}@fixture.invalid`, password })
+    const session = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password })
     users.push(session.user.id)
     return session
   }
@@ -176,7 +177,7 @@ fixture('owned account security and encrypted delivery fixture', () => {
   it('preserves the original account if another registration claims the proposed address before final confirmation', async () => {
     const session = await account(), pending = await change(session.user.id)
     await confirmAccountEmailChange({ token: pending.old })
-    const other = await registerAccount({ email: pending.newEmail, password }); users.push(other.user.id)
+    const other = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: pending.newEmail, password }); users.push(other.user.id)
     await expect(confirmAccountEmailChange({ token: pending.proposed })).rejects.toMatchObject({ code: 'EMAIL_UNAVAILABLE' })
     expect((await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } })).email).toBe(session.user.email)
     expect(await prisma.emailChange.findUnique({ where: { id: pending.result.pending.id } })).toMatchObject({ status: 'pending', new_confirmed_at: null })
@@ -357,4 +358,24 @@ fixture('owned account security and encrypted delivery fixture', () => {
     const profile = await exportAccountPage(session.user.id, { resource: 'profile' })
     expect(JSON.stringify([first, second, profile])).not.toMatch(/COUNTERPARTY_PRIVATE_BODY|password_hash|refresh_hash|token_hash|geometry|handshake_code/)
   }, 15000)
+  it('creates a Google account only after its chosen name clears the real unique index, without orphaning a rejected identity', async () => {
+    const existing = await account()
+    const taken = await prisma.user.findUniqueOrThrow({ where: { id: existing.user.id }, select: { username: true } })
+    const identity = { subject: 'owned_google_' + randomUUID().replaceAll('-', ''), email: randomUUID() + '@fixture.invalid' }
+    const continuation = await completeVerifiedGoogle(identity, { mode: 'signup', accountType: 'individual', termsAccepted: true })
+    expect(continuation.kind).toBe('finish')
+    expect(await prisma.user.count({ where: { email: identity.email } })).toBe(0)
+    if (continuation.kind !== 'finish') throw new Error('Missing verified username continuation')
+    await expect(finishGoogleAccount(continuation.challenge, { accountType: 'individual', termsAccepted: true, username: taken.username! })).rejects.toMatchObject({ code: 'USERNAME_TAKEN', status: 409 })
+    expect(await prisma.user.count({ where: { email: identity.email } })).toBe(0)
+    expect(await prisma.googleIdentity.count({ where: { id: identity.subject } })).toBe(0)
+    const chosen = 'google_' + randomUUID().replaceAll('-', '').slice(0, 16)
+    const session = await finishGoogleAccount(continuation.challenge, { accountType: 'individual', termsAccepted: true, username: chosen.toUpperCase() })
+    users.push(session.user.id)
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } })).toMatchObject({ username: chosen, email: identity.email, password_hash: null })
+    expect(await prisma.googleIdentity.findUniqueOrThrow({ where: { id: identity.subject } })).toMatchObject({ user_id: session.user.id })
+    expect((await authenticateAccess(session.access_token)).user.id).toBe(session.user.id)
+    expect(calls).toHaveLength(0)
+  }, 20000)
+
 })

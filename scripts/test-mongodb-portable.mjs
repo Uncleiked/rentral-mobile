@@ -23,9 +23,10 @@ const suites = {
   auth: 'tests/auth-security.integration.test.ts',
   backup: 'tests/backup.integration.test.ts',
   avatar: 'tests/profile-avatar.integration.test.ts',
+  locks: 'tests/revision-lock.integration.test.ts',
 }
 if (!binaryArgument || (selected !== 'all' && !(selected in suites)) ||
-  arguments_.length !== 2 + (suiteIndex < 0 ? 0 : 2)) throw new Error('Usage: node scripts/test-mongodb-portable.mjs --binary test-results/mongodb-portable/bin/.../mongod.exe [--suite all|core|admin|social|financial|auth|backup|avatar]')
+  arguments_.length !== 2 + (suiteIndex < 0 ? 0 : 2)) throw new Error('Usage: node scripts/test-mongodb-portable.mjs --binary test-results/mongodb-portable/bin/.../mongod.exe [--suite all|core|admin|social|financial|auth|backup|avatar|locks]')
 const owner = randomUUID().replaceAll('-', '')
 const fixture = join(artifacts, 'owned-portable-mongo-' + owner)
 const results = []

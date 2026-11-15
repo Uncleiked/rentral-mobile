@@ -6,6 +6,14 @@ const mocks = vi.hoisted(() => ({ ready: vi.fn(), transaction: vi.fn(), lock: vi
   connection: vi.fn(), createConnection: vi.fn(), updateConnection: vi.fn(), closeConnections: vi.fn(), countConnections: vi.fn(),
   message: vi.fn(), messageById: vi.fn(), messages: vi.fn(), createMessage: vi.fn(), report: vi.fn(), reports: vi.fn(), countReports: vi.fn(), createReport: vi.fn(), updateReport: vi.fn(), notify: vi.fn(), audit: vi.fn() }))
 vi.mock('@/lib/database/readiness', () => ({ assertMatchingReady: mocks.ready }))
+// Adapt the lock boundary to this domain fixture; raw command semantics have separate coverage.
+vi.mock('@/lib/database/revision-lock', () => ({
+  lockActiveAccount: async (tx: { user: { updateMany: (args: unknown) => Promise<{ count: number }> } }, id: string) =>
+    (await tx.user.updateMany({ where: { id, AND: [
+      { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+      { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+    ] }, data: { revision: { increment: 1 } } })).count === 1,
+}))
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work) }))
 vi.mock('@/lib/auth/roles', () => ({ assertStaffPermission: mocks.permission }))
 import { getOwnMatchingProfile, matchingCandidates, updateMatchingProfile, withdrawMatchingProfile, withdrawMatchingAccountInTransaction } from '@/lib/matching/profiles'

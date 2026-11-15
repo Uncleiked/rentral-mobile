@@ -19,7 +19,10 @@ export function authFailure(error: unknown): Response {
   if (readiness) return apiFailure(new ApiError(readiness.status, readiness.code, readiness.message), 'auth')
   if (error instanceof ApiError) return apiFailure(error, 'auth')
   if (error instanceof AuthError) return apiFailure(new ApiError(error.status, error.code, error.message), 'auth')
-  if (error instanceof z.ZodError) return apiFailure(new ApiError(400, 'INVALID_REQUEST', 'Check your email and password. Use at least 8 characters for a new password.'), 'auth')
+  if (error instanceof z.ZodError) {
+    const username = error.issues.find(issue => issue.path[0] === 'username')
+    return apiFailure(new ApiError(400, username ? 'INVALID_USERNAME' : 'INVALID_REQUEST', username?.message ?? 'Check your email and password. Use at least 8 characters for a new password.'), 'auth')
+  }
   // Record only a safe classification; provider messages can contain account
   // data, document contents or connection credentials.
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined

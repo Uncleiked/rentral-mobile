@@ -35,9 +35,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    "test-results/owned-real-http-017476b8d8d044589b03329ce8067827/.next/types/**/*.ts",
-    "test-results/owned-real-http-017476b8d8d044589b03329ce8067827/.next/dev/types/**/*.ts"
+    "**/*.mts"
   ],
   "exclude": [
     "node_modules",

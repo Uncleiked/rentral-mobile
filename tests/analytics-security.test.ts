@@ -5,6 +5,14 @@ const mocks = vi.hoisted(() => ({ cookies: vi.fn(), consent: vi.fn(), setCookie:
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated }))
 vi.mock('@/lib/db', () => ({ default: { marketEvent: { deleteMany: mocks.remove, aggregateRaw: mocks.query } } }))
+// Adapt the lock boundary to this domain fixture; raw command semantics have separate coverage.
+vi.mock('@/lib/database/revision-lock', () => ({
+  lockActiveAccount: async (tx: { user: { updateMany: (args: unknown) => Promise<{ count: number }> } }, id: string) =>
+    (await tx.user.updateMany({ where: { id, AND: [
+      { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+      { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+    ] }, data: { revision: { increment: 1 } } })).count === 1,
+}))
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({
   user: { findUnique: mocks.user, update: mocks.updateUser, updateMany: mocks.active }, marketEvent: { upsert: mocks.create, deleteMany: mocks.remove },
 }) }))

@@ -36,7 +36,8 @@ export async function finishGoogleSignIn(form: FormData): Promise<{ success: tru
     const store = await cookies(), challenge = await readGoogleFinish(store.get(GOOGLE_FINISH_COOKIE)?.value)
     const accountType = form.get('accountType'), password = form.get('password')
     if (typeof password === 'string' && password.length > 128) throw new AuthError(400, 'INVALID_CREDENTIALS', 'Check your password and try again.')
-    const session = await finishGoogleAccount(challenge, { password: typeof password === 'string' ? password : undefined,
+    const username = form.get('username')
+    const session = await finishGoogleAccount(challenge, { password: typeof password === 'string' ? password : undefined, username: typeof username === 'string' ? username : undefined,
       accountType: accountType === 'individual' || accountType === 'organization' ? accountType : undefined, termsAccepted: form.get('termsAccepted') === 'on' })
     for (const cookie of sessionCookies(session)) store.set(cookie)
     store.set({ ...googleCookieOptions, secure: googleCookieSecure(), name: GOOGLE_FINISH_COOKIE, value: '', maxAge: 0 })

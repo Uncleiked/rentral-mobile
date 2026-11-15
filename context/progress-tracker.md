@@ -1,5 +1,42 @@
 ## Progress Tracker
 
+## Required chosen usernames - 2026-11-15
+
+New email/API/native accounts must choose a public username. Google verifies
+identity first, then requires the existing continuation form to collect a chosen
+username before creating any account. Shared validation normalizes trim/lowercase,
+accepts 3-24 letters/numbers/underscores and rejects reserved platform names.
+The final Mongo unique insert is authoritative; collisions ask for another name
+and never substitute a generated handle. Existing sign-ins and usernames remain
+compatible, including the historical missing-handle repair for existing accounts.
+
+Focused auth verification passed108tests, web/native types and scoped lint. New
+owned-Mongo cases cover concurrent normalized-username races and Google collision
+rollback/retry; the real390px browser signup and final aggregate checks are pending.
+
+
+## Runtime regression follow-up - 2026-11-15
+
+The user's failing Follow overrides the earlier completion wording below.
+A genuine Next/browser/API/owned Mongo run reproduced P2028 at a single User
+revision lock under 400ms simulated database RTT. The database profiler proved
+Prisma's emulated incoming-relation update checks added more than twenty reads.
+The replacement uses one fixed, transaction-bound scalar revision command with
+exact availability conditions, readiness gates and strict acknowledgement checks;
+no timeout increase, identifier update or generic raw write path. Real rollback,
+BSON integer typing and concurrent closure/revocation tests pass.
+
+The genuine browser run also exposed a pre-hydration credential GET fallback.
+AuthForm now explicitly uses POST and disables submission until client handlers
+are ready; SSR regression and actual JS-disabled browser checks pass.
+
+The real HTTP/browser max-gallery run passes twenty checkpoints with actual
+login/cookies, admin decisions, draft reload, ten photos plus a private document,
+gallery publication, follows, likes/private saves, request acceptance, typing,
+notifications and account mismatch protection. Delayed HTTP acceptance, final
+regressions and build remain in progress. See [runtime verification](runtime-verification.md).
+
+
 ## Admin/social completion verification - 2026-11-15
 
 The Nov13 request is implemented in RentralMobile: gallery approval now includes

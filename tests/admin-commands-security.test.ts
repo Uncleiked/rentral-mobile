@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 type Account = { id: string; revision: number; staff_role: string | null; closed_at: Date | null; suspended_at: Date | null; gallery_upload_allowed: boolean; gallery_permission_revision: number; listing_fee_exempt?: boolean; listing_fee_exempt_by?: string | null; listing_fee_exempt_at?: Date | null; listing_fee_exempt_reason?: string | null; direct_publish_allowed?: boolean; direct_publish_by?: string | null; direct_publish_at?: Date | null; direct_publish_reason?: string | null }
-const state = vi.hoisted(() => ({ users: new Map<string, Account>(), receipts: new Map<string, Record<string, unknown>>(), audits: vi.fn(), listingUpdate: vi.fn(), userUpdate: vi.fn(), sessionUpdate: vi.fn(), bookingUpdate: vi.fn(), moderate: vi.fn(), transaction: vi.fn(), revokePush: vi.fn(), notify: vi.fn(), lostCommit: false, revokeAtLock: false, booking: {} as Record<string, unknown> }))
+const state = vi.hoisted(() => ({ users: new Map<string, Account>(), receipts: new Map<string, Record<string, unknown>>(), audits: vi.fn(), listingUpdate: vi.fn(), userUpdate: vi.fn(), rawAccess: vi.fn(), rawResult: undefined as unknown, sessionUpdate: vi.fn(), bookingUpdate: vi.fn(), moderate: vi.fn(), transaction: vi.fn(), revokePush: vi.fn(), notify: vi.fn(), lostCommit: false, revokeAtLock: false, booking: {} as Record<string, unknown> }))
 const owner = '11111111-1111-4111-8111-111111111111', member = '22222222-2222-4222-8222-222222222222', admin = '33333333-3333-4333-8333-333333333333', renter = '44444444-4444-4444-8444-444444444444', bookingId = '55555555-5555-4555-8555-555555555555', nonce = '66666666-6666-4666-8666-666666666666', auditId = '77777777-7777-4777-8777-777777777777'
 const reason = 'Reviewed supporting records and explicitly approved this platform decision.'
 const userDelegate = {
@@ -28,7 +28,13 @@ vi.mock('@/lib/database/transactions', () => ({
   },
   withTransaction: async (work: (tx: unknown) => Promise<unknown>) => {
     state.transaction()
-    const result = await work({ user: userDelegate, mutationReceipt: receiptDelegate,
+    const result = await work({ $runCommandRaw: async (command: { update: string; updates: { q: { _id: string }; u: { $set: Record<string, unknown> } }[] }) => {
+    state.rawAccess(command)
+    const change = command.updates[0], data = Object.fromEntries(Object.entries(change.u.$set).map(([key, value]) => [key,
+      value && typeof value === 'object' && '$date' in value ? new Date(String(value.$date)) : value && typeof value === 'object' && '$numberLong' in value ? Number(value.$numberLong) : value]))
+    await userDelegate.update({ where: { id: change.q._id }, data })
+    return state.rawResult === undefined ? { ok: 1, n: 1, nModified: 1 } : state.rawResult
+  }, user: userDelegate, mutationReceipt: receiptDelegate,
       listing: { updateMany: state.listingUpdate }, authSession: { updateMany: state.sessionUpdate },
       booking: { findUniqueOrThrow: async () => state.booking, update: state.bookingUpdate },
       adminAudit: { create: async (input: unknown) => { state.audits(input); return { id: auditId } } }, notification: { createMany: state.notify },
@@ -43,7 +49,7 @@ import { permissionsForRole } from '@/lib/auth/roles-policy'
 
 function command(operation: string, extra: Record<string, unknown> = {}) { return { operation, clientId: nonce, targetId: member, expectedRevision: 0, reason, ...extra } }
 beforeEach(() => {
-  vi.clearAllMocks(); state.users.clear(); state.receipts.clear(); state.lostCommit = false; state.revokeAtLock = false
+  vi.clearAllMocks(); state.users.clear(); state.receipts.clear(); state.lostCommit = false; state.revokeAtLock = false; state.rawResult = undefined
   for (const [id, role] of [[owner, 'owner'], [member, null], [admin, 'admin'], [renter, null]] as const) state.users.set(id, { id, revision: 0, staff_role: role, closed_at: null, suspended_at: null, gallery_upload_allowed: false, gallery_permission_revision: 0 })
   state.moderate.mockResolvedValue(auditId)
   state.booking = { id: bookingId, revision: 0, kind: 'inspection', status: 'confirmed', seeker_id: renter, lister_id: member, listing: { media_source: 'approved_gallery' }, manual_inspection_status: 'pending', manual_inspection_evidence: reason, manual_inspection_requested_by: renter }
@@ -214,5 +220,42 @@ describe('independent manual gallery inspection review', () => {
     Object.assign(state.booking, override)
     await expect(executeAdminCommand(owner, command('review_manual_inspection', { targetId: bookingId, decision: 'approve' }))).rejects.toMatchObject({ code: 'INSPECTION_NOT_PENDING' })
     expect(state.bookingUpdate).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('restricted transaction-bound member access writes', () => {
+  it('encodes only the exact gallery grant and integral epoch without changing identity or general revision', async () => {
+    await executeAdminCommand(owner, command('set_gallery_permission', { allowed: true }))
+    expect(state.rawAccess).toHaveBeenCalledOnce()
+    expect(state.rawAccess).toHaveBeenCalledWith({ update: 'User', updates: [{
+      q: { _id: member }, u: { $set: { gallery_upload_allowed: true, gallery_permission_revision: { $numberLong: '1' } }, $currentDate: { updatedAt: true } }, multi: false, upsert: false,
+    }] })
+    expect(state.users.get(member)?.revision).toBe(1)
+    expect(state.audits).toHaveBeenCalledOnce()
+  })
+  it('encodes server-owned dates and preserves explicit null resets', async () => {
+    await executeAdminCommand(owner, command('set_free_posting_permission', { allowed: true }))
+    const first = state.rawAccess.mock.calls[0][0].updates[0].u.$set
+    expect(first.listing_fee_exempt_at).toEqual({ $date: expect.any(String) })
+    expect(first.listing_fee_exempt_by).toBe(owner)
+    await executeAdminCommand(owner, command('set_free_posting_permission', { allowed: false, clientId: '99999999-9999-4999-8999-999999999999', expectedRevision: 1 }))
+    expect(state.rawAccess.mock.calls[1][0].updates[0].u.$set).toEqual({ listing_fee_exempt: false, listing_fee_exempt_by: null, listing_fee_exempt_at: null, listing_fee_exempt_reason: null })
+  })
+  it('accepts an acknowledged matched no-op when assigning the existing role', async () => {
+    state.rawResult = { ok: 1, n: 1, nModified: 0 }
+    expect(await executeAdminCommand(owner, command('change_role', { role: 'member' }))).toMatchObject({ committed: true })
+    expect(state.audits).toHaveBeenCalledOnce()
+  })
+  it.each([null, { ok: 0, n: 1, nModified: 1 }, { ok: 1, n: 0, nModified: 0 }, { ok: 1, n: 2, nModified: 2 }, { ok: 1, n: 1, nModified: '1' }, { ok: 1, n: 1, nModified: 1, writeErrors: [{}] }, { ok: 1, n: 1, nModified: 1, writeConcernError: {} }])('does not record a successful decision after an unconfirmed write %j', async result => {
+    state.rawResult = result
+    await expect(executeAdminCommand(owner, command('set_gallery_permission', { allowed: true }))).rejects.toThrow('ADMIN_ACCESS_WRITE_UNCONFIRMED')
+    expect(state.audits).not.toHaveBeenCalled()
+    expect(state.receipts.size).toBe(0)
+  })
+  it('rejects access-command field injection before any transaction write', async () => {
+    await expect(executeAdminCommand(owner, command('set_gallery_permission', { allowed: true, password_hash: 'forged', revision: 500, $set: { staff_role: 'owner' } }))).rejects.toBeDefined()
+    expect(state.rawAccess).not.toHaveBeenCalled()
+    expect(state.audits).not.toHaveBeenCalled()
   })
 })

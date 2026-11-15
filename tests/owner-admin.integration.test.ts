@@ -91,7 +91,7 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true'); vi.stubEnv('PAYMENTS_ENABLED', 'false'); vi.stubEnv('MUX_ENABLED', 'false'); vi.stubEnv('GEOAPIFY_API_KEY', '')
     outbound = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('No provider request is authorized in this fixture') })
     limiterSpy = vi.spyOn(apiRateLimiter, 'allow').mockImplementation((key, maximum) => originalAllow(key, maximum, limiterClock))
-    ;[platformOwner, admin, host, renter] = await Promise.all(Array.from({ length: 4 }, () => registerAccount({ email: `${randomUUID()}@fixture.invalid`, password })))
+    ;[platformOwner, admin, host, renter] = await Promise.all(Array.from({ length: 4 }, () => registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password })))
     const bootstrapArgs = ['--experimental-strip-types', resolve('scripts/bootstrap-owner.ts'), '--email', platformOwner.user.email, '--reason', reason]
     const options = { cwd: storageRoot, env: { ...process.env, MONGODB_URL: uri, DATABASE_URL: uri }, encoding: 'utf8' as const, windowsHide: true, timeout: 20000 }
     expect(JSON.parse(execFileSync(process.execPath, bootstrapArgs, options))).toMatchObject({ dryRun: true, accountMatched: true, existingOwners: 0, ready: true })
@@ -116,6 +116,47 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     expect(forged.status).toBe(400)
     expect(await prisma.user.count({ where: { staff_role: 'owner' } })).toBe(1)
   })
+  it('rolls back a raw access grant, audit, notification and receipt after a later database rejection', async () => {
+    // Bounded fault injection is authorized only in this disposable loopback fixture.
+    // Reject this single receipt nonce; normal domain services and commands stay real.
+    if (!uri || !fixtureOwner || localMongoDatabaseName(uri) !== 'rentral_test_' + fixtureOwner || process.env.MONGODB_URL !== uri || process.env.DATABASE_URL !== uri) throw new Error('Unsafe admin rollback fixture.')
+    const db = native.db(localMongoDatabaseName(uri))
+    if (!await db.collection<{ _id: string }>('_FixtureOwnership').findOne({ _id: fixtureOwner })) throw new Error('Missing admin rollback fixture ownership.')
+    const collection = await db.listCollections({ name: 'MutationReceipt' }).next()
+    if (!collection || !('options' in collection)) throw new Error('Expected receipt collection metadata before fault injection.')
+    const original = collection.options
+    if (!original?.validator || !Object.keys(original.validator).length) throw new Error('Expected reviewed receipt validator before fault injection.')
+    const target = await registerAccount({ username: 'rollback_' + randomUUID().replaceAll('-', '').slice(0, 15), email: randomUUID() + '@fixture.invalid', password })
+    const targetSelect = { revision: true, gallery_upload_allowed: true, gallery_permission_revision: true, updatedAt: true } as const
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: target.user.id }, select: targetSelect })
+    const actorBefore = await prisma.user.findUniqueOrThrow({ where: { id: platformOwner.user.id }, select: { revision: true, updatedAt: true } })
+    const clientId = randomUUID(), failureReason = 'Owned rollback fixture rejects only the final receipt for ' + clientId
+    let originalCommand: Record<string, unknown> | undefined
+    try {
+      await db.command({ collMod: 'MutationReceipt', validator: { $and: [original.validator, { client_id: { $ne: clientId } }] }, validationLevel: 'strict', validationAction: 'error' })
+      const failed = await command(platformOwner, 'set_gallery_permission', target.user.id, { allowed: true, clientId, reason: failureReason })
+      originalCommand = failed.body
+      expect(failed.response.status).toBeGreaterThanOrEqual(500)
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: target.user.id }, select: targetSelect })).toEqual(before)
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: platformOwner.user.id }, select: { revision: true, updatedAt: true } })).toEqual(actorBefore)
+      expect(await prisma.adminAudit.count({ where: { target_id: target.user.id, action: 'set_gallery_permission', reason: failureReason } })).toBe(0)
+      expect(await prisma.notification.count({ where: { user_id: target.user.id, kind: 'gallery_permission' } })).toBe(0)
+      expect(await prisma.mutationReceipt.count({ where: { actor_id: platformOwner.user.id, client_id: clientId } })).toBe(0)
+    } finally {
+      await db.command({ collMod: 'MutationReceipt', validator: original.validator, validationLevel: original.validationLevel ?? 'strict', validationAction: original.validationAction ?? 'error' })
+    }
+    const restored = await db.listCollections({ name: 'MutationReceipt' }).next()
+    expect(restored && 'options' in restored ? restored.options?.validator : undefined).toEqual(original.validator)
+    if (!originalCommand) throw new Error('Missing original admin command.')
+    // Retry the same command after restoration: no replacement nonce or fabricated receipt.
+    const accepted = await adminCommand(request(platformOwner, '/admin/commands', originalCommand))
+    expect(accepted.status).toBe(200)
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: target.user.id }, select: targetSelect })).toMatchObject({ gallery_upload_allowed: true, gallery_permission_revision: (before.gallery_permission_revision ?? 0) + 1, revision: before.revision + 1 })
+    expect(await prisma.adminAudit.count({ where: { target_id: target.user.id, action: 'set_gallery_permission', reason: failureReason } })).toBe(1)
+    expect(await prisma.notification.count({ where: { user_id: target.user.id, kind: 'gallery_permission' } })).toBe(1)
+    expect(await prisma.mutationReceipt.count({ where: { actor_id: platformOwner.user.id, client_id: clientId } })).toBe(1)
+  }, 20000)
+
   it('uses an audited original command receipt, rejects changed nonce instructions and supports actor-only readback', async () => {
     const first = await command(platformOwner, 'set_gallery_permission', host.user.id, { allowed: true })
     expect(first.response.status).toBe(200)

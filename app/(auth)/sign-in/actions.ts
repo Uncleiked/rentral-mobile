@@ -4,6 +4,7 @@ import { createClient } from '@/lib/server'
 import { captureServerEvent } from '@/lib/posthog'
 import { emailChangeSchema } from '@/lib/schemas'
 import { authErrorMessage } from '@/lib/auth-errors'
+import { usernameSchema } from '@/lib/contracts/username'
 
 type AuthResult =
   | { success: true; redirectTo: string; message?: string }
@@ -41,19 +42,21 @@ export async function signup(formData: FormData): Promise<AuthResult> {
   const parsed = emailChangeSchema.safeParse({ email })
   if (!parsed.success) return { error: 'Enter a valid email address.' }
   if (password.length < 8) return { error: 'Password must be at least 8 characters.' }
+  const username = usernameSchema.safeParse(formData.get('username'))
+  if (!username.success) return { error: username.error.issues[0]?.message ?? 'Choose a valid username.' }
 
   const accountType = formData.get('accountType')
   if (accountType !== 'individual' && accountType !== 'organization') return { error: 'Choose Individual or Organization before creating your account.' }
   if (formData.get('termsAccepted') !== 'on') return { error: 'Accept the terms and privacy policy before creating your account.' }
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const { data, error } = await client.auth.signUp({
-    email: parsed.data.email, password, accountType,
+    email: parsed.data.email, password, username: username.data, accountType,
     options: { emailRedirectTo: new URL('/auth/callback', appUrl).toString() },
   })
 
   if (error) {
     console.error('[auth/login/actions] Account creation failed.')
-    return { error: 'Account creation failed. Check your details or try again shortly.' }
+    return { error: authErrorMessage(error) }
   }
 
   if (data.user) {

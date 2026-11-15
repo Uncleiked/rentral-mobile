@@ -29,6 +29,7 @@ import { z } from 'zod'
 import { AccountUnavailableError, assertActiveAccounts } from '@/lib/accounts/availability'
 import { assertGalleryPermission, prepareGalleryMedia } from '@/lib/listings/gallery'
 import { applySubmissionPublishing } from '@/lib/listings/publishing'
+import { writeOwnedListingScalars } from '@/lib/listings/scalar-write'
 
 const METADATA_SCHEMAS = {
   house: houseMetadataSchema,
@@ -143,18 +144,21 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
       const replay = await transactionMutation(tx, command)
       if (replay) return { row: await tx.listing.findFirstOrThrow({ where: { id: replay, lister_id: userId }, select: { id: true, lister: { select: { username: true } } } }), replayed: true }
       if (isGallery) await assertGalleryPermission(tx, userId, galleryRevision!)
+      let draftUsername: string | null = null
       if (draftId) {
         // Serialize draft publication with edits so ownership, status, footage
         // and its stored GPS are checked against the exact row being published.
         const owned = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { id: true, revision: true } })
         if (owned && owned.revision !== observedDraft?.revision) throw new ListingRevisionError()
         if (!owned || !await lockRecord(tx, 'listing', draftId)) throw new DraftNotFoundError()
-        const current = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { video_path: true } })
+        const current = await tx.listing.findFirst({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, select: { video_path: true, lister: { select: { username: true } } } })
         if (!current) throw new DraftNotFoundError()
+        draftUsername = current.lister?.username ?? null
       }
       await claimStorageObjects(tx, userId, storedObjects)
-      const row = draftId
-        ? await tx.listing.update({
+      const row = draftId && isGallery
+        ? await writeOwnedListingScalars(tx, draftId, userId, listingData, true).then(() => ({ id: draftId, lister: { username: draftUsername } }))
+        : draftId ? await tx.listing.update({
             where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
             data: listingData,
             select: { id: true, lister: { select: { username: true } } },
@@ -172,10 +176,7 @@ export async function saveListingForUser(userId: string, input: unknown): Promis
         await recordAddressMatch(tx, row.id, captureId, addressMatch)
       } else throw new ApiError(409, 'CAPTURE_REQUIRED', 'Confirm this recording and its location before submitting.')
 
-      await tx.listing.update({
-        where: { id: row.id },
-        data: { listing_status: LISTING_STATUS.PENDING_VERIFICATION },
-      })
+      await writeOwnedListingScalars(tx, row.id, userId, { listing_status: LISTING_STATUS.PENDING_VERIFICATION })
       if (videoPath && muxEnabled()) {
         await tx.mediaAsset.create({ data: { listing_id: row.id, source_path: videoPath, mux_asset_id: null, playback_id: null } })
       }
@@ -292,11 +293,11 @@ export async function saveDraftForUser(userId: string, input: unknown): Promise<
         videoChanged = (videoPath ?? null) !== existing.video_path
         await claimStorageObjects(tx, userId, storedObjects)
 
-        const result = await tx.listing.updateMany({
-          where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT },
-          data: draftData,
-        })
-        if (result.count === 0) throw new DraftNotFoundError()
+        if (isGallery) await writeOwnedListingScalars(tx, draftId, userId, draftData, true)
+        else {
+          const result = await tx.listing.updateMany({ where: { id: draftId, lister_id: userId, listing_status: LISTING_STATUS.DRAFT }, data: draftData })
+          if (result.count === 0) throw new DraftNotFoundError()
+        }
       } else {
         await claimStorageObjects(tx, userId, storedObjects)
         const created = await tx.listing.create({

@@ -77,7 +77,7 @@ async function runFinancialBrowser(db, origin, session) {
   // Like the three native HTTP registrations below, this Node client has no
   // browser Origin. This mode does not claim production browser-CSRF acceptance.
   const registration = await fetch(`${origin}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: `gallery-owner-${owner.slice(0, 12)}@fixture.invalid`, password: `OwnedGallery!${randomUUID()}` }), signal: AbortSignal.timeout(120000) })
+    body: JSON.stringify({ username: `gallery_${owner.slice(0, 12)}`, email: `gallery-owner-${owner.slice(0, 12)}@fixture.invalid`, password: `OwnedGallery!${randomUUID()}` }), signal: AbortSignal.timeout(120000) })
   assert.equal(registration.status, 201, 'Synthetic gallery owner registers through the owned JWT endpoint.')
   const registrationBody = await registration.json(), gallerySession = registrationBody?.data
   assert.ok(gallerySession?.user?.id && gallerySession.access_token && gallerySession.refresh_token, 'Synthetic gallery owner receives its own JWT session.')
@@ -181,13 +181,13 @@ try {
     return { response, bytes, value, data: value?.data }
   }
   const password = 'LocalFixture!secret-9842'
-  await request('/api/v1/auth/register', { json: { email: 'unprepared@fixture.invalid', password }, expected: 503 })
+  await request('/api/v1/auth/register', { json: { email: 'unprepared@fixture.invalid', password, username: 'unprepared_fixture' }, expected: 503 })
   check('unprepared database fails closed before User writes', await db.collection('User').countDocuments() === 0)
   await ensureMongoIndexes(db)
   check('owned schema validators and readiness marker initialized explicitly')
-  const host = (await request('/api/v1/auth/register', { json: { email: 'host@fixture.invalid', password }, expected: 201 })).data
-  const renter = (await request('/api/v1/auth/register', { json: { email: 'renter@fixture.invalid', password }, expected: 201 })).data
-  const outsider = (await request('/api/v1/auth/register', { json: { email: 'outsider@fixture.invalid', password }, expected: 201 })).data
+  const host = (await request('/api/v1/auth/register', { json: { email: 'host@fixture.invalid', password, username: 'host_fixture' }, expected: 201 })).data
+  const renter = (await request('/api/v1/auth/register', { json: { email: 'renter@fixture.invalid', password, username: 'renter_fixture' }, expected: 201 })).data
+  const outsider = (await request('/api/v1/auth/register', { json: { email: 'outsider@fixture.invalid', password, username: 'outsider_fixture' }, expected: 201 })).data
   check('three accounts register through real JWT endpoints')
   if (productionBrowser) {
     const missingListing = randomUUID(), feePath = `/api/v1/my-listings/${missingListing}/publication-fee`

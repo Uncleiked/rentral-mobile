@@ -125,9 +125,9 @@ export async function getSession(): Promise<AuthSession | null> {
   }
   return refreshing.promise
 }
-export async function signIn(email: string, password: string, register = false): Promise<void> {
+export async function signIn(email: string, password: string, register = false, username?: string): Promise<void> {
   const attempt = ++signInAttempt
-  const result = await authRequest<unknown>(register ? '/register' : '/login', { email, password })
+  const result = await authRequest<unknown>(register ? '/register' : '/login', { email, password, ...(register ? { username } : {}) })
   if (!isSession(result)) throw new Error('Your sign-in could not be completed.')
   if (attempt !== signInAttempt) return
   // A failed login leaves an existing session usable. Only an accepted login

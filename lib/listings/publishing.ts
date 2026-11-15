@@ -7,6 +7,7 @@ import { lockRecord, withTransaction } from '@/lib/database/transactions'
 import { committedMutation, mutationCommand, recordMutation, transactionMutation } from '@/lib/database/mutations'
 import { claimStorageObjects, type PreparedStorageObject } from '@/lib/storage-claims/service'
 import { assertListingPublicationAssets } from './publication-assets'
+import { writeOwnedListingScalars } from './scalar-write'
 import { directPublishingGranted, galleryPublishingGranted, publicationReviewBypassed, freePostingGranted, type PublicationGrantAccount } from './publishing-policy'
 import { directPublicationCommandSchema, type DirectPublicationState } from '@/lib/contracts/direct-publication'
 
@@ -67,7 +68,7 @@ export async function publishTrustedListingInTransaction(tx: Prisma.TransactionC
       documentPath: listing.document_path, documentDigest: currentDocument?.digest, submittedAt: new Date().toISOString() })
     if (!prepared.success) throw new ApiError(409, 'PUBLICATION_DOCUMENT_CHANGED', 'The current authority document could not be confirmed. Reselect it or ask an administrator to review this listing.')
     proof = prepared.data
-    await tx.listing.update({ where: { id: listingId }, data: { publication_mode: 'trusted_publisher', direct_publish_proof: proof } })
+    await writeOwnedListingScalars(tx, listingId, ownerId, { publication_mode: 'trusted_publisher', direct_publish_proof: proof })
     await tx.adminAudit.create({ data: { actor_id: ownerId, action: 'trusted_publication_requested', target_type: 'listing', target_id: listingId,
       reason: 'Owner completed a previously submitted gallery listing under current gallery approval.', metadata: { ...proofMetadata(proof), documentPath: proof.documentPath, documentDigest: proof.documentDigest, humanDocumentApproval: false, moneyMoved: false } } })
   }
@@ -76,7 +77,7 @@ export async function publishTrustedListingInTransaction(tx: Prisma.TransactionC
   if (!document || !document.digest || !document.size_bytes || !document.content_type) throw new ApiError(409, 'PUBLICATION_DOCUMENT_CHANGED', 'The exact submitted authority document is no longer available. Ask an administrator to review the current document.')
   await claimStorageObjects(tx, ownerId, [{ id: document.id, bucket: 'compliance-docs', path: document.path, digest: document.digest, sizeBytes: document.size_bytes, contentType: document.content_type }])
   await assertListingPublicationAssets(tx, listing)
-  await tx.listing.update({ where: { id: listingId }, data: { listing_status: 'active' } })
+  await writeOwnedListingScalars(tx, listingId, ownerId, { listing_status: 'active' })
   await tx.adminAudit.create({ data: { actor_id: ownerId, action: 'trusted_listing_published', target_type: 'listing', target_id: listingId,
     reason: proof.version === 2 ? 'Published under current administrator-approved gallery permission.' : 'Published under the current administrator-issued direct publishing permission.', metadata: { ...proofMetadata(proof), documentPath: proof.documentPath, documentDigest: proof.documentDigest, humanDocumentApproval: false, moneyMoved: false } } })
 }
@@ -89,7 +90,7 @@ export async function applySubmissionPublishing(tx: Prisma.TransactionClient, ow
   await assertPublisherAdmission(tx, ownerId, account)
   const now = new Date()
   if (freePostingGranted(account)) {
-    await tx.listing.update({ where: { id: listingId }, data: { fee_waived_at: now, fee_waived_by: account!.listing_fee_exempt_by, fee_waiver_reason: account!.listing_fee_exempt_reason!.trim() } })
+    await writeOwnedListingScalars(tx, listingId, ownerId, { fee_waived_at: now, fee_waived_by: account!.listing_fee_exempt_by, fee_waiver_reason: account!.listing_fee_exempt_reason!.trim() })
     await tx.adminAudit.create({ data: { actor_id: ownerId, action: 'account_free_posting_applied', target_type: 'listing', target_id: listingId,
       reason: 'Applied the existing administrator-issued free posting permission to a new submission.', metadata: { grantedBy: account!.listing_fee_exempt_by, grantedAt: account!.listing_fee_exempt_at!.toISOString(), moneyMoved: false } } })
   }
@@ -101,7 +102,7 @@ export async function applySubmissionPublishing(tx: Prisma.TransactionClient, ow
   const common = { ownerId, documentPath: document.path, documentDigest: document.digest, submittedAt: now.toISOString() }
   const proof: PublicationProof = gallery ? { ...common, version: 2, basis: 'gallery_permission', galleryPermissionRevision: submitted.gallery_permission_revision! }
     : { ...common, version: 1, grantedBy: account!.direct_publish_by!, grantedAt: account!.direct_publish_at!.toISOString(), grantReason: account!.direct_publish_reason!.trim() }
-  await tx.listing.update({ where: { id: listingId }, data: { publication_mode: 'trusted_publisher', direct_publish_proof: proof } })
+  await writeOwnedListingScalars(tx, listingId, ownerId, { publication_mode: 'trusted_publisher', direct_publish_proof: proof })
   await tx.adminAudit.create({ data: { actor_id: ownerId, action: 'trusted_publication_requested', target_type: 'listing', target_id: listingId,
     reason: gallery ? 'Submitted under current administrator-approved gallery permission.' : 'Submitted under an existing administrator-issued direct publishing permission.', metadata: { ...proofMetadata(proof), documentPath: document.path, documentDigest: document.digest, humanDocumentApproval: false, moneyMoved: false } } })
   try { await publishTrustedListingInTransaction(tx, ownerId, listingId) }

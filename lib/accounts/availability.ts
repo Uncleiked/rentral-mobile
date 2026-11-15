@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { lockActiveAccount } from '@/lib/database/revision-lock'
 
 export const activeAccountWhere = { AND: [{ OR: [{ closed_at: null }, { closed_at: { isSet: false } }] }, { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] }] } satisfies Prisma.UserWhereInput
 export const activeAccountSelect = { id: true, closed_at: true, suspended_at: true } satisfies Prisma.UserSelect
@@ -15,7 +16,6 @@ export class AccountUnavailableError extends Error {
 /** A real write is the serialization boundary with account closure, across all processes. */
 export async function assertActiveAccounts(tx: Prisma.TransactionClient, userIds: readonly string[]): Promise<void> {
   for (const id of [...new Set(userIds)].sort()) {
-    const locked = await tx.user.updateMany({ where: { id, ...activeAccountWhere }, data: { revision: { increment: 1 } } })
-    if (locked.count !== 1) throw new AccountUnavailableError()
+    if (!await lockActiveAccount(tx, id)) throw new AccountUnavailableError()
   }
 }

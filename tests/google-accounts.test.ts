@@ -35,9 +35,13 @@ describe('Google accounts share MongoDB users without email auto-linking', () =>
     expect(state.userCreate).not.toHaveBeenCalled()
   })
   it('creates a Google organization with no fabricated password, privileges or KYC', async () => {
-    await completeVerifiedGoogle(identity, { mode: 'signup', accountType: 'organization', termsAccepted: true })
+    const continuation = await completeVerifiedGoogle(identity, { mode: 'signup', accountType: 'organization', termsAccepted: true })
+    expect(continuation.kind).toBe('finish')
+    expect(state.userCreate).not.toHaveBeenCalled()
+    if (continuation.kind !== 'finish') throw new Error('Missing username continuation')
+    await finishGoogleAccount(continuation.challenge, { accountType: 'organization', termsAccepted: true, username: ' Chosen_Company ' })
     const saved = state.userCreate.mock.calls[0][0].data
-    expect(saved).toMatchObject({ email: identity.email, account_type: 'organization', password_hash: null })
+    expect(saved).toMatchObject({ email: identity.email, username: 'chosen_company', account_type: 'organization', password_hash: null })
     expect(saved).not.toHaveProperty('staff_role'); expect(saved).not.toHaveProperty('kyc_verified')
     expect(state.identityCreate.mock.calls[0][0].data).toMatchObject({ id: identity.subject, user_id: saved.id })
   })
@@ -85,7 +89,23 @@ describe('Google accounts share MongoDB users without email auto-linking', () =>
   it('requires signup consent and never replays a new-account continuation', async () => {
     await expect(finishGoogleAccount({ kind: 'new', identity }, { accountType: 'individual' })).rejects.toMatchObject({ code: 'ACCOUNT_TYPE_REQUIRED' })
     state.identityFind.mockResolvedValue({ user_id: userId })
-    await expect(finishGoogleAccount({ kind: 'new', identity }, { accountType: 'individual', termsAccepted: true })).rejects.toMatchObject({ code: 'GOOGLE_RESTART' })
+    await expect(finishGoogleAccount({ kind: 'new', identity }, { accountType: 'individual', termsAccepted: true, username: 'chosen_member' })).rejects.toMatchObject({ code: 'GOOGLE_RESTART' })
     expect(state.userCreate).not.toHaveBeenCalled()
   })
+})
+
+
+it.each([undefined, '', 'admin', 'two words', 'ab'])('requires a chosen valid Google username %s before creating an account', async username => {
+  await expect(finishGoogleAccount({ kind: 'new', identity }, { accountType: 'individual', termsAccepted: true, username })).rejects.toMatchObject({ code: 'INVALID_USERNAME' })
+  expect(state.userCreate).not.toHaveBeenCalled(); expect(state.identityCreate).not.toHaveBeenCalled(); expect(state.issue).not.toHaveBeenCalled()
+})
+it('lets an unused verified Google continuation choose another name after a final index collision', async () => {
+  state.userCreate.mockRejectedValueOnce({ code: 'P2002', meta: { target: ['username'] } })
+  state.userFind.mockImplementation(async ({ where }: { where: { username?: string } }) => where.username === 'taken_member' ? account : null)
+  const challenge = { kind: 'new' as const, identity }
+  await expect(finishGoogleAccount(challenge, { accountType: 'individual', termsAccepted: true, username: 'taken_member' })).rejects.toMatchObject({ code: 'USERNAME_TAKEN', status: 409 })
+  expect(state.identityCreate).not.toHaveBeenCalled(); expect(state.issue).not.toHaveBeenCalled()
+  await finishGoogleAccount(challenge, { accountType: 'individual', termsAccepted: true, username: 'different_member' })
+  expect(state.userCreate.mock.calls[1][0].data.username).toBe('different_member')
+  expect(state.issue).toHaveBeenCalledTimes(1)
 })

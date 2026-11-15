@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ ready: vi.fn(), user: vi.fn(), lock: vi.fn(), claim: vi.fn(), photos: vi.fn(), files: vi.fn() }))
 vi.mock('@/lib/database/readiness', () => ({ assertOwnerAdminReady: mocks.ready }))
 vi.mock('@/lib/db', () => ({ default: {} }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockActiveAccount: mocks.lock }))
 vi.mock('@/lib/storage-claims/service', async original => ({ ...await original<typeof import('@/lib/storage-claims/service')>(), prepareGalleryPhotos: mocks.photos, prepareListingStorage: mocks.files, claimStorageObjects: mocks.claim }))
 import { assertGalleryPermission, assertGalleryPublication, galleryIsPublic, prepareGalleryMedia } from '@/lib/listings/gallery'
 import { saveDraftInputSchema, saveListingInputSchema } from '@/lib/contracts/listings'
@@ -11,9 +12,9 @@ const objectId = (path: string) => createHash('sha256').update(`listings-media\0
 const image = (name: string) => ({ kind: 'image' as const, path: `owner/gallery/${name}.jpg`, objectId: objectId(`owner/gallery/${name}.jpg`), digest: 'a'.repeat(64), sizeBytes: 100, contentType: 'image/jpeg' as const })
 const proof = [image('one'), image('two')]
 const listing = { id: 'listing', lister_id: 'owner', media_source: 'approved_gallery', gallery_permission_revision: 3, gallery_media: proof, gallery_media_paths: proof.map(item => item.path.toLowerCase()), video_path: null, poster_path: proof[0].path }
-const tx = { user: { findFirst: mocks.user, updateMany: mocks.lock } } as unknown as Parameters<typeof assertGalleryPermission>[0]
+const tx = { user: { findFirst: mocks.user } } as unknown as Parameters<typeof assertGalleryPermission>[0]
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.ready.mockResolvedValue(undefined); mocks.user.mockResolvedValue({ gallery_upload_allowed: true, gallery_permission_revision: 3 }); mocks.lock.mockResolvedValue({ count: 1 }); mocks.claim.mockResolvedValue(undefined)
+  vi.resetAllMocks(); mocks.ready.mockResolvedValue(undefined); mocks.user.mockResolvedValue({ gallery_upload_allowed: true, gallery_permission_revision: 3 }); mocks.lock.mockResolvedValue(true); mocks.claim.mockResolvedValue(undefined)
 })
 
 it('allows a photo-only gallery command but rejects fabricated recording evidence, duplicate photos and client-built proofs', () => {
@@ -26,12 +27,13 @@ it('allows a photo-only gallery command but rejects fabricated recording evidenc
 
 it('checks current approval and exact permission revision, with a real user-row write against revocation races', async () => {
   expect(await assertGalleryPermission(tx, 'owner', 3)).toBe(3)
-  expect(mocks.lock).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'owner', gallery_upload_allowed: true, OR: [{ gallery_permission_revision: 3 }] }), data: { revision: { increment: 1 } } }))
+  expect(mocks.lock).toHaveBeenCalledWith(tx, 'owner')
+  expect(mocks.lock.mock.invocationCallOrder[0]).toBeLessThan(mocks.user.mock.invocationCallOrder[0])
   mocks.user.mockResolvedValue({ gallery_upload_allowed: false, gallery_permission_revision: 4 })
   await expect(assertGalleryPermission(tx, 'owner')).rejects.toMatchObject({ code: 'GALLERY_PERMISSION_REQUIRED' })
   mocks.user.mockResolvedValue({ gallery_upload_allowed: true, gallery_permission_revision: 5 })
   await expect(assertGalleryPermission(tx, 'owner', 3)).rejects.toMatchObject({ code: 'GALLERY_PERMISSION_REQUIRED' })
-  mocks.user.mockResolvedValue({ gallery_upload_allowed: true, gallery_permission_revision: 3 }); mocks.lock.mockResolvedValue({ count: 0 })
+  mocks.user.mockResolvedValue({ gallery_upload_allowed: true, gallery_permission_revision: 3 }); mocks.lock.mockResolvedValue(false)
   await expect(assertGalleryPermission(tx, 'owner', 3)).rejects.toMatchObject({ code: 'GALLERY_PERMISSION_REQUIRED' })
 })
 
@@ -61,4 +63,15 @@ it('builds gallery proofs only from verified object metadata and chooses the fir
   mocks.photos.mockResolvedValue(objects); mocks.files.mockResolvedValue([])
   expect(await prepareGalleryMedia('owner', { galleryPhotos: proof.map(item => item.path) })).toEqual({ objects, proof, paths: proof.map(item => item.path), posterPath: proof[0].path })
   expect(mocks.files).toHaveBeenCalledWith('owner', { videoPath: undefined, documentPath: undefined, posterPath: undefined })
+})
+
+it('refuses an inactive account before reading its gallery grant', async () => {
+  mocks.lock.mockResolvedValue(false)
+  await expect(assertGalleryPermission(tx, 'owner')).rejects.toMatchObject({ code: 'GALLERY_PERMISSION_REQUIRED' })
+  expect(mocks.user).not.toHaveBeenCalled()
+})
+it('accepts the legacy zero epoch only when the grant is current under the user lock', async () => {
+  mocks.user.mockResolvedValue({ gallery_upload_allowed: true, gallery_permission_revision: null })
+  expect(await assertGalleryPermission(tx, 'owner', 0)).toBe(0)
+  await expect(assertGalleryPermission(tx, 'owner', 1)).rejects.toMatchObject({ code: 'GALLERY_PERMISSION_REQUIRED' })
 })

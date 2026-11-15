@@ -77,9 +77,10 @@ describe('JWT signatures and session boundaries', () => {
 
 describe('MongoDB account credentials', () => {
   it('stores a salted slow password hash and never returns it to clients', async () => {
-    const result = await registerAccount({ email: 'Member@Example.test', password: 'local-password-123' })
+    const result = await registerAccount({ email: 'Member@Example.test', password: 'local-password-123', username: ' Chosen_Member ' })
     const inserted = mocks.userCreate.mock.calls[0][0].data
     expect(inserted.email).toBe('member@example.test')
+    expect(inserted.username).toBe('chosen_member')
     expect(inserted.password_hash).toMatch(/^scrypt-v1:/)
     expect(inserted.password_hash).not.toContain('local-password-123')
     expect(inserted).not.toHaveProperty('staff_role')
@@ -98,8 +99,8 @@ describe('MongoDB account credentials', () => {
     expect(await verifyPassword('wrong', 'malformed')).toBe(false)
   }, 15000)
   it('rejects actor/role injections and weak signup passwords', async () => {
-    await expect(registerAccount({ email: 'member@example.test', password: 'local-password-123', staff_role: 'admin' })).rejects.toThrow()
-    await expect(registerAccount({ email: 'member@example.test', password: 'short' })).rejects.toThrow()
+    await expect(registerAccount({ username: 'chosen_member', email: 'member@example.test', password: 'local-password-123', staff_role: 'admin' })).rejects.toThrow()
+    await expect(registerAccount({ username: 'chosen_member', email: 'member@example.test', password: 'short' })).rejects.toThrow()
     expect(mocks.userCreate).not.toHaveBeenCalled()
   })
   it('does not authenticate unknown emails or missing password hashes', async () => {

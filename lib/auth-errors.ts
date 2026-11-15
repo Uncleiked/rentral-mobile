@@ -15,6 +15,7 @@ export function authErrorMessage(error: unknown): string {
     return 'This sign-in provider is unavailable. Please use email and password.'
   }
   if (code === 'invalid_credentials' || code === 'INVALID_CREDENTIALS') return 'Email or password is incorrect.'
+  if (code === 'USERNAME_TAKEN') return 'That username is already taken. Choose another username.'
   if (code === 'ACCOUNT_EXISTS') return 'An account with this email already exists. Sign in or reset your password.'
   return 'Sign-in could not be completed. Please try again.'
 }

@@ -3,29 +3,38 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { assertGoogleAuthReady } from '@/lib/database/readiness'
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
-import { defaultAccountHandle, isUniqueConstraintError } from '@/lib/accounts/bootstrap'
+import { isUniqueConstraintError } from '@/lib/accounts/bootstrap'
+import { usernameSchema } from '@/lib/contracts/username'
 import { accountIsActive } from '@/lib/accounts/availability'
 import { apiRateLimiter } from '@/lib/api/rate-limit'
 import { createGoogleAccountSession } from './service'
 import { verifyPassword } from './password'
 import { tokenHash } from './token'
 import { AuthError } from './types'
-import { googleIdentitySchema, type GoogleFinish, type GoogleIdentity, type GoogleIntent } from './google-oauth'
+import { googleIdentitySchema, googleStartSchema, type GoogleFinish, type GoogleIdentity, type GoogleIntent } from './google-oauth'
 
 const userSelect = { id: true, email: true, password_hash: true, closed_at: true, suspended_at: true } satisfies Prisma.UserSelect
 const fingerprint = (user: { password_hash: string | null; email: string }) => tokenHash(JSON.stringify([user.email, user.password_hash]))
 function challengeUsed(): never { throw new AuthError(409, 'GOOGLE_RESTART', 'This Google request has already been used or changed. Start Google sign-in again.') }
-async function createGoogleAccount(identity: GoogleIdentity, accountType: 'individual' | 'organization', finish = false) {
+async function createGoogleAccount(identity: GoogleIdentity, accountType: 'individual' | 'organization', username: string) {
   const id = randomUUID()
   await withTransaction(async tx => {
     if (await tx.googleIdentity.findUnique({ where: { id: identity.subject }, select: { user_id: true } })) challengeUsed()
-    await tx.user.create({ data: { id, email: identity.email, username: defaultAccountHandle(id), account_type: accountType, password_hash: null } })
+    await tx.user.create({ data: { id, email: identity.email, username, account_type: accountType, password_hash: null } })
     await tx.googleIdentity.create({ data: { id: identity.subject, user_id: id, email_at_link: identity.email, credential_fingerprint: fingerprint({ email: identity.email, password_hash: null }) } })
-  }).catch(error => { if (finish && isUniqueConstraintError(error)) challengeUsed(); throw error })
+  }).catch(async error => {
+    if (isUniqueConstraintError(error)) {
+      if (await prisma.googleIdentity.findUnique({ where: { id: identity.subject }, select: { user_id: true } })) challengeUsed()
+      if (await prisma.user.findUnique({ where: { username }, select: { id: true } })) throw new AuthError(409, 'USERNAME_TAKEN', 'That username is already taken. Choose another username.')
+      challengeUsed()
+    }
+    throw error
+  })
   return createGoogleAccountSession(id, identity.subject, fingerprint({ email: identity.email, password_hash: null }))
 }
-export async function completeVerifiedGoogle(identityInput: unknown, intent: GoogleIntent, recoveryAttempt = 0) {
+export async function completeVerifiedGoogle(identityInput: unknown, intent: GoogleIntent) {
   const identity = googleIdentitySchema.parse(identityInput)
+  googleStartSchema.parse(intent)
   await assertGoogleAuthReady()
   const existing = await prisma.googleIdentity.findUnique({ where: { id: identity.subject }, select: { user_id: true, credential_fingerprint: true } })
   if (existing) {
@@ -39,20 +48,16 @@ export async function completeVerifiedGoogle(identityInput: unknown, intent: Goo
     if (!accountIsActive(emailAccount)) throw new AuthError(401, 'GOOGLE_FAILED', 'This account is unavailable.')
     return { kind: 'finish' as const, challenge: { kind: 'link' as const, identity, userId: emailAccount.id, fingerprint: fingerprint(emailAccount) } }
   }
-  if (intent.mode === 'signin') return { kind: 'finish' as const, challenge: { kind: 'new' as const, identity } }
-  try { return { kind: 'session' as const, session: await createGoogleAccount(identity, intent.accountType) } }
-  catch (error) {
-    // A competing verified Google callback may have committed. Read only the
-    // immutable provider subject; a newly collided email must still confirm its password.
-    if (isUniqueConstraintError(error) && recoveryAttempt < 1) return completeVerifiedGoogle(identity, { mode: 'signin' }, recoveryAttempt + 1)
-    throw error
-  }
+  // A new identity must choose its own public username before any account is created.
+  return { kind: 'finish' as const, challenge: { kind: 'new' as const, identity } }
 }
-export async function finishGoogleAccount(challenge: GoogleFinish, input: { password?: string; accountType?: 'individual' | 'organization'; termsAccepted?: boolean }) {
+export async function finishGoogleAccount(challenge: GoogleFinish, input: { password?: string; username?: string; accountType?: 'individual' | 'organization'; termsAccepted?: boolean }) {
   await assertGoogleAuthReady()
   if (challenge.kind === 'new') {
     if (!input.accountType || !input.termsAccepted) throw new AuthError(400, 'ACCOUNT_TYPE_REQUIRED', 'Choose Individual or Organization and accept the terms before creating your account.')
-    return createGoogleAccount(challenge.identity, input.accountType, true)
+    const username = usernameSchema.safeParse(input.username)
+    if (!username.success) throw new AuthError(400, 'INVALID_USERNAME', username.error.issues[0]?.message ?? 'Choose a valid username.')
+    return createGoogleAccount(challenge.identity, input.accountType, username.data)
   }
   if (!challenge.userId || !challenge.fingerprint) challengeUsed()
   if (!apiRateLimiter.allow('google-link:' + tokenHash(challenge.userId + challenge.identity.subject), 5)) throw new AuthError(429, 'RATE_LIMITED', 'Too many attempts. Wait a minute and start Google sign-in again.')

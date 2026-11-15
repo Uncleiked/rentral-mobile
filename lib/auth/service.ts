@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
-import { defaultAccountHandle, isUniqueConstraintError } from '@/lib/accounts/bootstrap'
+import { isUniqueConstraintError } from '@/lib/accounts/bootstrap'
+import { usernameSchema } from '@/lib/contracts/username'
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { hashPassword, verifyPassword } from './password'
 import { ACCESS_SECONDS, REFRESH_SECONDS, accessClaims, accessToken, revocationClaims, opaqueToken, signingKey, tokenHash } from './token'
@@ -15,7 +16,7 @@ import { cancelAuthEmails, queueAuthEmail } from './email-delivery'
 import { invalidateAccountChallenges, revokeAccountPush, revokeSessionPush } from './credential-state'
 import { accountIsActive } from '@/lib/accounts/availability'
 
-export const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(8).max(128), accountType: z.enum(['individual', 'organization']).optional().default('individual') }).strict()
+export const credentialsSchema = z.object({ username: usernameSchema, email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(8).max(128), accountType: z.enum(['individual', 'organization']).optional().default('individual') }).strict()
 export const loginSchema = z.object({ email: credentialsSchema.shape.email, password: z.string().min(1).max(128) }).strict()
 const authUserSelect = { id: true, email: true, password_hash: true, staff_role: true, closed_at: true, suspended_at: true } satisfies Prisma.UserSelect
 type Account = Prisma.UserGetPayload<{ select: typeof authUserSelect }>
@@ -55,13 +56,20 @@ export async function registerAccount(input: unknown): Promise<AuthSession> {
   signingKey()
   const passwordHash = await hashPassword(data.password)
   const id = randomUUID()
+  let user: Account
   try {
-    const user = await prisma.user.create({ data: { id, email: data.email, username: defaultAccountHandle(id), account_type: data.accountType, password_hash: passwordHash }, select: authUserSelect })
-    return newSession(user)
+    user = await prisma.user.create({ data: { id, email: data.email, username: data.username, account_type: data.accountType, password_hash: passwordHash }, select: authUserSelect })
   } catch (error) {
-    if (isUniqueConstraintError(error)) throw new AuthError(409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Sign in or reset your password.')
+    if (isUniqueConstraintError(error)) {
+      const target = typeof error === 'object' && error !== null && 'meta' in error && error.meta && typeof error.meta === 'object' && 'target' in error.meta ? error.meta.target : null
+      if ((typeof target === 'string' && target.includes('username')) || (Array.isArray(target) && target.includes('username'))) throw new AuthError(409, 'USERNAME_TAKEN', 'That username is already taken. Choose another username.')
+      const existing = await prisma.user.findUnique({ where: { email: data.email }, select: { id: true } })
+      if (existing) throw new AuthError(409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Sign in or reset your password.')
+      throw new AuthError(409, 'USERNAME_TAKEN', 'That username is already taken. Choose another username.')
+    }
     throw error
   }
+  return newSession(user)
 }
 export async function loginAccount(input: unknown): Promise<AuthSession> {
   const data = loginSchema.parse(input)

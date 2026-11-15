@@ -4,6 +4,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ identity: vi.fn(), lock: vi.fn(), active: vi.fn(), user: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn() }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: mocks.identity }))
 vi.mock('@/lib/db', () => ({ default: { user: { findUnique: mocks.user } } }))
+// Adapt the lock boundary to this domain fixture; raw command semantics have separate coverage.
+vi.mock('@/lib/database/revision-lock', () => ({
+  lockActiveAccount: async (tx: { user: { updateMany: (args: unknown) => Promise<{ count: number }> } }, id: string) =>
+    (await tx.user.updateMany({ where: { id, AND: [
+      { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+      { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+    ] }, data: { revision: { increment: 1 } } })).count === 1,
+}))
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({
   user: { findUnique: mocks.user, update: mocks.update, updateMany: mocks.active }, marketEvent: { upsert: mocks.create, deleteMany: mocks.remove },
 }) }))

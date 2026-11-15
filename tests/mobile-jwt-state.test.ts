@@ -351,3 +351,22 @@ it.each([
   expect(fixtures.stored.has(key)).toBe(false)
   expect(fixtures.fetch).not.toHaveBeenCalled()
 })
+
+
+it('sends the chosen username only when creating a native account', async () => {
+  fixtures.fetch.mockImplementation(() => Promise.resolve(response(session())))
+  const auth = await import('../apps/mobile/src/lib/auth')
+  await auth.signIn('member@example.test', 'fixture-password', true, 'chosen_member')
+  expect(fixtures.fetch.mock.calls[0][0]).toContain('/register')
+  expect(JSON.parse(fixtures.fetch.mock.calls[0][1].body)).toEqual({ email: 'member@example.test', password: 'fixture-password', username: 'chosen_member' })
+  await auth.signIn('member@example.test', 'fixture-password')
+  expect(fixtures.fetch.mock.calls[1][0]).toContain('/login')
+  expect(JSON.parse(fixtures.fetch.mock.calls[1][1].body)).toEqual({ email: 'member@example.test', password: 'fixture-password' })
+})
+it('preserves the existing native session when a chosen username is rejected by the server', async () => {
+  const original = session(); fixtures.stored.set(key, JSON.stringify(original))
+  const auth = await import('../apps/mobile/src/lib/auth'); await auth.getSession()
+  fixtures.fetch.mockResolvedValue(response('That username is already taken. Choose another username.', 409))
+  await expect(auth.signIn('new@example.test', 'fixture-password', true, 'taken_member')).rejects.toThrow('another username')
+  expect(await auth.getSession()).toEqual(original); expect(fixtures.fetch).toHaveBeenCalledTimes(1)
+})

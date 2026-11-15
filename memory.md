@@ -1,4 +1,25 @@
-# Memory - Admin/social delivery and persistent uploads
+﻿# Memory - Admin/social delivery and persistent uploads
+
+Latest steering: mandatory chosen usernames are implemented in email/API/native signup
+and Google continuation; focused108tests/types/lint pass, existing accounts kept.
+Follow is user-confirmed working. Admin scalaraccess nowpasses400msRTT browser and
+real atomic receipt-failure rollback. Final gallery performance/scalar write work
+is active in runtime_follow_diagnosis; no claim of complete verification yet.
+
+
+Follow is now fixed and user-confirmed on the actual localhost account after refresh
+(2026-11-15). The cause was Prisma's User relation update emulation during a
+revision-only lock; a fixed transaction-bound raw scalar command preserves
+readiness, BSON Long increments, timestamps and exact active-account locking.
+Actual browser Follow also passes simulated400ms database RTT. AuthForm POST +
+hydration guard fixes a real pre-hydration credential GET fallback.
+Latest unit run2317passed/127guarded; all127Mongo checks ran and passed separately
+in owned loopback fixtures. Genuine maximum-gallery/social/admin browser flow
+passed20checkpoints. Delayed gallery submission still reproduces P2028 in its
+old User permission CAS; runtime_follow_diagnosis is fixing it. Delayed admin
+case, final checks/build/docs still pending. See context/runtime-verification.md.
+Git403 was the KingDavidsHub/Uncleiked HTTPS account mismatch; instructions given.
+Local main now matches origin/main after the user's push; agent did not push.
 
 Updated: 2026-11-15 Africa/Lagos. Active repository:
 C:/Users/Mudian Consult/Documents/RentralMobile. Use npm.cmd/Node24,
@@ -70,3 +91,4 @@ If asked to activate hosted features, review/authorize the selected Atlas setup
 and deployment; don't assume local code completion already changed production.
 Keep provider/device/merchant acceptance separate from source/test completion.
 No named web feature remains unfinished in this increment.
+

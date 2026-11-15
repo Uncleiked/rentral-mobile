@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ authenticated: vi.fn(), transaction: vi.fn(), lock: vi.fn(), activeOwner: vi.fn(), user: vi.fn(), findListing: vi.fn(), updateListing: vi.fn(), review: vi.fn(), audit: vi.fn(), notify: vi.fn(), report: vi.fn(), booking: vi.fn(), updateReport: vi.fn(), automatedListing: vi.fn(), geocode: vi.fn(), capture: vi.fn(), storedVideo: vi.fn(), prepare: vi.fn(), claim: vi.fn(), gallery: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.authenticated, requireSessionUserId: mocks.authenticated }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockActiveAccount: mocks.activeOwner }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, user: { findUnique: mocks.user }, listing: { findUnique: mocks.automatedListing }, adminAudit: { create: mocks.audit } } }))
 vi.mock('@/lib/storage-claims/service', () => ({ prepareListingStorage: mocks.prepare, claimStorageObjects: mocks.claim }))
@@ -36,7 +37,7 @@ beforeEach(() => {
   mocks.automatedListing.mockResolvedValue({ lister_id: 'host', document_path: 'host/folder/title.pdf', listing_status: 'pending_verification' })
   mocks.prepare.mockResolvedValue([{ id: 'document-object', bucket: 'compliance-docs', path: 'host/folder/title.pdf', digest: 'd'.repeat(64), sizeBytes: 100, contentType: 'application/pdf' }])
   mocks.claim.mockResolvedValue(undefined); mocks.gallery.mockResolvedValue({ hasVideo: false }); mocks.audit.mockResolvedValue({ id: listingId })
-  mocks.activeOwner.mockResolvedValue({ count: 1 })
+  mocks.activeOwner.mockResolvedValue(true)
   mocks.booking.mockResolvedValue({ listing_id: listingId })
   mocks.report.mockResolvedValue({ id: 'report', booking_id: listingId, status: 'open', booking: { seeker_id: 'renter', lister_id: 'host', status: 'disputed' } })
   mocks.user.mockImplementation(async ({ where }: { where: { id: string } }) => ({ staff_role: ['staff', 'second-staff'].includes(where.id) ? 'admin' : where.id === 'analyst' ? 'analyst' : null }))
@@ -57,7 +58,7 @@ describe('server-owned staff access and publication', () => {
     expect(mocks.review).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
   })
   it('denies publishing a closed owner but preserves suspension and document remediation', async () => {
-    mocks.activeOwner.mockResolvedValue({ count: 0 })
+    mocks.activeOwner.mockResolvedValue(false)
     await expect(moderateListing('staff', listingId, 'publish', 'Reviewed owner closure')).rejects.toMatchObject({ code: 'ACCOUNT_UNAVAILABLE' })
     expect(mocks.updateListing).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled()
     await moderateListing('staff', listingId, 'suspend', 'Keep the historical listing unavailable')

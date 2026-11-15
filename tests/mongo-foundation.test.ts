@@ -1,8 +1,9 @@
 ﻿import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Prisma } from '@prisma/client'
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn() }))
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), revisionLock: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction } }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockRecordRevision: mocks.revisionLock }))
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { assertAppendOnlyOperation } from '@/lib/database/append-only'
 import { localMongoUrl, localMongoDatabaseName, mongoUrl, mongoDatabaseName } from '@/lib/database/config'
@@ -99,13 +100,12 @@ it('does not open another transaction when a scheduled retry resumes after the t
   expect(mocks.transaction).toHaveBeenCalledOnce()
 })
 
-it('locks by an actual revision increment and reports missing documents', async () => {
-  const update = vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
-  // This isolated test supplies only the delegate used at the transaction boundary.
-  const tx = { listing: { updateMany: update } } as unknown as Prisma.TransactionClient
+it('uses the bounded revision-lock boundary and preserves missing-record results', async () => {
+  mocks.revisionLock.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+  const tx = {} as Prisma.TransactionClient
   expect(await lockRecord(tx, 'listing', 'listing-id')).toBe(true)
   expect(await lockRecord(tx, 'listing', 'missing')).toBe(false)
-  expect(update).toHaveBeenNthCalledWith(1, { where: { id: 'listing-id' }, data: { revision: { increment: 1 } } })
+  expect(mocks.revisionLock.mock.calls).toEqual([[tx, 'listing', 'listing-id'], [tx, 'listing', 'missing']])
 })
 
 it('keeps money, audit and credit allocations append-only through the server client', () => {

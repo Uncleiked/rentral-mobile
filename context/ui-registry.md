@@ -1,5 +1,24 @@
 # UI Registry
 
+## Chosen username fields - 2026-11-15
+
+Email signup and Google new-account continuation use the existing accountField
+styles, visible Username label and associated helper text. Mark it required, use
+autocomplete=username, disable capitalization/spellcheck, and explain the3-24
+letter/number/underscore format and lowercase storage. Native uses the established
+theme Field. A collision stays on the form with an actionable message; never
+silently select another username. Credential forms use POST and wait for hydration.
+
+
+## Credential form readiness - 2026-11-15
+
+Credential forms declare method=post, including before JavaScript hydration.
+Keep submit and account/provider switches disabled until their handlers are
+ready; retain existing account controls, semantic styles and loading/error
+states. Passwords must never be placed in navigation query strings. This
+readiness rule does not replace server authentication or current-session checks.
+
+
 ## Admin and social UI patterns - 2026-11-15
 
 - AdminGlobalSearch uses the existing surface-card/background-app panels, subtle

@@ -40,8 +40,8 @@ fixture('owned avatar upload and profile save', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://127.0.0.1:30999')
     vi.stubEnv('JWT_SECRET', 'owned-avatar-fixture-only-signing-secret-over-32-bytes')
     vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true')
-    member = await registerAccount({ email: `${randomUUID()}@fixture.invalid`, password: 'owned-avatar-password-123' })
-    other = await registerAccount({ email: `${randomUUID()}@fixture.invalid`, password: 'owned-avatar-password-123' })
+    member = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password: 'owned-avatar-password-123' })
+    other = await registerAccount({ username: 'u_' + randomUUID().replaceAll('-', '').slice(0, 20), email: `${randomUUID()}@fixture.invalid`, password: 'owned-avatar-password-123' })
     firstPath = `${member.user.id}/${randomUUID()}.jpg`
     replacementPath = `${member.user.id}/${randomUUID()}.png`
   }, 20000)

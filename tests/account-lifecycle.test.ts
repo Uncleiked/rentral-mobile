@@ -10,6 +10,14 @@ vi.mock('@/lib/push/devices', () => ({ closePushAccountInTransaction: mocks.push
 vi.mock('@/lib/lifecycle/service', () => ({ lifecycleAccountClosureBlocked: mocks.lifecycle }))
 vi.mock('@/lib/api/rate-limit', () => ({ apiRateLimiter: { allow: () => true } }))
 vi.mock('@/lib/database/readiness', () => ({ authSecurityPrepared: async () => true, financialPrepared: mocks.financeReady, matchingPrepared: async () => true, lifecyclePrepared: async () => true, commercialPrepared: async () => false, pushPrepared: async () => true }))
+// Adapt the lock boundary to this domain fixture; raw command semantics have separate coverage.
+vi.mock('@/lib/database/revision-lock', () => ({
+  lockActiveAccount: async (tx: { user: { updateMany: (args: unknown) => Promise<{ count: number }> } }, id: string) =>
+    (await tx.user.updateMany({ where: { id, AND: [
+      { OR: [{ closed_at: null }, { closed_at: { isSet: false } }] },
+      { OR: [{ suspended_at: null }, { suspended_at: { isSet: false } }] },
+    ] }, data: { revision: { increment: 1 } } })).count === 1,
+}))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => unknown) => work({
   user: { updateMany: mocks.lock, findUniqueOrThrow: mocks.user, update: mocks.updateUser }, booking: { findFirst: mocks.booking }, dispute: { findFirst: mocks.report }, paymentIntent: { findFirst: mocks.payment }, financialOperation: { findFirst: mocks.operation }, listing: { updateMany: mocks.archive }, authSession: { updateMany: mocks.revoke }, paymentRecipient: { updateMany: mocks.recipients }, savedListing: { deleteMany: mocks.saved },
 }) }))

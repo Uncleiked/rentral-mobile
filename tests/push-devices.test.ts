@@ -2,6 +2,7 @@ import type { PushDevice, Prisma } from '@prisma/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ prepared: vi.fn(), ready: vi.fn(), tx: vi.fn(), lock: vi.fn(), active: vi.fn(), userFind: vi.fn(), userUpdate: vi.fn(), session: vi.fn(), find: vi.fn(), list: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), revoke: vi.fn(), deliveries: vi.fn() }))
 vi.mock('@/lib/database/readiness', () => ({ assertPushReady: mocks.ready, pushPrepared: mocks.prepared }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockActiveAccount: mocks.active }))
 vi.mock('@/lib/database/transactions', () => ({ lockRecord: mocks.lock, withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.tx(work) }))
 vi.mock('@/lib/db', () => ({ default: { pushDevice: { findMany: mocks.list }, user: { findUnique: mocks.userFind } } }))
 import { closePushAccountInTransaction, pushCapability, registerPushDevice, revokePushDevice, revokePushInstallation, revokePushSessionInTransaction } from '@/lib/push/devices'
@@ -21,7 +22,7 @@ beforeEach(() => {
   versions = new Map([[first, 0], [second, 0]])
   row = { id, revision: 0, user_id: first, auth_session_id: sid, installation_id: installation, token_hash: pushTokenHash(token), proof_hash: pushProofHash(installation, secret), platform: 'android', status: 'active',
     opted_in_at: now, revoked_at: null, createdAt: now, updatedAt: now, ...sealPushToken(id, token) }
-  mocks.prepared.mockResolvedValue(true); mocks.ready.mockResolvedValue(undefined); mocks.active.mockResolvedValue({ count: 1 }); mocks.lock.mockResolvedValue(true); mocks.count.mockResolvedValue(0)
+  mocks.prepared.mockResolvedValue(true); mocks.ready.mockResolvedValue(undefined); mocks.active.mockResolvedValue(true); mocks.lock.mockResolvedValue(true); mocks.count.mockResolvedValue(0)
   mocks.userFind.mockImplementation(async ({ where }: { where: { id: string } }) => ({ push_consent_version: versions.get(where.id) ?? 0 }))
   mocks.userUpdate.mockImplementation(async ({ where, data }: { where: { id: string }; data: { push_consent_version: number } }) => { versions.set(where.id, data.push_consent_version); return data })
   mocks.session.mockResolvedValue({ id: sid })
@@ -63,7 +64,7 @@ it('permits transfer only after revoke and matching stable proof while preservin
   expect((await registerPushDevice(second, sid, input)).device.id).toBe(id)
   expect(row?.user_id).toBe(second); expect(row?.status).toBe('active')
   expect(mocks.lock).toHaveBeenCalledWith(expect.anything(), 'user', first)
-  expect(mocks.active).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: second }) }))
+  expect(mocks.active).toHaveBeenCalledWith(expect.anything(), second)
 })
 it('lets the authenticated owner recover a lost proof and reseals data after key rotation', async () => {
   const next = Buffer.alloc(32, 2).toString('base64url')

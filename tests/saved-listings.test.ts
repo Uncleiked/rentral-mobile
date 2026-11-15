@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ user: vi.fn(), findListing: vi.fn(), upsert: vi.fn(), remove: vi.fn(), revalidate: vi.fn() }))
 vi.mock('@/lib/action-helpers', () => ({ requireUserId: mocks.user }))
 vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: mocks.findListing }, savedListing: { upsert: mocks.upsert, deleteMany: mocks.remove } } }))
+vi.mock('@/lib/database/revision-lock', () => ({ lockActiveAccount: async () => true }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ user: { updateMany: async () => ({ count: 1 }) }, listing: { findFirst: mocks.findListing }, savedListing: { upsert: mocks.upsert } }) }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
 import { setListingSaved } from '@/app/actions/savedActions'
