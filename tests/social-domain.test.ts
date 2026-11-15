@@ -1,10 +1,11 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const store = vi.hoisted(() => ({ follows: new Map(), blocks: new Map(), likes: new Map(), receipts: new Map(), users: new Map() }))
 const mocks = vi.hoisted(() => ({ ready: vi.fn(), active: vi.fn(), lock: vi.fn(), userOne: vi.fn(), userFirst: vi.fn(), userMany: vi.fn(), followOne: vi.fn(), followFirst: vi.fn(), followCount: vi.fn(), followUpsert: vi.fn(), followUpdate: vi.fn(), blockOne: vi.fn(), blockFirst: vi.fn(), blockMany: vi.fn(), blockUpsert: vi.fn(), likeOne: vi.fn(), likeCount: vi.fn(), likeUpsert: vi.fn(), listing: vi.fn(), notify: vi.fn(), threads: vi.fn(), activityDelete: vi.fn(), acceptRequests: vi.fn(), receiptOne: vi.fn(), receiptCreate: vi.fn(), savedUpsert: vi.fn(), gallery: vi.fn() }))
 const tx = vi.hoisted(() => ({}))
+const phase = vi.hoisted(() => ({ insideTransaction: false, completedTransactions: 0 }))
 vi.mock('@/lib/db', () => ({ default: tx }))
 vi.mock('@/lib/database/readiness', () => ({ assertSocialReady: mocks.ready }))
-vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (db: unknown) => Promise<unknown>) => work(tx), lockRecord: mocks.lock }))
+vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (db: unknown) => Promise<unknown>) => { phase.insideTransaction = true; try { return await work(tx) } finally { phase.insideTransaction = false; phase.completedTransactions += 1 } }, lockRecord: mocks.lock }))
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: mocks.active }))
 vi.mock('@/lib/listings/gallery', async original => ({ ...await original<typeof import('@/lib/listings/gallery')>(), assertGalleryListingCurrent: mocks.gallery }))
 import { getListingLike, getOwnBlockState, setBlocked, setFollowing, setListingLike } from '@/lib/social/service'
@@ -15,7 +16,7 @@ const firstClient = '55555555-5555-4555-8555-555555555555', secondClient = '6666
 const now = new Date('2026-11-13T12:00:00Z')
 const person = (id: string, username: string) => ({ id, username, email: username + '@private.fixture.invalid', password_hash: 'private-hash', avatar_url: null, account_type: 'individual', createdAt: now, individualProfile: { full_name: username === 'seeker' ? 'Seeker Member' : 'Host Member' }, organizationProfile: null })
 beforeEach(() => {
- vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now)
+ vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now); phase.insideTransaction = false; phase.completedTransactions = 0
  for (const values of Object.values(store)) values.clear()
  store.users.set(a, person(a, 'seeker')); store.users.set(b, person(b, 'host'))
  Object.assign(tx, { user: { findUnique: mocks.userOne, findFirst: mocks.userFirst, findMany: mocks.userMany }, socialFollow: { findUnique: mocks.followOne, findFirst: mocks.followFirst, count: mocks.followCount, upsert: mocks.followUpsert, updateMany: mocks.followUpdate }, socialBlock: { findUnique: mocks.blockOne, findFirst: mocks.blockFirst, findMany: mocks.blockMany, upsert: mocks.blockUpsert }, listingLike: { findUnique: mocks.likeOne, count: mocks.likeCount, upsert: mocks.likeUpsert }, listing: { findFirst: mocks.listing }, notification: { create: mocks.notify }, conversation: { findMany: mocks.threads, updateMany: mocks.acceptRequests }, conversationActivity: { deleteMany: mocks.activityDelete }, mutationReceipt: { findUnique: mocks.receiptOne, create: mocks.receiptCreate }, savedListing: { upsert: mocks.savedUpsert } })
@@ -112,4 +113,46 @@ describe('listing likes and blocking', () => {
   expect(mocks.blockUpsert).not.toHaveBeenCalled(); expect(mocks.userOne).not.toHaveBeenCalled(); expect(mocks.userFirst).not.toHaveBeenCalled()
  })
  it('fails closed before social writes if the reviewed database setup is missing', async () => { mocks.ready.mockRejectedValue(new Error('DATABASE_SETUP_REQUIRED')); await expect(setListingLike(a, listingId, { clientId: firstClient, liked: true })).rejects.toThrow('DATABASE_SETUP_REQUIRED'); expect(mocks.likeUpsert).not.toHaveBeenCalled(); expect(mocks.notify).not.toHaveBeenCalled() })
+})
+
+describe('social mutation commit boundaries', () => {
+ it('finishes Follow before profile joins and counts, even when the projection is slow', async () => {
+  const count = mocks.followCount.getMockImplementation()!
+  const projections: boolean[] = []
+  mocks.followCount.mockImplementation(async args => {
+   projections.push(phase.insideTransaction)
+   vi.advanceTimersByTime(6000)
+   return count(args)
+  })
+  expect(await setFollowing(a, b, { clientId: firstClient, following: true })).toMatchObject({ following: true, followersCount: 1 })
+  expect(projections).toEqual([false, false])
+  expect(phase.completedTransactions).toBe(1)
+  expect(mocks.receiptCreate).toHaveBeenCalledTimes(1)
+ })
+ it('keeps the committed Follow receipt when post-commit profile readback fails', async () => {
+  mocks.userFirst.mockRejectedValueOnce(new Error('READBACK_UNAVAILABLE'))
+  const command = { clientId: firstClient, following: true }
+  await expect(setFollowing(a, b, command)).rejects.toThrow('READBACK_UNAVAILABLE')
+  expect(store.receipts.size).toBe(1); expect(mocks.notify).toHaveBeenCalledTimes(1)
+  expect(await setFollowing(a, b, command)).toMatchObject({ following: true })
+  expect(mocks.followUpsert).toHaveBeenCalledTimes(1); expect(mocks.notify).toHaveBeenCalledTimes(1)
+ })
+ it('reads Like counts after commit and recovers a failed projection without another notification', async () => {
+  const count = mocks.likeCount.getMockImplementation()!
+  const projections: boolean[] = []
+  mocks.likeCount.mockImplementation(async args => { projections.push(phase.insideTransaction); return count(args) })
+  const command = { clientId: firstClient, liked: true }
+  mocks.likeCount.mockRejectedValueOnce(new Error('COUNT_UNAVAILABLE'))
+  await expect(setListingLike(a, listingId, command)).rejects.toThrow('COUNT_UNAVAILABLE')
+  expect(store.receipts.size).toBe(1); expect(mocks.notify).toHaveBeenCalledTimes(1)
+  expect(await setListingLike(a, listingId, command)).toEqual({ listingId, liked: true, count: 1 })
+  expect(projections).toEqual([false])
+  expect(mocks.likeUpsert).toHaveBeenCalledTimes(1); expect(mocks.notify).toHaveBeenCalledTimes(1)
+ })
+ it('reads the current own Block state outside the committed transaction', async () => {
+  const get = mocks.blockOne.getMockImplementation()!, reads: boolean[] = []
+  mocks.blockOne.mockImplementation(async args => { reads.push(phase.insideTransaction); return get(args) })
+  expect(await setBlocked(a, b, { clientId: firstClient, blocked: true })).toEqual({ personId: b, blocked: true })
+  expect(reads).toEqual([true, false])
+ })
 })
