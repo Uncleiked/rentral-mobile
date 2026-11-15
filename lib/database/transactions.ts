@@ -1,5 +1,7 @@
-import type { Prisma } from '@prisma/client'
+﻿import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
+import { traceTransaction } from './transaction-trace'
+import { databaseErrorDiagnostic } from './error-diagnostics'
 
 export type LockModel = 'conversation' | 'user' | 'listing' | 'listingCapture' | 'booking' | 'paymentIntent' | 'mediaAsset' | 'dispute' | 'safetyNotice' | 'safetyAppeal' | 'renewal' | 'leaseTermination' | 'workerState' | 'paymentRecipient' | 'financialOperation' | 'providerReceipt' | 'matchProfile' | 'matchConnection' | 'matchReport' | 'commercialOrder' | 'sponsoredCampaign' | 'pushDevice' | 'pushDelivery'
 const TRANSACTION_ATTEMPTS = 5
@@ -22,11 +24,19 @@ export async function withTransaction<T>(operation: (tx: Prisma.TransactionClien
     const maxWait = Math.min(TRANSACTION_MAX_WAIT_MS, Math.floor(remaining / 2))
     const timeout = Math.min(TRANSACTION_TIMEOUT_MS, remaining - maxWait)
     try {
-      return await prisma.$transaction(tx => {
-        // This query-only extension changes no delegates, inputs or results. Erase
-        // its internal generic metadata at this one boundary; guards remain active.
-        return operation(tx as unknown as Prisma.TransactionClient)
-      }, { maxWait, timeout })
+      return await traceTransaction(async snapshot => {
+        const started = Date.now()
+        try {
+          return await prisma.$transaction(tx => {
+            // This query-only extension preserves inputs/results/readiness.
+            return operation(tx as unknown as Prisma.TransactionClient)
+          }, { maxWait, timeout })
+        } catch (error) {
+          const diagnostic = databaseErrorDiagnostic(error)
+          if (diagnostic.code === 'P2028') console.error('[database/transaction]', { ...diagnostic, elapsedMs: Date.now() - started, maxWait, timeout, steps: snapshot() })
+          throw error
+        }
+      })
     }
     catch (error) {
       if (!retryableTransaction(error) || attempt + 1 >= TRANSACTION_ATTEMPTS) throw error
@@ -67,3 +77,4 @@ export async function lockRecord(tx: Prisma.TransactionClient, model: LockModel,
     case 'pushDelivery': return (await tx.pushDelivery.updateMany(args)).count === 1
   }
 }
+

@@ -11,10 +11,12 @@ export function databaseErrorDiagnostic(error: unknown): { name: string; code?: 
     if ((typeof rawMongo === 'number' || typeof rawMongo === 'string' && /^[0-9]{1,7}$/.test(rawMongo)) && Number.isSafeInteger(Number(rawMongo))) result.mongoCode = Number(rawMongo)
     const detail = [error.message, ...(meta && typeof meta === 'object' ? ['message', 'error'].map(key => Reflect.get(meta, key)).filter((value): value is string => typeof value === 'string') : [])].join(' ').slice(0, 12000)
     if (result.code === 'P2028' && /expired|timeout|timed out/i.test(detail)) result.cause = 'transaction_timeout'
+    else if (result.code === 'P2028' && /not found|already closed|invalid.*transaction|transaction.*invalid/i.test(detail)) result.cause = 'transaction_closed'
     else if (result.code === 'P2034' || /write conflict|writeconflict/i.test(detail)) result.cause = 'write_conflict'
     else if (result.mongoCode === 121 || /document failed validation/i.test(detail)) result.cause = 'document_validation'
     else if (result.code && ['P1001', 'P1002', 'P1017'].includes(result.code)) result.cause = 'database_connection'
   } catch { /* Untrusted error accessors must not break the error response. */ }
   return result
 }
+
 

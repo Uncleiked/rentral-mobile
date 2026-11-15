@@ -1,4 +1,5 @@
-import { Prisma, PrismaClient } from '@prisma/client'
+﻿import { Prisma, PrismaClient } from '@prisma/client'
+import { traceDatabaseQuery } from './database/transaction-trace'
 import { assertAppendOnlyOperation, type RelationGraph } from './database/append-only'
 import { mongoUrl } from './database/config'
 import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, assertMutationReady, assertAuthSecurityReady, assertMatchingReady, assertCaptureReady, assertOrganizationsReady, assertGoogleAuthReady, assertSocialReady } from './database/readiness'
@@ -25,7 +26,7 @@ const prismaClientSingleton = () => new PrismaClient({
       else if (model && ['PaymentRecipient', 'FinancialOperation', 'FinancialAllocation', 'ProviderReceipt'].includes(model)) await assertFinancialReady()
       else if (model && ['LeaseTermination', 'WorkerState', 'WorkerFailure'].includes(model)) await assertLifecycleReady()
       else await assertMongoReady()
-      return query(args)
+      return traceDatabaseQuery(model ?? 'raw', operation, () => query(args))
     },
   },
 })
@@ -38,3 +39,4 @@ const prisma = globalThis.prismaMongoGlobal ?? prismaClientSingleton()
 if (process.env.NODE_ENV !== 'production') globalThis.prismaMongoGlobal = prisma
 
 export default prisma
+
