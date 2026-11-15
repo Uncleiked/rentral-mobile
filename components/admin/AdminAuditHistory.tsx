@@ -9,9 +9,9 @@ const button = 'inline-flex min-h-11 min-w-0 items-center justify-center gap-2 r
 const panel = 'min-w-0 rounded-2xl border border-border-subtle bg-surface-card p-5 sm:p-6'
 type Fields = { query: string; targetType: string; from: string; to: string; sort: string }
 const defaults: Fields = { query: '', targetType: 'all', from: '', to: '', sort: 'newest' }
-type Props = { actorId: string; disabled: boolean; refreshToken: number }
-export function AdminAuditHistory({ actorId, disabled, refreshToken }: Props) {
-  const [fields, setFields] = useState<Fields>(defaults), [filters, setFilters] = useState<Fields>(defaults)
+type Props = { actorId: string; disabled: boolean; refreshToken: number; initialQuery?: string }
+export function AdminAuditHistory({ actorId, disabled, refreshToken, initialQuery = '' }: Props) {
+  const [fields, setFields] = useState<Fields>({ ...defaults, query: initialQuery }), [filters, setFilters] = useState<Fields>({ ...defaults, query: initialQuery })
   const [page, setPage] = useState<AdminAuditPage | null>(null), [cursor, setCursor] = useState<string | null>(null), [history, setHistory] = useState<(string | null)[]>([])
   const [loading, setLoading] = useState(true), [error, setError] = useState(''), [validation, setValidation] = useState('')
   const active = useRef(true), sequence = useRef(0)

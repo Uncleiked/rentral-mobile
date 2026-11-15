@@ -9,7 +9,7 @@ import { z } from 'zod'
 
 const MAGIC = Buffer.from('RENTRAL_BACKUP_V1\n'), NONCE_BYTES = 12, TAG_BYTES = 16
 const MAX_RECORD_BYTES = 32 * 1024 * 1024
-export const backupCollectionName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,119}$/)
+export const backupCollectionName = z.string().regex(/^(?:[A-Za-z_][A-Za-z0-9_]{0,119}|rentral_media\.(?:files|chunks))$/)
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
 const safeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 export const backupRecordSchema = z.discriminatedUnion('type', [

@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Prisma } from '@prisma/client'
-const mocks = vi.hoisted(() => ({ account: vi.fn(), listing: vi.fn(), update: vi.fn(), document: vi.fn(), audit: vi.fn(), claims: vi.fn(), assets: vi.fn(), owned: vi.fn(), active: vi.fn(), lock: vi.fn(), receipt: vi.fn(), receiptCreate: vi.fn(), transaction: vi.fn(), organization: vi.fn() }))
-vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: mocks.owned }, mutationReceipt: { findUnique: mocks.receipt } } }))
+const mocks = vi.hoisted(() => ({ account: vi.fn(), listing: vi.fn(), update: vi.fn(), document: vi.fn(), audit: vi.fn(), claims: vi.fn(), assets: vi.fn(), owned: vi.fn(), active: vi.fn(), lock: vi.fn(), receipt: vi.fn(), receiptCreate: vi.fn(), transaction: vi.fn(), organization: vi.fn(), barrier: vi.fn() }))
+vi.mock('@/lib/db', () => ({ default: { listing: { findFirst: mocks.owned }, adminAudit: { findFirst: mocks.barrier }, mutationReceipt: { findUnique: mocks.receipt } } }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: mocks.transaction, lockRecord: mocks.lock }))
 vi.mock('@/lib/accounts/availability', () => ({ assertActiveAccounts: mocks.active }))
 vi.mock('@/lib/storage-claims/service', () => ({ claimStorageObjects: mocks.claims }))
 vi.mock('@/lib/listings/publication-assets', () => ({ assertListingPublicationAssets: mocks.assets }))
 import { ApiError } from '@/lib/api/http'
-import { applySubmissionPublishing, publishOwnListing, publishTrustedListingInTransaction } from '@/lib/listings/publishing'
+import { applySubmissionPublishing, publishOwnListing, publishTrustedListingInTransaction, ownedDirectPublication } from '@/lib/listings/publishing'
 
 const ownerId = '824ac8a3-930e-44bf-a8aa-6dd7998c2ea1', adminId = '180ffea3-877c-4263-a9d6-b6d13cce9691', listingId = '4498d069-9a31-455b-a88c-f337cfe3bfa1'
 const at = new Date('2026-11-12T10:00:00.000Z'), reason = 'Established portfolio operator approved for direct publication.'
 const document = { id: 'a'.repeat(64), bucket: 'compliance-docs' as const, path: ownerId + '/folder/authority.pdf', digest: 'b'.repeat(64), sizeBytes: 100, contentType: 'application/pdf' }
 let row: Record<string, unknown>, account: Record<string, unknown>, receipts: Record<string, unknown>
-const tx = { listing: { findFirst: mocks.listing, update: mocks.update }, user: { findUnique: mocks.account }, organizationApplication: { findUnique: mocks.organization }, storageObject: { findFirst: mocks.document }, adminAudit: { create: mocks.audit }, mutationReceipt: { findUnique: mocks.receipt, create: mocks.receiptCreate } } as unknown as Prisma.TransactionClient
+const tx = { listing: { findFirst: mocks.listing, update: mocks.update }, user: { findUnique: mocks.account }, organizationApplication: { findUnique: mocks.organization }, storageObject: { findFirst: mocks.document }, adminAudit: { create: mocks.audit, findFirst: mocks.barrier }, mutationReceipt: { findUnique: mocks.receipt, create: mocks.receiptCreate } } as unknown as Prisma.TransactionClient
 beforeEach(() => {
-  vi.resetAllMocks(); receipts = {}
+  vi.resetAllMocks(); receipts = {}; mocks.barrier.mockResolvedValue(null)
   account = { direct_publish_allowed: true, direct_publish_by: adminId, direct_publish_at: at, direct_publish_reason: reason, listing_fee_exempt: true, listing_fee_exempt_by: adminId, listing_fee_exempt_at: at, listing_fee_exempt_reason: 'Approved promotional free posting for this operator.' }
   row = { id: listingId, revision: 3, lister_id: ownerId, listing_status: 'pending_verification', document_path: document.path, text_address: '14 Yaba Street', archived_at: null, publication_mode: 'trusted_publisher',
     direct_publish_proof: { version: 1, ownerId, grantedBy: adminId, grantedAt: at.toISOString(), grantReason: reason, documentPath: document.path, documentDigest: document.digest, submittedAt: at.toISOString() }, documentReview: null }
@@ -117,5 +117,77 @@ describe('owner direct publication boundaries', () => {
     expect(mocks.assets).toHaveBeenCalledTimes(1)
     expect(mocks.receiptCreate).toHaveBeenCalledTimes(1)
     await expect(publishOwnListing(ownerId, listingId, { ...command, expectedRevision: 4 })).rejects.toMatchObject({ code: 'INVALID_RETRY' })
+  })
+})
+
+function galleryAccount() {
+  account.direct_publish_allowed = false; account.gallery_upload_allowed = true; account.gallery_permission_revision = 4
+  row.media_source = 'approved_gallery'; row.gallery_permission_revision = 4; row.publication_mode = null; row.direct_publish_proof = null
+}
+describe('gallery approval includes review bypass with factual evidence', () => {
+  it('publishes a ready gallery using only current gallery approval, with no fabricated direct issuer or document approval', async () => {
+    galleryAccount()
+    await applySubmissionPublishing(tx, ownerId, listingId, [document])
+    expect(row).toMatchObject({ listing_status: 'active', publication_mode: 'trusted_publisher', documentReview: null })
+    expect(row.direct_publish_proof).toMatchObject({ version: 2, basis: 'gallery_permission', ownerId, galleryPermissionRevision: 4, documentPath: document.path, documentDigest: document.digest })
+    expect(row.direct_publish_proof).not.toHaveProperty('grantedBy')
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'trusted_listing_published', metadata: expect.objectContaining({ permissionBasis: 'gallery_permission', galleryPermissionRevision: 4, humanDocumentApproval: false }) }) }))
+  })
+  it('does not waive fees merely because gallery publication is approved', async () => {
+    galleryAccount(); account.listing_fee_exempt = false
+    mocks.assets.mockRejectedValue(new ApiError(409, 'PUBLICATION_FEE_REQUIRED', 'Fee required.'))
+    await applySubmissionPublishing(tx, ownerId, listingId, [document])
+    expect(row.listing_status).toBe('pending_verification')
+    expect(row).not.toHaveProperty('fee_waived_at')
+    expect(row.direct_publish_proof).toMatchObject({ version: 2, basis: 'gallery_permission' })
+    await expect(publishOwnListing(ownerId, listingId, { clientId: '9b0e9231-12fd-4402-a862-e954843fb7ac', expectedRevision: 3 })).rejects.toMatchObject({ code: 'PUBLICATION_FEE_REQUIRED' })
+    expect(row.listing_status).not.toBe('active')
+  })
+  it('retains trusted intent while a gallery video finishes processing', async () => {
+    galleryAccount(); mocks.assets.mockRejectedValue(new ApiError(409, 'PUBLICATION_VIDEO_REQUIRED', 'Processing.'))
+    await applySubmissionPublishing(tx, ownerId, listingId, [document])
+    expect(row).toMatchObject({ listing_status: 'pending_verification', publication_mode: 'trusted_publisher' })
+  })
+  it('does not turn gallery approval into authority for recorded submissions', async () => {
+    galleryAccount(); row.media_source = 'recorded'
+    await applySubmissionPublishing(tx, ownerId, listingId, [document])
+    expect(row.listing_status).toBe('pending_verification'); expect(row.direct_publish_proof).toBeNull()
+    expect(mocks.assets).not.toHaveBeenCalled()
+  })
+  it('rejects stale gallery revisions at submission', async () => {
+    galleryAccount(); row.gallery_permission_revision = 3
+    await expect(applySubmissionPublishing(tx, ownerId, listingId, [document])).rejects.toMatchObject({ code: 'DIRECT_PUBLICATION_UNAVAILABLE' })
+    expect(row.listing_status).not.toBe('active')
+  })
+  it('rejects revoked or reissued gallery authority at completion', async () => {
+    galleryAccount(); await applySubmissionPublishing(tx, ownerId, listingId, [document]); row.listing_status = 'pending_verification'
+    account.gallery_upload_allowed = false
+    await expect(publishTrustedListingInTransaction(tx, ownerId, listingId)).rejects.toMatchObject({ code: 'DIRECT_PUBLICATION_UNAVAILABLE' })
+    account.gallery_upload_allowed = true; account.gallery_permission_revision = 5
+    await expect(publishTrustedListingInTransaction(tx, ownerId, listingId)).rejects.toMatchObject({ code: 'DIRECT_PUBLICATION_UNAVAILABLE' })
+  })
+  it('offers old eligible gallery submissions an explicit owner completion without duplicate submission', async () => {
+    galleryAccount()
+    expect(await ownedDirectPublication(ownerId, listingId)).toMatchObject({ canPublish: true, status: 'pending_verification' })
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect((await publishOwnListing(ownerId, listingId, { clientId: '9b0e9231-12fd-4402-a862-e954843fb7ac', expectedRevision: 3 })).status).toBe('active')
+    expect(row.direct_publish_proof).toMatchObject({ version: 2, basis: 'gallery_permission', galleryPermissionRevision: 4 })
+    expect(row.documentReview).toBeNull()
+  })
+  it('preserves immutable negative review barriers for old manual galleries', async () => {
+    galleryAccount(); mocks.barrier.mockResolvedValue({ id: 'prior-negative-review' })
+    expect(await ownedDirectPublication(ownerId, listingId)).toBeNull()
+    await expect(publishTrustedListingInTransaction(tx, ownerId, listingId)).rejects.toMatchObject({ code: 'DIRECT_PUBLICATION_UNAVAILABLE' })
+    expect(mocks.assets).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled()
+  })
+  it('does not revive a prior trusted proof cleared into manual review by an administrator', async () => {
+    galleryAccount(); row.direct_publish_proof = { version: 2, basis: 'gallery_permission', ownerId, galleryPermissionRevision: 4, documentPath: document.path, documentDigest: document.digest, submittedAt: at.toISOString() }
+    expect(await ownedDirectPublication(ownerId, listingId)).toBeNull()
+    await expect(publishTrustedListingInTransaction(tx, ownerId, listingId)).rejects.toMatchObject({ code: 'DIRECT_PUBLICATION_UNAVAILABLE' })
+  })
+  it('requires an available digest-bound current document for legacy completion', async () => {
+    galleryAccount(); mocks.document.mockResolvedValue(null)
+    await expect(publishTrustedListingInTransaction(tx, ownerId, listingId)).rejects.toMatchObject({ code: 'PUBLICATION_DOCUMENT_CHANGED' })
+    expect(mocks.assets).not.toHaveBeenCalled()
   })
 })

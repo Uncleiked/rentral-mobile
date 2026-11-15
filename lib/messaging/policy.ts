@@ -28,7 +28,13 @@ export type ChatThread = {
   userId: string
   otherName: string
   otherReadAt: string | null
-  listingId: string
+  listingId: string | null
+  otherId?: string
+  folder?: 'primary' | 'requests' | 'sent'
+  kind?: 'listing' | 'direct'
+  requestIncoming?: boolean
+  canSend?: boolean
+  canAccept?: boolean
   messages: ChatMessage[]
   hasMore: boolean
 }

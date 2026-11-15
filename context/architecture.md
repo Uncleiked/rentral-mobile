@@ -1,6 +1,26 @@
 ## Rentral: Multi-Asset Spatial Trust Architecture
 
-## Current architecture — 2026-11-10
+## Latest admin/social and storage boundaries - 2026-11-15
+
+The [increment guide](social-admin-release.md) supersedes older gallery-only
+manual-review and filesystem-only deployment statements. Gallery grants produce
+versioned review-bypass evidence bound to the current account grant revision and
+authority file digest; human review/payment/GPS records are never fabricated.
+New social edges/likes and direct conversation acceptance use current accounts,
+transaction locks, explicit desired state, mutation receipts and atomic
+notifications. Block/request boundaries apply to writes, presence and read
+feedback; native legacy listing conversations retain their existing DTOs.
+
+Reviewed setup installs additive SocialFollow/SocialBlock/ListingLike and
+MediaBlob/GridFS collections and independent feature markers. The Conversation
+replacement unique index is created before the known old constraint is removed.
+Runtime never prepares schema/indexes. Durable media uses same-database GridFS
+with immutable heads/tombstones, bounded validated chunks and signed range reads.
+Raw GPS/private documents are not added to public social or search responses.
+No hosted activation is implied by source completion.
+
+
+## Current architecture â€” 2026-11-10
 
 - `/admin` and native Admin share current-role services and strict versioned
   commands with atomic audit/receipt readback. Owner authority is persisted by
@@ -109,7 +129,7 @@ an automatic production cutover. See [backup operations](backup-operations.md),
 [current verification evidence](progress-tracker.md). No real email, push, payment,
 Mux/AI/geocoding acceptance or physical-device release is implied by source tests.
 
-## Historical architecture below — superseded stack and examples
+## Historical architecture below â€” superseded stack and examples
 
 > Historical target: [Architecture and Delivery Plan](production-plan.md), reviewed
 > 2026-09-24. Preserve its provider/financial constraints, but use the current
@@ -152,80 +172,80 @@ Analytics & Telemetry: PostHog - Comprehensive event tracking, behavioral analyt
 ## Folder Structure
 
 /
-├── app/
-│   ├── layout.tsx                              → Root layout, Providers (Supabase Auth, QueryClient, PostHog)
-│   ├── page.tsx                                → Homepage (Value prop, category entry)
-│   ├── (auth)/
-│   │   ├── sign-in/                            → Supabase Auth flow
-│   │   ├── sign-up/                            → Supabase Auth flow
-│   │   └── onboarding/                         → Didit KYC, Username selection
-│   ├── feed/
-│   │   └── page.tsx                            → Vertical-scrolling video discovery feed
-│   ├── listing/
-│   │   ├── create/                             → Mobile-first camera capture & metadata forms
-│   │   ├── edit/[id]/                          → Active listing metadata modification UI
-│   │   └── [id]/                               → Detailed asset parameters & public reviews
-│   ├── checkout/
-│   │   ├── escrow-setup/                       → Dynamic Virtual Account generator UI (Multi-year capable)
-│   │   └── handshake/                          → OTP & GPS Proximity UI for inspections
-│   ├── messages/
-│   │   └── page.tsx                            → WebSocket chat, direct share cards
-│   ├── profile/
-│   │   └── page.tsx                            → Trust Score ledger, active listings
-│   ├── admin/
-│   │   └── page.tsx                            → Force release/refund console (is_admin=true)
-│   └── api/
-│       ├── webhooks/
-│       │   ├── opay/route.ts                   → Inbound payment settlement listener
-│       │   └── didit/route.ts                  → KYC async status updates
-│       ├── verify/
-│       │   ├── document-upload/route.ts        → Gemini AI multi-modal forgery checks (Deeds, CAC)
-│       │   └── lease-termination/route.ts      → Vacancy verification to unfreeze listings
-│       ├── billing/
-│       │   └── continuous-renewal/route.ts     → Open Banking cross-check for Year 2+ renewals
-│       ├── analytics/
-│       │   └── ingest/route.ts                 → Server-side PostHog event proxy for B2B insights
-│       └── admin/
-│           └── force-settlement/route.ts       → Emergency escrow overrides
-├── components/
-│   ├── ui/                                     → Shadcn primitive components
-│   ├── feed/
-│   │   ├── DiscoveryFeedCard.tsx               → MuxPlayer, glassmorphic overlays, trust badges
-│   │   └── EngagementActions.tsx               → Like, direct share, message triggers
-│   ├── listing/
-│   │   ├── VideoCaptureCanvas.tsx              → WebRTC camera stream, HTML5 Geolocation hooks
-│   │   ├── SpatialMetadataForm.tsx             → Dynamic fields (House vs Car vs Boat)
-│   │   └── ListingEditor.tsx                   → Form for updating prices/prefs without altering GPS
-│   ├── escrow/
-│   │   ├── MultiYearConfigurator.tsx           → UI for defining custom lease duration payouts
-│   │   ├── VirtualAccountDisplay.tsx           → OPay checkout renderer
-│   │   └── ProximityScanner.tsx                → OTP input & navigator.geolocation execution
-│   └── chat/
-│       ├── ThreadList.tsx                      → Active negotiations
-│       └── ChatCanvas.tsx                      → Supabase Realtime message streams
-├── instrumentation-client.ts                   → Client-side PostHog init (Next.js App Router convention, not lib/)
-├── lib/
-│   ├── supabase/
-│   │   ├── client.ts                           → Browser SSR client
-│   │   └── server.ts                           → Server-side client with admin roles
-│   ├── payment/
-│   │   ├── opay-engine.ts                      → Virtual account & automated payout fetch wrappers
-│   │   └── paystack-engine.ts                  → Pan-African fallback routing
-│   ├── spatial/
-│   │   └── math.ts                             → Client-side coordinate distance estimators
-│   ├── gemini.ts                               → AI Engine initialization
-│   ├── posthog.ts                              → Server-side telemetry singleton + captureServerEvent() helper
-│   └── utils.ts                                → Tailwind merge, formatting tools
-├── store/
-│   └── useRentralStore.ts                      → Zustand: Local UI overrides, active booking context
-├── supabase/
-│   ├── migrations/                             → PostGIS DDL schemas & RLS policies
-│   └── functions/
-│       ├── handle-holding-expiration/          → Deno Edge function for 24-hour split payouts
-│       └── trigger-lease-renewals/             → Deno CRON processing dynamic multi-year alerts
-└── types/
-    ├── database.ts                             → Supabase auto-generated typings
-    └── platform.ts                             → Core TS Interfaces (Profiles, Listings, Transactions)
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ layout.tsx                              â†’ Root layout, Providers (Supabase Auth, QueryClient, PostHog)
+â”‚   â”œâ”€â”€ page.tsx                                â†’ Homepage (Value prop, category entry)
+â”‚   â”œâ”€â”€ (auth)/
+â”‚   â”‚   â”œâ”€â”€ sign-in/                            â†’ Supabase Auth flow
+â”‚   â”‚   â”œâ”€â”€ sign-up/                            â†’ Supabase Auth flow
+â”‚   â”‚   â””â”€â”€ onboarding/                         â†’ Didit KYC, Username selection
+â”‚   â”œâ”€â”€ feed/
+â”‚   â”‚   â””â”€â”€ page.tsx                            â†’ Vertical-scrolling video discovery feed
+â”‚   â”œâ”€â”€ listing/
+â”‚   â”‚   â”œâ”€â”€ create/                             â†’ Mobile-first camera capture & metadata forms
+â”‚   â”‚   â”œâ”€â”€ edit/[id]/                          â†’ Active listing metadata modification UI
+â”‚   â”‚   â””â”€â”€ [id]/                               â†’ Detailed asset parameters & public reviews
+â”‚   â”œâ”€â”€ checkout/
+â”‚   â”‚   â”œâ”€â”€ escrow-setup/                       â†’ Dynamic Virtual Account generator UI (Multi-year capable)
+â”‚   â”‚   â””â”€â”€ handshake/                          â†’ OTP & GPS Proximity UI for inspections
+â”‚   â”œâ”€â”€ messages/
+â”‚   â”‚   â””â”€â”€ page.tsx                            â†’ WebSocket chat, direct share cards
+â”‚   â”œâ”€â”€ profile/
+â”‚   â”‚   â””â”€â”€ page.tsx                            â†’ Trust Score ledger, active listings
+â”‚   â”œâ”€â”€ admin/
+â”‚   â”‚   â””â”€â”€ page.tsx                            â†’ Force release/refund console (is_admin=true)
+â”‚   â””â”€â”€ api/
+â”‚       â”œâ”€â”€ webhooks/
+â”‚       â”‚   â”œâ”€â”€ opay/route.ts                   â†’ Inbound payment settlement listener
+â”‚       â”‚   â””â”€â”€ didit/route.ts                  â†’ KYC async status updates
+â”‚       â”œâ”€â”€ verify/
+â”‚       â”‚   â”œâ”€â”€ document-upload/route.ts        â†’ Gemini AI multi-modal forgery checks (Deeds, CAC)
+â”‚       â”‚   â””â”€â”€ lease-termination/route.ts      â†’ Vacancy verification to unfreeze listings
+â”‚       â”œâ”€â”€ billing/
+â”‚       â”‚   â””â”€â”€ continuous-renewal/route.ts     â†’ Open Banking cross-check for Year 2+ renewals
+â”‚       â”œâ”€â”€ analytics/
+â”‚       â”‚   â””â”€â”€ ingest/route.ts                 â†’ Server-side PostHog event proxy for B2B insights
+â”‚       â””â”€â”€ admin/
+â”‚           â””â”€â”€ force-settlement/route.ts       â†’ Emergency escrow overrides
+â”œâ”€â”€ components/
+â”‚   â”œâ”€â”€ ui/                                     â†’ Shadcn primitive components
+â”‚   â”œâ”€â”€ feed/
+â”‚   â”‚   â”œâ”€â”€ DiscoveryFeedCard.tsx               â†’ MuxPlayer, glassmorphic overlays, trust badges
+â”‚   â”‚   â””â”€â”€ EngagementActions.tsx               â†’ Like, direct share, message triggers
+â”‚   â”œâ”€â”€ listing/
+â”‚   â”‚   â”œâ”€â”€ VideoCaptureCanvas.tsx              â†’ WebRTC camera stream, HTML5 Geolocation hooks
+â”‚   â”‚   â”œâ”€â”€ SpatialMetadataForm.tsx             â†’ Dynamic fields (House vs Car vs Boat)
+â”‚   â”‚   â””â”€â”€ ListingEditor.tsx                   â†’ Form for updating prices/prefs without altering GPS
+â”‚   â”œâ”€â”€ escrow/
+â”‚   â”‚   â”œâ”€â”€ MultiYearConfigurator.tsx           â†’ UI for defining custom lease duration payouts
+â”‚   â”‚   â”œâ”€â”€ VirtualAccountDisplay.tsx           â†’ OPay checkout renderer
+â”‚   â”‚   â””â”€â”€ ProximityScanner.tsx                â†’ OTP input & navigator.geolocation execution
+â”‚   â””â”€â”€ chat/
+â”‚       â”œâ”€â”€ ThreadList.tsx                      â†’ Active negotiations
+â”‚       â””â”€â”€ ChatCanvas.tsx                      â†’ Supabase Realtime message streams
+â”œâ”€â”€ instrumentation-client.ts                   â†’ Client-side PostHog init (Next.js App Router convention, not lib/)
+â”œâ”€â”€ lib/
+â”‚   â”œâ”€â”€ supabase/
+â”‚   â”‚   â”œâ”€â”€ client.ts                           â†’ Browser SSR client
+â”‚   â”‚   â””â”€â”€ server.ts                           â†’ Server-side client with admin roles
+â”‚   â”œâ”€â”€ payment/
+â”‚   â”‚   â”œâ”€â”€ opay-engine.ts                      â†’ Virtual account & automated payout fetch wrappers
+â”‚   â”‚   â””â”€â”€ paystack-engine.ts                  â†’ Pan-African fallback routing
+â”‚   â”œâ”€â”€ spatial/
+â”‚   â”‚   â””â”€â”€ math.ts                             â†’ Client-side coordinate distance estimators
+â”‚   â”œâ”€â”€ gemini.ts                               â†’ AI Engine initialization
+â”‚   â”œâ”€â”€ posthog.ts                              â†’ Server-side telemetry singleton + captureServerEvent() helper
+â”‚   â””â”€â”€ utils.ts                                â†’ Tailwind merge, formatting tools
+â”œâ”€â”€ store/
+â”‚   â””â”€â”€ useRentralStore.ts                      â†’ Zustand: Local UI overrides, active booking context
+â”œâ”€â”€ supabase/
+â”‚   â”œâ”€â”€ migrations/                             â†’ PostGIS DDL schemas & RLS policies
+â”‚   â””â”€â”€ functions/
+â”‚       â”œâ”€â”€ handle-holding-expiration/          â†’ Deno Edge function for 24-hour split payouts
+â”‚       â””â”€â”€ trigger-lease-renewals/             â†’ Deno CRON processing dynamic multi-year alerts
+â””â”€â”€ types/
+    â”œâ”€â”€ database.ts                             â†’ Supabase auto-generated typings
+    â””â”€â”€ platform.ts                             â†’ Core TS Interfaces (Profiles, Listings, Transactions)
 
 
 ## System Boundaries
@@ -244,13 +264,13 @@ supabase/functions/: Deno-based edge compute. Owns time-delayed operations (24-h
 
 1. Hardware-Locked Listing Creation & Modification
 
-Creation: User activates VideoCaptureCanvas natively requesting navigator.geolocation. User completes 120s walkthrough, inputs metadata, and pays ₦1,000 listing fee via OPay. Server validates payment, checks ST_Distance geocoder sanity, and activates listing.
+Creation: User activates VideoCaptureCanvas natively requesting navigator.geolocation. User completes 120s walkthrough, inputs metadata, and pays â‚¦1,000 listing fee via OPay. Server validates payment, checks ST_Distance geocoder sanity, and activates listing.
 
 Modification (Edit Mode): Listers can edit dynamic variables (rent amount, agent fees, structural descriptions, and tenant preferences) via app/listing/edit/[id]. Architectural Constraint: The core hardware_coordinates and video_raw.mp4 cannot be edited. If the physical asset changes or is misrepresented, the user must create a brand-new listing, preventing bait-and-switch spatial fraud.
 
 2. Multi-Year Lease Settlement & GPS Handshake
 
-Inspection: Seeker books inspection (₦3,000 escrow), meets Lister on-site, and scans OTP. PostGIS ST_DWithin verifies 20m radius. If True, inspection fee drops to Lister.
+Inspection: Seeker books inspection (â‚¦3,000 escrow), meets Lister on-site, and scans OTP. PostGIS ST_DWithin verifies 20m radius. If True, inspection fee drops to Lister.
 
 Multi-Year Upfront Payment: When moving to full settlement, the Seeker uses the MultiYearConfigurator. Even if the base listing is 1 year, the Seeker can input a custom duration (e.g., 5 years). The system multiplies the total, generating an OPay Virtual Account for the bulk sum.
 
@@ -401,7 +421,7 @@ No Direct P2P Escrow Transfers: Funds MUST ALWAYS route through the Rentral Corp
 
 UI Boundary Strictness: Next.js API routes (app/api/) MUST NOT contain React UI logic. React components (components/) MUST NOT contain direct database execution logic. All mutations MUST pass through defined Server Actions.
 
-AI Auditing Mandate: The Gemini document audit pipeline (for Titles and Move-Out Deeds) MUST always return a structured JSON object. It must gracefully fail to a "Manual Review Required" state if the AI cannot determine authenticity—never default to "Approved."
+AI Auditing Mandate: The Gemini document audit pipeline (for Titles and Move-Out Deeds) MUST always return a structured JSON object. It must gracefully fail to a "Manual Review Required" state if the AI cannot determine authenticityâ€”never default to "Approved."
 
 Admin Sandboxing: Development bypass variables (admin_bypass_verification, is_admin_override) MUST be guarded by the profiles.is_admin = true check at the database level to prevent production manipulation.
 

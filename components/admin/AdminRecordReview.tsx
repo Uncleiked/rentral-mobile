@@ -39,9 +39,15 @@ export function AdminRecordReview(props: Props) {
     ...(selection.value.source === 'recorded' && selection.value.locationStatus !== 'matched' ? ['The recorded walkthrough location must match the listing.'] : []),
     ...(!selection.value.fee.waived && !selection.value.fee.paid ? ['Confirm payment or waive this listing fee.'] : []),
   ] : []
-  const ready = actions.some(action => action.value === operation) && reason.trim().length >= minReason && (!needsOverride || owner && override) && !noPermissionChange &&
-    !(selection.kind === 'listing' && operation === 'publish' && publicationIssues.length > 0) &&
-    !(selection.kind === 'listing' && operation === 'approve_document' && openedDocument !== selection.value.id)
+  const remainingRequirements = [
+    ...(!actions.some(action => action.value === operation) ? ['Choose an available decision.'] : []),
+    ...(reason.trim().length < minReason ? ['Add ' + (minReason - reason.trim().length) + ' more characters to the reason (at least ' + minReason + ' total).'] : []),
+    ...(needsOverride && !owner ? ['Another eligible administrator must review your own record.'] : needsOverride && !override ? ['Tick the owner acknowledgement to record a decision about your own account or listing.'] : []),
+    ...(noPermissionChange ? ['This permission already has the selected value. Change the switch or choose another decision.'] : []),
+    ...(selection.kind === 'listing' && operation === 'publish' ? publicationIssues : []),
+    ...(selection.kind === 'listing' && operation === 'approve_document' && openedDocument !== selection.value.id ? ['Prepare and open the current private document before approving it.'] : []),
+  ]
+  const ready = remainingRequirements.length === 0
   const title = selection.kind === 'listing' ? selection.value.title : selection.kind === 'user' ? selection.value.email : 'Manual inspection review'
   const checks = selection.kind === 'listing' ? [
     { label: 'Authority document', detail: selection.value.document.approvalMatches ? 'Current file approved' : selection.value.document.status.replaceAll('_', ' '), passed: selection.value.document.approvalMatches },
@@ -59,7 +65,7 @@ export function AdminRecordReview(props: Props) {
       <AdminMediaPreview key={selection.value.id} actorId={actorId} listingId={selection.value.id} title={selection.value.title} disabled={blocked} />
       {selection.value.document.present && <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" className={button} disabled={blocked} onClick={onPrepareDocument}><FileText className="mr-2 size-4" />Prepare private document</button>{privateDocument?.id === selection.value.id && <a className={button} href={privateDocument.url} target="_blank" rel="noreferrer" onClick={onOpenDocument}>Open current document ↗</a>}</div>}
       {operation === 'approve_document' && openedDocument !== selection.value.id && <p className="mt-3 text-xs leading-5 text-text-muted">Prepare and open the current private document before approving it.</p>}
-      <p className="mt-3 text-xs leading-5 text-text-muted">Manual review is the default. Direct-posting permission is a separate exception and does not independently verify documents. Gallery media has no recording GPS proof. A fee waiver changes no payment history.</p>
+      <p className="mt-3 text-xs leading-5 text-text-muted">Recorded listings require manual review unless separately approved for direct posting. Gallery approval includes publication without manual review and does not independently verify documents. Gallery media has no recording GPS proof. A fee waiver changes no payment history.</p>
     </>}
     {selection.kind === 'user' && <>
       <dl className="mt-5 grid min-w-0 gap-4 rounded-xl border border-border-subtle bg-background-app p-4 sm:grid-cols-2">
@@ -67,10 +73,10 @@ export function AdminRecordReview(props: Props) {
         <div><dt className="text-xs text-text-muted">Account</dt><dd className="mt-1 text-sm text-text-secondary">{selection.value.closed ? 'Closed' : selection.value.suspended ? 'Suspended' : 'Active'}</dd></div>
         <div><dt className="text-xs text-text-muted">Gallery uploads</dt><dd className="mt-1 text-sm text-text-secondary">{selection.value.galleryAllowed ? 'Allowed' : 'Not allowed'}</dd></div>
         <div><dt className="text-xs text-text-muted">Free listing posts</dt><dd className="mt-1 text-sm text-text-secondary">{selection.value.freePostingAllowed ? 'Allowed' : 'Normal publication fee'}</dd></div>
-        <div className="sm:col-span-2"><dt className="text-xs text-text-muted">Direct publication</dt><dd className="mt-1 text-sm text-text-secondary">{selection.value.directPublishAllowed ? 'Allowed for complete submissions' : 'Administrator review required'}</dd></div>
+        <div className="sm:col-span-2"><dt className="text-xs text-text-muted">Direct publication</dt><dd className="mt-1 text-sm text-text-secondary">{selection.value.directPublishAllowed ? 'Allowed for complete submissions' : selection.value.galleryAllowed ? 'Approved gallery listings skip manual review' : 'Administrator review required'}</dd></div>
       </dl>
       {onViewListings && <button type="button" className={button + ' mt-4 w-full sm:w-auto'} disabled={blocked} onClick={onViewListings}>View this member&apos;s listings</button>}
-      <p className="mt-3 text-xs leading-5 text-text-muted">These permissions are independent. Gallery access does not waive fees or skip publication review. Direct publication does not mark an authority document as independently verified.</p>
+      <p className="mt-3 text-xs leading-5 text-text-muted">Gallery approval includes publication without manual review for gallery listings. Free posting remains separate. The direct-publication setting also covers recorded submissions. Neither approval marks an authority document as independently verified.</p>
       {selection.value.role === 'owner' && selection.value.id !== actorId && <p className="mt-4 text-sm leading-6 text-text-muted">The platform owner is protected from ordinary account and role changes.</p>}
       {selection.value.closed && <p className="mt-4 text-sm leading-6 text-text-muted">Closed accounts cannot receive new administrative privileges.</p>}
     </>}
@@ -87,8 +93,8 @@ export function AdminRecordReview(props: Props) {
         </div>}
         <label className="block text-xs font-medium text-text-muted min-w-0 max-w-full">Decision<select className={field} value={operation} onChange={event => setOperation(event.target.value)}>{actions.map(action => <option key={action.value} value={action.value}>{action.label}</option>)}</select></label>
         {selection.kind === 'user' && operation === 'set_gallery_permission' && <>
-          <AdminToggle label="Allow gallery uploads" checked={galleryAllowed} disabled={blocked} onChange={setGalleryAllowed} description="Allow this member to create listings from selected photos and videos. This does not verify their recording location." />
-          <p className="text-xs leading-5 text-text-muted">{noPermissionChange ? 'Change the switch, add a reason, then save. The switch alone does not change permission.' : galleryAllowed ? 'Pending decision: allow gallery uploads. Save below to apply it.' : 'Pending decision: revoke gallery uploads. Existing gallery listings will leave discovery pending review.'}</p>
+          <AdminToggle label="Allow gallery uploads" checked={galleryAllowed} disabled={blocked} onChange={setGalleryAllowed} description="Allow selected photos and videos and publication without manual review after document, media and fee checks. Recording location remains unverified." />
+          <p className="text-xs leading-5 text-text-muted">{noPermissionChange ? 'Change the switch, add a reason, then save. The switch alone does not change permission.' : galleryAllowed ? 'Pending decision: approve gallery uploads and publication without manual review. Record below to apply it.' : 'Pending decision: revoke gallery uploads. Existing gallery listings will leave discovery pending review.'}</p>
         </>}
         {selection.kind === 'user' && operation === 'set_free_posting_permission' && <>
           <AdminToggle label="Allow free listing posts" checked={freePostingAllowed} disabled={blocked} onChange={setFreePostingAllowed} description="Waive the publication fee for new submissions from this account. This does not mark any payment as paid." />
@@ -96,7 +102,7 @@ export function AdminRecordReview(props: Props) {
         </>}
         {selection.kind === 'user' && operation === 'set_direct_publish_permission' && <>
           <AdminToggle label="Allow direct publication" checked={directPublishAllowed} disabled={blocked} onChange={setDirectPublishAllowed} description="Skip manual publication review for complete listings. Ownership-document presence, media, account and payment requirements still apply." />
-          <p className="text-xs leading-5 text-text-muted">{noPermissionChange ? 'Change the switch, add a reason, then record the decision.' : directPublishAllowed ? 'Pending decision: allow this account to publish complete submissions directly.' : 'Pending decision: require administrator review for future submissions.'} This is separate from gallery uploads and free posting.</p>
+          <p className="text-xs leading-5 text-text-muted">{noPermissionChange ? 'Change the switch, add a reason, then record the decision.' : directPublishAllowed ? 'Pending decision: allow this account to publish complete submissions directly.' : 'Pending decision: require administrator review for future submissions.'} Gallery approval already covers gallery listings; this setting also covers recorded submissions. Free posting remains separate.</p>
         </>}
         {selection.kind === 'listing' && operation === 'waive_fee' && <p className="rounded-xl border border-glass-border-success bg-accent-muted p-4 text-sm leading-6 text-text-secondary">This makes this listing eligible for publication without a publication payment. It does not refund an existing payment or change the host&apos;s other listings.</p>}
         {selection.kind === 'listing' && operation === 'publish' && <div className="rounded-xl border border-border-subtle bg-background-app p-4"><h3 className="text-sm font-semibold">{publicationIssues.length ? 'Complete these checks before publication' : 'Visible publication checks are complete'}</h3>{publicationIssues.length ? <ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-5 text-text-secondary">{publicationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p className="mt-2 text-xs leading-5 text-text-muted">The server checks the latest permissions, evidence, availability and payment state again when you record this decision.</p>}</div>}
@@ -104,9 +110,11 @@ export function AdminRecordReview(props: Props) {
         {needsOverride && owner && <label className="flex items-start gap-3 rounded-xl border border-glass-border-warning bg-glass-warning p-4 text-sm leading-6 text-text-secondary min-w-0 max-w-full"><input type="checkbox" checked={override} onChange={event => setOverride(event.target.checked)} className="mt-1 size-5 shrink-0 accent-accent-primary" /><span>{selfPermission ? 'I am deciding my own posting permission as the platform owner. This will be recorded.' : 'I am using an owner override to review my own listing. This will be recorded.'}<span className="mt-1 block text-xs text-text-muted">A detailed reason of at least 30 characters is required.</span></span></label>}
         {needsOverride && !owner && <p className="text-sm leading-6 text-text-muted">Another eligible administrator must review your own record.</p>}
         {destructive && <p className="flex gap-2 rounded-xl border border-glass-border-warning bg-glass-warning p-3 text-xs leading-5 text-text-secondary"><ShieldAlert className="mt-0.5 size-4 shrink-0" />{operation === 'transfer_ownership' ? 'This transfers platform ownership to the selected account and changes your role to admin. Review the account carefully.' : 'This decision can remove access or public visibility. Review the selected record and reason before saving.'}</p>}
-        <label className="block text-xs font-medium text-text-muted min-w-0 max-w-full">Reason for this decision<textarea required minLength={minReason} maxLength={2000} rows={4} className={field} value={reason} onChange={event => setReason(event.target.value)} placeholder="Explain what you checked and why this decision is appropriate." /></label>
-        <p className="flex flex-wrap justify-between gap-2 text-xs text-text-muted min-w-0"><span>At least {minReason} characters. Saved to the audit trail.</span><span>{reason.trim().length}/2000</span></p>
-        <button className={`${button} w-full bg-accent-primary text-text-inverse hover:bg-accent-hover sm:w-auto`} disabled={blocked || !ready}>{busy ? 'Saving decision…' : 'Record decision'}</button>
+        <label className="block text-xs font-medium text-text-muted min-w-0 max-w-full">Reason for this decision<textarea aria-invalid={reason.trim().length > 0 && reason.trim().length < minReason} aria-describedby="admin-decision-reason-help admin-decision-requirements" required minLength={minReason} maxLength={2000} rows={4} className={field} value={reason} onChange={event => setReason(event.target.value)} placeholder="Explain what you checked and why this decision is appropriate." /></label>
+        <p id="admin-decision-reason-help" className="flex flex-wrap justify-between gap-2 text-xs text-text-muted min-w-0"><span>At least {minReason} characters. Saved to the audit trail.</span><span>{reason.trim().length}/2000</span></p>
+        {remainingRequirements.length > 0 && <div id="admin-decision-requirements" role="status" aria-live="polite" className="rounded-xl border border-border-subtle bg-background-app p-4"><p className="text-sm font-semibold text-text-primary">Before you can record this decision</p><ul className="mt-2 list-disc space-y-2 pl-5 text-xs leading-6 text-text-secondary">{remainingRequirements.map(requirement => <li key={requirement}>{requirement}</li>)}</ul></div>}
+        {blocked && !busy && <p className="text-xs leading-6 text-text-muted">Finish confirming the existing request before recording another decision.</p>}
+        <button aria-describedby={remainingRequirements.length ? 'admin-decision-requirements' : undefined} className={`${button} w-full bg-accent-primary text-text-inverse hover:bg-accent-hover sm:w-auto`} disabled={blocked || !ready}>{busy ? 'Saving decision…' : 'Record decision'}</button>
       </fieldset>
     </form>}
   </section>

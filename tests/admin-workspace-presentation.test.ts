@@ -1,7 +1,8 @@
-import { createElement } from 'react'
+﻿import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { AdminRecordReview } from '../components/admin/AdminRecordReview'
+import { AdminGlobalSearch } from '../components/admin/AdminGlobalSearch'
 import { adminTabs, decisionsFor, type AdminSelection } from '../components/admin/admin-view'
 
 const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -54,4 +55,32 @@ describe('admin review presentation safeguards', () => {
     expect(decisionsFor(suspended, ['gallery:manage', 'user:manage'], actorId, true).map(action => action.value)).toEqual(['restore_user'])
     expect(adminTabs(['staff:workspace', 'finance:review', 'operations:read']).map(tab => tab.id)).toEqual(['audit', 'tools'])
   })
+})
+it('explains the short reason that keeps a gallery permission decision disabled', () => {
+  const html = renderToStaticMarkup(createElement(AdminRecordReview, { ...props, galleryAllowed: true, reason: 'good person' }))
+  expect(saveDisabled(html)).toBe(true)
+  expect(html).toContain('Before you can record this decision')
+  expect(html).toContain('Add 4 more characters to the reason (at least 15 total).')
+  expect(html).toContain('aria-invalid="true"')
+  expect(html).toContain('publication without manual review')
+  const valid = renderToStaticMarkup(createElement(AdminRecordReview, { ...props, galleryAllowed: true, reason: 'Reviewed this account and approved gallery publication.' }))
+  expect(saveDisabled(valid)).toBe(false)
+})
+it('explains the detailed owner reason and acknowledgement without weakening self-grant protection', () => {
+  const own: AdminSelection = { kind: 'user', value: { ...selection.value, id: actorId, role: 'owner' } }
+  const html = renderToStaticMarkup(createElement(AdminRecordReview, { ...props, selection: own, galleryAllowed: true, reason: 'good person' }))
+  expect(saveDisabled(html)).toBe(true)
+  expect(html).toContain('Add 19 more characters to the reason (at least 30 total).')
+  expect(html).toContain('Tick the owner acknowledgement')
+})
+
+it('limits global search categories to current admin workspaces and hides an unavailable search', () => {
+  const base = { actorId, disabled: false, onOpen: noop, onListing: noop, onMember: noop }
+  const finance = renderToStaticMarkup(createElement(AdminGlobalSearch, { ...base, tabs: [{ id: 'tools' }] }))
+  expect(finance).toBe('')
+  const moderator = renderToStaticMarkup(createElement(AdminGlobalSearch, { ...base, tabs: [{ id: 'listings' }, { id: 'tools' }] }))
+  expect(moderator).toContain('value="listings"')
+  expect(moderator).not.toContain('value="members"')
+  expect(moderator).not.toContain('value="organizations"')
+  expect(moderator).not.toContain('value="audit"')
 })

@@ -17,3 +17,6 @@ export const MONGO_SETUP_ID = 'rentral-schema'
 export const ORGANIZATION_VERSION = 1
 
 export const GOOGLE_AUTH_VERSION = 1
+
+export const SOCIAL_VERSION = 1
+export const MEDIA_STORAGE_VERSION = 1

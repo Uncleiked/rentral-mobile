@@ -1,4 +1,4 @@
-import { createLocalStorage, defaultStorageDirectory } from './core'
+import { createAppStorage } from './app'
 import { storageBucket, storageFailure, storagePath, StorageError } from './policy'
 import { signedStorageUrl, storageFileUrl } from './urls'
 import { uploadStoredObject, removeStoredObjects } from '@/lib/storage-claims/service'
@@ -12,7 +12,7 @@ function streamBody(body: UploadBody): ReadableStream<Uint8Array> {
 
 /** Server-only adapter. Callers must authorize the actor before requesting a signed link. */
 export function createStorageAdmin() {
-  const storage = createLocalStorage(defaultStorageDirectory())
+  const storage = createAppStorage()
   return { storage: { from(value: string) {
     const bucket = storageBucket(value)
     return {

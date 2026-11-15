@@ -4,7 +4,7 @@ import { requireUserId } from '@/lib/action-helpers'
 import { redirect } from 'next/navigation'
 import prisma from '@/lib/db'
 import { GalleryListingWorkspace } from '@/components/listing/GalleryListingWorkspace'
-import { directPublishingGranted, freePostingGranted } from '@/lib/listings/publishing-policy'
+import { directPublishingGranted, publicationReviewBypassed, freePostingGranted } from '@/lib/listings/publishing-policy'
 
 export default async function CreateListingPage({
   searchParams,
@@ -24,7 +24,7 @@ export default async function CreateListingPage({
   if (params.gallery === '1' || draft?.mediaSource === 'approved_gallery' || (!draft && account?.gallery_upload_allowed)) {
     return <GalleryListingWorkspace key={`${actorId}:${params.draft ?? 'new'}`} actorId={actorId} draft={draft}
       allowed={Boolean(account?.gallery_upload_allowed)} permissionRevision={account?.gallery_permission_revision ?? 0}
-      directPublishAllowed={directPublishingGranted(account)} freePostingAllowed={freePostingGranted(account)} />
+      directPublishAllowed={publicationReviewBypassed(account, 'approved_gallery')} freePostingAllowed={freePostingGranted(account)} />
   }
 
   return <CreateListingWizard key={`${actorId}:${params.draft ?? 'new'}`} actorId={actorId} draft={draft} directPublishAllowed={directPublishingGranted(account)} freePostingAllowed={freePostingGranted(account)} />

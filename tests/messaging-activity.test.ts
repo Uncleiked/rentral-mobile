@@ -1,7 +1,8 @@
+vi.mock('@/lib/social/relationships', () => ({ areSociallyBlocked: vi.fn(async () => false), areUsersMutualFollowers: vi.fn(async () => false), assertSocialInteractionAllowed: vi.fn(async () => undefined) }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ ready: vi.fn(), thread: vi.fn(), find: vi.fn(), upsert: vi.fn(), remove: vi.fn(), active: vi.fn(), identity: vi.fn() }))
+const mocks = vi.hoisted(() => ({ ready: vi.fn(), socialReady: vi.fn(), thread: vi.fn(), find: vi.fn(), upsert: vi.fn(), remove: vi.fn(), active: vi.fn(), identity: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: { conversation: { findFirst: mocks.thread }, conversationActivity: { findUnique: mocks.find, upsert: mocks.upsert, deleteMany: mocks.remove } } }))
-vi.mock('@/lib/database/readiness', () => ({ assertMessagingActivityReady: mocks.ready }))
+vi.mock('@/lib/database/readiness', () => ({ assertMessagingActivityReady: mocks.ready, socialPrepared: mocks.socialReady }))
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: mocks.active }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: async (work: (tx: unknown) => Promise<unknown>) => work({ conversation: { findFirst: mocks.thread }, conversationActivity: { upsert: mocks.upsert } }) }))
 vi.mock('@/lib/api/auth', () => ({ requireApiIdentity: mocks.identity }))
@@ -16,7 +17,7 @@ const thread = { seeker_id: 'seeker', lister_id: 'host', seeker_read_at: null, l
   seeker: { closed_at: null }, lister: { closed_at: null }, messages: [{ id: messageId }] }
 const request = (method = 'GET', body?: unknown) => new Request('http://localhost:3000/api/v1/messages/' + id + '/activity', { method, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) })
 beforeEach(() => {
-  vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now); mocks.thread.mockResolvedValue(thread)
+  vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now); mocks.socialReady.mockResolvedValue(true); mocks.thread.mockResolvedValue(thread)
   mocks.find.mockResolvedValue({ last_seen_at: now, typing_until: new Date(now.getTime() + 8000) }); mocks.identity.mockResolvedValue({ userId: 'seeker' })
 })
 afterEach(() => vi.useRealTimers())
@@ -41,6 +42,10 @@ describe('conversation-scoped presence and typing', () => {
   it('does not expose closed-account presence', async () => {
     mocks.thread.mockResolvedValue({ ...thread, lister: { closed_at: now } })
     expect(await getConversationActivity('seeker', id)).toMatchObject({ otherOnline: false, otherTyping: false }); expect(mocks.find).not.toHaveBeenCalled()
+  })
+  it.each(['seeker', 'lister'] as const)('does not expose suspended %s activity', async participant => {
+    mocks.thread.mockResolvedValue({ ...thread, [participant]: { closed_at: null, suspended_at: now } })
+    expect(await getConversationActivity('seeker', id)).toMatchObject({ otherOnline: false, otherTyping: false, otherReadAt: null }); expect(mocks.find).not.toHaveBeenCalled()
   })
   it('serializes both active participants before heartbeat and bounds typing to eight seconds', async () => {
     await setConversationActivity('seeker', id, true)

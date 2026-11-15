@@ -1,4 +1,6 @@
-import { z } from 'zod'
+﻿import { z } from 'zod'
+import { databaseErrorDiagnostic } from '@/lib/database/error-diagnostics'
+import { MutationConflictError } from '@/lib/database/mutations'
 import { AccountUnavailableError } from '@/lib/accounts/availability'
 import { mongoReadinessFailure } from '@/lib/database/readiness-errors'
 
@@ -15,6 +17,7 @@ export function apiSuccess<T>(data: T, status = 200): Response {
 export function apiFailure(error: unknown, scope: string): Response {
   const readiness = mongoReadinessFailure(error)
   if (readiness) return apiFailure(new ApiError(readiness.status, readiness.code, readiness.message), scope)
+  if (error instanceof MutationConflictError) return apiFailure(new ApiError(409, error.code, error.message), scope)
   if (error instanceof AccountUnavailableError) return apiFailure(new ApiError(409, error.code, error.message), scope)
   if (error instanceof ApiError) return Response.json({ success: false, error: error.message, code: error.code }, {
     status: error.status, headers: { ...privateHeaders, ...(error.status === 429 ? { 'Retry-After': '60' } : {}) },
@@ -23,7 +26,7 @@ export function apiFailure(error: unknown, scope: string): Response {
   if (error instanceof Error && error.message === 'RATE_LIMITED') return apiFailure(new ApiError(429, 'RATE_LIMITED', 'You are making requests quickly. Please wait a moment.'), scope)
   if (error instanceof Error && ['FORBIDDEN', 'LISTING_UNAVAILABLE'].includes(error.message)) return apiFailure(new ApiError(404, 'NOT_FOUND', 'This resource is unavailable.'), scope)
   if (error instanceof Error && error.message === 'INVALID_RETRY') return apiFailure(new ApiError(409, 'INVALID_RETRY', 'Use a new client identifier for a different conversation.'), scope)
-  console.error(`[api/v1/${scope}] Request failed`, error instanceof Error ? error.name : 'UnknownError')
+  console.error(`[api/v1/${scope}] Request failed`, databaseErrorDiagnostic(error))
   return Response.json({ success: false, error: 'This request could not be completed. Please try again.', code: 'REQUEST_FAILED' }, { status: 500, headers: privateHeaders })
 }
 
@@ -62,3 +65,5 @@ export async function readApiJson(request: Request, maximumBytes = 16384): Promi
     throw new ApiError(400, 'INVALID_JSON', 'Supply a valid JSON request body.')
   } finally { reader.releaseLock() }
 }
+
+

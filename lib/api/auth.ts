@@ -7,7 +7,7 @@ import { apiBearer, cookieMutationOriginAllowed } from './policy'
 import { apiRateLimiter } from './rate-limit'
 
 // `verified` is the legacy option name: it now checks account existence only.
-type Options = { mutation?: boolean; verified?: boolean; platform?: boolean; admission?: false }
+type Options = { mutation?: boolean; verified?: boolean; platform?: boolean; admission?: false; rateLimit?: 'upload_part' }
 export type ApiIdentity = { userId: string; email?: string; sessionId?: string; mode: 'cookie' | 'bearer' }
 
 export async function requireApiIdentity(request: Request, options: Options = {}): Promise<ApiIdentity> {
@@ -36,7 +36,8 @@ export async function requireApiIdentity(request: Request, options: Options = {}
   // after another tab changes ambient cookies. This header only restricts access.
   const expectedAccount = request.headers.get('x-rentral-account')
   if (expectedAccount !== null && expectedAccount !== userId) throw new ApiError(409, 'ACCOUNT_CHANGED', 'The signed-in account changed. Refresh this page before continuing.')
-  if (!apiRateLimiter.allow(`${userId}:${options.mutation ? 'write' : 'read'}`, options.mutation ? 20 : 120)) {
+  const rateScope = options.rateLimit === 'upload_part' ? 'upload_part' : options.mutation ? 'write' : 'read'
+  if (!apiRateLimiter.allow(`${userId}:${rateScope}`, options.rateLimit === 'upload_part' ? 120 : options.mutation ? 20 : 120)) {
     throw new ApiError(429, 'RATE_LIMITED', 'You are making requests quickly. Please wait a moment.')
   }
   if (options.verified) {

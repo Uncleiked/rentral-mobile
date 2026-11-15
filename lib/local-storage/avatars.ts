@@ -1,4 +1,4 @@
-import { createLocalStorage, defaultStorageDirectory } from './core'
+import { createAppStorage } from './app'
 import { requireOwnedStoragePath, StorageError } from './policy'
 import { storageOrigin } from './urls'
 
@@ -11,7 +11,7 @@ export async function verifiedAvatarReference(input: string, userId: string): Pr
   const path = url.pathname.slice(prefix.length)
   requireOwnedStoragePath('profile-avatars', path, userId)
   // info verifies the stored metadata, size, safe extension and real file magic.
-  const info = await createLocalStorage(defaultStorageDirectory()).info('profile-avatars', path)
+  const info = await createAppStorage().info('profile-avatars', path)
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(info.contentType) || info.size > 2 * 1024 * 1024) throw new StorageError(415, 'INVALID_AVATAR', 'Choose a JPEG, PNG or WEBP image under 2MB.')
   return url.pathname
 }

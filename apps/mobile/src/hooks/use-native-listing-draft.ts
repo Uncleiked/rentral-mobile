@@ -121,7 +121,7 @@ export function useNativeListingDraft(serverId: string | null) {
       const files: NonNullable<NativeDeviceDraft['galleryFiles']> = []
       for (const value of values) files.push({ id: Crypto.randomUUID(), uri: await stashNativeDraftFile(actorId, latest.current.localId, value.uri, value.kind, value.mimeType), kind: value.kind, mimeType: value.mimeType, upload: null })
       await commit(snapshot({ galleryFiles: [...(latest.current.galleryFiles ?? []).filter(item => item.kind !== kind), ...files] }))
-      setMessage('Your gallery selection is kept on this device. It receives human review and has no recording location proof.')
+      setMessage('Your gallery selection is kept on this device. Current gallery approval allows publication without manual review; it does not create recording location proof.')
     } catch (failure) { setError(errorMessage(failure)); throw failure }
     finally { lock.current = false; setBusy(false); setPhase('') }
   }
@@ -294,7 +294,7 @@ export function useNativeListingDraft(serverId: string | null) {
       }
       const current = latest.current
       const command = current.pending!
-      setPhase(command.mode === 'submit' ? 'Submitting for asset review…' : 'Saving your server draft…')
+      setPhase(command.mode === 'submit' ? command.listing.mediaSource === 'approved_gallery' ? 'Publishing gallery listing...' : 'Submitting for asset review...' : 'Saving your server draft...')
       const result = await saveOwnerListing(command, actorId)
       saveAccepted = true
       const server = await memberGet(`/my-listings/${result.id}`, ownerListingDetailSchema, undefined, actorId)

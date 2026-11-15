@@ -9,6 +9,12 @@ describe('native independent publication controls', () => {
   const choices = nativePublishingChoices(user, actor, 'admin', permissionsForRole('admin'))
   expect(choices.map(item => [item.operation,item.current,item.ownerOverride])).toEqual([['set_gallery_permission',true,false],['set_free_posting_permission',false,false],['set_direct_publish_permission',false,false]])
  })
+ it('explains that gallery approval includes review bypass while recorded publishing and fees remain separate', () => {
+  const choices = nativePublishingChoices(user, actor, 'admin', permissionsForRole('admin'))
+  expect(choices.find(choice => choice.operation === 'set_gallery_permission')?.help).toMatch(/gallery media and publication without manual review/)
+  expect(choices.find(choice => choice.operation === 'set_gallery_permission')?.help).toMatch(/documents.*media.*Fees are separate/)
+  expect(choices.find(choice => choice.operation === 'set_direct_publish_permission')?.help).toMatch(/For recorded listings.*location checks.*fee or waiver/)
+ })
  it.each(['member','finance','moderator','analyst'])('does not create grant powers for %s', role => expect(nativePublishingChoices(user,actor,role,permissionsForRole(role))).toEqual([]))
  it('hides ordinary self changes and protected owner edits', () => {
   expect(nativePublishingChoices({...user,id:actor,role:'admin'},actor,'admin',permissionsForRole('admin'))).toEqual([])

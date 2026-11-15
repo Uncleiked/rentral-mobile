@@ -12,6 +12,7 @@ import { captureBackup } from '@/lib/backup/capture'
 import { verifyEncryptedArchive } from '@/lib/backup/archive'
 import { verifyOwnedRestore } from '@/lib/backup/restore'
 import { createLocalStorage } from '@/lib/local-storage/core'
+import { createMongoStorage } from '@/lib/local-storage/mongodb'
 
 const uri = process.env.RENTRAL_TEST_MONGO_URI, owner = process.env.RENTRAL_TEST_MONGO_OWNER
 const fixture = describe.skipIf(!uri)
@@ -34,6 +35,10 @@ fixture('owned encrypted backup and quarantined restoration', () => {
     const path = `${user.id}/avatar.png`, png = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z6XIAAAAASUVORK5CYII=', 'base64'))
     const store = createLocalStorage(storage); await store.upload('profile-avatars', path, new Blob([png]).stream(), 'image/png'); await store.remove('profile-avatars', `${user.id}/deleted.png`)
     await source.storageObject.create({ data: { id: createHash('sha256').update(`profile-avatars\0${path}`).digest('hex'), bucket: 'profile-avatars', path, owner_id: user.id, state: 'available', digest: createHash('sha256').update(png).digest('hex'), size_bytes: png.length, content_type: 'image/png' } })
+    const durablePath = `${user.id}/durable-avatar.png`, durable = createMongoStorage(async () => native.db(sourceName))
+    await durable.upload('profile-avatars', durablePath, new Blob([png]).stream(), 'image/png')
+    await durable.remove('profile-avatars', `${user.id}/durable-deleted.png`)
+    await source.storageObject.create({ data: { id: createHash('sha256').update(`profile-avatars\0${durablePath}`).digest('hex'), bucket: 'profile-avatars', path: durablePath, owner_id: user.id, state: 'available', digest: createHash('sha256').update(png).digest('hex'), size_bytes: png.length, content_type: 'image/png' } })
     const payment = await source.paymentIntent.create({ data: { user_id: user.id, kind: 'listing_fee', reference: randomUUID(), idempotency_key: randomUUID(), amount_kobo: 100000n, customer_email: user.email, status: 'succeeded', provider_environment: 'test', paid_at: new Date(), provider_transaction_id: '999999' } })
     await source.ledgerTransaction.create({ data: { payment_id: payment.id, kind: 'provider_collection', currency: 'NGN', business_key: `provider_collection:${payment.id}`, entries: { create: [
       { account_key: 'provider:collections', direction: 'debit', amount_kobo: 100000n, currency: 'NGN' }, { account_key: `customer:${user.id}`, direction: 'credit', amount_kobo: 100000n, currency: 'NGN' },
@@ -64,7 +69,7 @@ fixture('owned encrypted backup and quarantined restoration', () => {
     const restoreOwner = randomBytes(16).toString('hex'), target = new URL(uri!); target.pathname = `/rentral_restore_${restoreOwner}`
     const restored = join(root, `rentral-restore-${restoreOwner}`)
     const result = await verifyOwnedRestore({ archive, key, targetUri: target.href, configuredUri: uri!, owner: restoreOwner, restoreRoot: restored })
-    expect(result.journals).toBe(1); expect(result.storageClaims).toBe(1); expect(result.files).toBeGreaterThanOrEqual(3)
+    expect(result.journals).toBe(1); expect(result.storageClaims).toBe(2); expect(result.files).toBeGreaterThanOrEqual(3)
     const db = native.db(`rentral_restore_${restoreOwner}`, { promoteLongs: false })
     expect(await db.collection('AuthSession').findOne({ user_id: userId })).toMatchObject({ revoked_at: expect.any(Date) })
     expect(await db.collection('PasswordReset').findOne({ user_id: userId })).toMatchObject({ used_at: expect.any(Date) })
@@ -82,6 +87,10 @@ fixture('owned encrypted backup and quarantined restoration', () => {
     const proof = await db.collection('BsonProof').findOne()
     expect(BSON.Long.isLong(proof?.ordinaryLong)).toBe(true); expect(proof?.amount.toString()).toBe(BSON.Long.MAX_VALUE.toString())
     expect(proof?.binary).toBeInstanceOf(BSON.Binary)
+    const durable = createMongoStorage(async () => db)
+    expect((await durable.info('profile-avatars', `${userId}/durable-avatar.png`)).contentType).toBe('image/png')
+    expect((await durable.download('profile-avatars', `${userId}/durable-avatar.png`)).size).toBeGreaterThan(0)
+    await expect(durable.upload('profile-avatars', `${userId}/durable-deleted.png`, new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])]).stream(), 'image/png')).rejects.toMatchObject({ code: 'FILE_NAME_USED' })
     const store = createLocalStorage(join(restored, 'storage'))
     expect((await store.info('profile-avatars', `${userId}/avatar.png`)).contentType).toBe('image/png')
     const png = await readFile(join(root, 'source-storage', 'profile-avatars', userId, 'avatar.png'))

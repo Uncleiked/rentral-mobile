@@ -1,0 +1,45 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions -- Playwright CLI invokes this saved function with --filename. */
+async page => {
+ const results=[],errors=[],outbound=[]
+ const check=(condition,message)=>{if(!condition)throw new Error(message)}
+ page.on('pageerror',error=>errors.push(error.message))
+ await page.context().route('**/*',async route=>{const url=new URL(route.request().url());if(url.hostname!=='127.0.0.1'){outbound.push(url.origin);return route.abort('blockedbyclient')}if(url.pathname.startsWith('/api/'))throw new Error('Unexpected API mutation/read in presentation-only fixture');return route.continue()})
+ for(const width of [1440,390,320,768]){
+  await page.setViewportSize({width,height:900})
+  await page.goto('http://127.0.0.1:4189/?view=member',{waitUntil:'domcontentloaded'})
+  await page.getByRole('switch',{name:'Allow gallery uploads',exact:true}).click()
+  const reason=page.getByRole('textbox',{name:'Reason for this decision',exact:true})
+  await reason.fill('good person')
+  await page.getByText('Add 4 more characters to the reason (at least 15 total).',{exact:true}).waitFor()
+  check(await page.getByRole('button',{name:'Record decision',exact:true}).isDisabled(),'Short member reason should remain blocked')
+  check(await reason.getAttribute('aria-invalid')==='true','Short reason should be identified as invalid')
+  await page.getByText('Pending decision: approve gallery uploads and publication without manual review. Record below to apply it.',{exact:true}).waitFor()
+  if(width===320)await page.screenshot({path:'output/playwright/admin-short-reason-320.png',fullPage:true})
+  await reason.fill('Reviewed the account and approved gallery posting.')
+  check(await page.getByRole('button',{name:'Record decision',exact:true}).isEnabled(),'Complete member decision should be enabled')
+  await page.getByRole('button',{name:'Record decision',exact:true}).click()
+  await page.getByText('Synthetic decisions: 1',{exact:true}).waitFor()
+  results.push({width,flow:'short reason explained; valid approval saves',passed:true})
+  await page.goto('http://127.0.0.1:4189/?view=self',{waitUntil:'domcontentloaded'})
+  await page.getByRole('switch',{name:'Allow gallery uploads',exact:true}).click()
+  await page.getByRole('textbox',{name:'Reason for this decision',exact:true}).fill('good person')
+  await page.getByText('Add 19 more characters to the reason (at least 30 total).',{exact:true}).waitFor()
+  await page.getByText('Tick the owner acknowledgement to record a decision about your own account or listing.',{exact:true}).waitFor()
+  await page.getByRole('textbox',{name:'Reason for this decision',exact:true}).fill('Reviewed my owner account and explicitly approved its gallery posting permission.')
+  check(await page.getByRole('button',{name:'Record decision',exact:true}).isDisabled(),'Self owner acknowledgement must remain required')
+  await page.getByRole('checkbox').check()
+  check(await page.getByRole('button',{name:'Record decision',exact:true}).isEnabled(),'Complete acknowledged owner approval should be enabled')
+  results.push({width,flow:'owner detailed reason and explicit acknowledgement preserved',passed:true})
+  await page.goto('http://127.0.0.1:4189/?view=gallery',{waitUntil:'domcontentloaded'})
+  await page.getByText('Your gallery approval includes publication without manual review once required documents, media and fee checks are complete.',{exact:false}).waitFor()
+  await page.getByRole('button',{name:'Publish listing',exact:true}).waitFor()
+  check(await page.getByRole('button',{name:'Submit for review',exact:true}).count()===0,'Approved gallery incorrectly asks for human review')
+  await page.getByText('The publication fee applies unless an administrator grants a waiver.',{exact:false}).waitFor()
+  await page.evaluate(()=>document.fonts.ready)
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Overflow at '+width)
+  if(width===320||width===1440)await page.screenshot({path:'output/playwright/gallery-approved-'+width+'.png',fullPage:true})
+  results.push({width,flow:'gallery approval publishes without duplicate direct grant; fee remains separate',passed:true})
+ }
+ check(errors.length===0,'Page errors: '+errors.join(';'));check(outbound.length===0,'Outbound calls: '+outbound.join(';'))
+ return{cases:results.length,results,errors,outbound}
+}

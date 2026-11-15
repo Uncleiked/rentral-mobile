@@ -1,5 +1,36 @@
 # UI Registry
 
+## Admin and social UI patterns - 2026-11-15
+
+- AdminGlobalSearch uses the existing surface-card/background-app panels, subtle
+  borders, rounded-2xl containers, rounded-xl controls and semantic text colors.
+  Labels are text-xs/muted; inputs are text-base on phones and sm:text-sm.
+  Search/clear/open buttons have min-h-11, explicit focus treatment and visible
+  loading/error/empty states. Group results by the selected permitted category;
+  carry search terms into the full workspaces rather than starting an ID-only flow.
+- Permission switches prepare a selected decision. Record decision explains the
+  required trimmed reason length and any owner acknowledgement beside the action.
+  A disabled action always has a visible explanation; saved actions require the
+  existing audit receipt, not a switch animation.
+- Contextual brand navigation: administration logos lead to /admin, marketplace
+  logos to /marketplace, public navigation remains /. Desktop and compact menus
+  use the same destinations.
+- Public hearts are likes with confirmed counts. Bookmarks are private saved
+  listings. Do not use the same icon for these different actions.
+- People/profile cards use existing semantic colors, public username/display name,
+  responsive action wrapping and follower/following dialogs. No email in public
+  social cards. Pending/blocked/error/empty states are explicit.
+- Messaging uses Primary/Requests/Sent tabs; pending recipients see Move to Primary
+  before a reply composer. Request screens suppress typing/presence/read feedback.
+  Accepting selects Primary; uncertain writes preserve the original command and
+  offer readback before editing. Block recovery uses minimal actor-owned state.
+- Notifications distinguish follow/like/message activity, paginate and refresh,
+  and confirm read actions through the API. Never create fake local notifications.
+- Responsive evidence covers 320,390,768,1440px with no overflow/page errors;
+  artifacts are in ignored output/playwright/admin-global-search,
+  social-workspace and publishing-permission.
+
+
 ### Website consistency baseline - 2026-11-12
 
 Files: app/globals.css, app/layout.tsx, components/layout/AccountPage.tsx,
@@ -39,7 +70,7 @@ message. Detailed setup failures are fixed-code server logs only. No new public
 diagnostic controls or visual patterns were introduced.
 
 
-### Owner/admin decisions and recovery — 2026-11-10
+### Owner/admin decisions and recovery â€” 2026-11-10
 
 Files: components/admin/AdminWorkspace.tsx, apps/mobile/app/admin.tsx.
 
@@ -60,7 +91,7 @@ recovery panel; pause new decisions, retain the original actor/nonce/body, read
 the receipt first and offer exact retry only after absence is confirmed. A link
 to specialized finance does not imply that a listing review moved money.
 
-### Approved gallery creation and photo display — 2026-11-10
+### Approved gallery creation and photo display â€” 2026-11-10
 
 Files: components/listing/GalleryListingWorkspace.tsx, components/listing/ListingGallery.tsx,
 apps/mobile/app/create-listing.tsx, apps/mobile/src/components/gallery-photos.tsx.
@@ -87,19 +118,19 @@ recovery never implies a completed listing save. A reviewed abandonment explains
 that it keeps other work and does not delete server files. Permission revocation
 still permits recovery readback while blocking new uploads or saves.
 
-### Manual inspection evidence — 2026-11-10
+### Manual inspection evidence â€” 2026-11-10
 
 Files: components/bookings/ManualInspectionReview.tsx,
 apps/mobile/src/components/manual-inspection.tsx.
 
 Web evidence uses border-subtle separation, rounded-xl fields/actions and muted
-13–14px help. Native uses the standard surface/border/radius.xl/space.xl card,
+13â€“14px help. Native uses the standard surface/border/radius.xl/space.xl card,
 semibold 19px heading and regular 13/22 help. Preserve multiline statements,
 show pending/approved/rejected status in words, and label the evidence as manual.
 Explain that review creates no GPS proof or automatic payout. Keep uncertain
 submissions actor/booking scoped and read the original receipt before retry.
 
-### Profile photo and address feedback — 2026-11-10
+### Profile photo and address feedback â€” 2026-11-10
 
 Files: apps/mobile/src/components/avatar-editor.tsx,
 apps/mobile/src/components/capture-address-check.tsx,
@@ -117,7 +148,7 @@ lookup and provider outage with useful correction/retry guidance. A missing
 building is not called an outage. Legacy responses use neutral fallback wording.
 Neither color nor an icon alone conveys permission, a match or success.
 
-### Rentral identity and native launch — 2026-11-10
+### Rentral identity and native launch â€” 2026-11-10
 
 Files: components/brand/RentralLogo.tsx, apps/mobile/src/components/BrandLogo.tsx,
 LaunchIntro.tsx; canonical geometry/palette: lib/brand/identity.json.
@@ -129,14 +160,14 @@ LaunchIntro.tsx; canonical geometry/palette: lib/brand/identity.json.
 | Native sizes | Compact mark36/wordmark25; standard44/30; launch128/36 |
 | Surfaces/text | Existing charcoal background, white primary text, emerald semantic accent |
 | Native spacing | space.xs inline gap; launch wordmark space.sm below mark |
-| Motion | One720ms launch; cubicBezier(0.23,1,0.32,1), opacity/0.96→1 scale;180ms reduced-motion path without scale |
+| Motion | One720ms launch; cubicBezier(0.23,1,0.32,1), opacity/0.96â†’1 scale;180ms reduced-motion path without scale |
 | Fallback | Font4s budget; intro1.5s safety; error/retry fallback releases native splash |
 
 The SVG/native PNG/ICO assets come from one deterministic generator. ICO's
 embedded PNG must remain RGBA/32-bit; the iOS icon separately stays opaque RGB.
 The intro is outside actor-keyed navigation and cannot wait for backend readiness.
 
-### Capture address and uncertain request recovery — 2026-11-10
+### Capture address and uncertain request recovery â€” 2026-11-10
 
 Native CaptureAddressCheck uses existing text/muted/accentBright/warning tokens,
 17px semibold headings,13px regular explanatory text with21px line height and
@@ -158,10 +189,10 @@ account restricts existing authentication; it never grants identity or a role.
 Changing the captured actor remounts children so old draft commands cannot carry
 across accounts. There is no added visual wrapper or theme.
 
-### Commercial purchases and sponsored placements — 2026-11-09
+### Commercial purchases and sponsored placements â€” 2026-11-09
 
 `components/commerce/*` uses the existing surface-card/border-subtle/rounded-2xl
-cards with p-5–6, rounded-xl fields, semantic primary/secondary/muted text and
+cards with p-5â€“6, rounded-xl fields, semantic primary/secondary/muted text and
 minimum44px actions. Exact kobo formats as NGN; every purchase shows fixed days
 and test/live environment. Unknown writes retain their original command and
 offer readback before an explicit retry. Provider checkout is an inspected link,
@@ -176,7 +207,7 @@ the commerce web handoff; it explicitly states separate browser sign-in and
 passes no authentication token in the URL. Native sponsored placement patterns
 are recorded by the native owner after implementation.
 
-### Member dashboard activity — 2026-11-09
+### Member dashboard activity â€” 2026-11-09
 
 Web `components/account/MemberActivityCards.tsx` and native `app/dashboard.tsx`
 use existing surface cards and semantic text. A short label, prominent observed
@@ -186,17 +217,17 @@ inspection captions describe recorded check-ins, and review counts state their
 all-time completed-booking scope. Native cards use radius.xl/space.xl and shared
 Page/Button; web uses rounded-2xl/border-subtle/p-5. Counts link to actual archives.
 
-### Native lease management — 2026-11-09
+### Native lease management â€” 2026-11-09
 
 `apps/mobile/app/leases.tsx` and `lease/[id].tsx` use Page, shared Field and
 Button, surface/border cards with radius.xl and space.xl padding. Headlines use
-20–22px semibold; body 14px/23 secondary; help 12–13px/21 muted; unconfirmed
+20â€“22px semibold; body 14px/23 secondary; help 12â€“13px/21 muted; unconfirmed
 results use semantic warning text plus a visible history-check action. Date/time
 labels state their input format and device time zone. Evidence is private,
 10 MB bounded and explicitly uploaded before proposal submission. Counterparty
 reasons accompany accept/decline; staff review is a separate recorded step.
 
-### Conversation activity controls — 2026-11-09
+### Conversation activity controls â€” 2026-11-09
 
 `components/messaging/ChatPanel.tsx` retains surface-card, border-subtle,
 rounded-2xl and p-4/sm:p-5. Activity is a small muted caption under the member
@@ -205,18 +236,18 @@ text-xs muted pattern. It shares only conversation-scoped activity while the
 view is visible; opting out clears the actor's ephemeral row. Read indicators
 reuse the message timestamp caption. No global last-seen timestamp is exposed.
 
-### Lease requests and lifecycle reviews — 2026-11-09
+### Lease requests and lifecycle reviews â€” 2026-11-09
 
 Canonical pattern: root ui-registry.md entry of the same name. New shared web
 components: components/lifecycle/LeaseRequestForm.tsx, LeaseRequestsPage.tsx,
 LeaseCounterpartyControls.tsx and components/admin/LifecycleReviewControls.tsx.
-Cards reuse surface-card/border-subtle/rounded-2xl/p-5–6; fields reuse app
+Cards reuse surface-card/border-subtle/rounded-2xl/p-5â€“6; fields reuse app
 background/rounded-xl/p-3; labels/help text-xs muted, body/status text-sm secondary.
 Actions keep minimum44px targets, accent hover/focus outlines and visible disabled
 states. Explicit booking outcomes extend existing ReviewControls. Preserve input
 and uploaded evidence on unconfirmed outcomes, with visible history refresh.
 
-### Staff financial workspace — 2026-11-09
+### Staff financial workspace â€” 2026-11-09
 
 Files: components/admin/FinancialWorkspace.tsx, FinancialOperationReview.tsx,
 FinancialReceipts.tsx and financial-ui.ts. Shared field/button token strings
@@ -229,7 +260,7 @@ and approval/request/provider outcome distinct. Preserve uncertain immutable
 commands and require explicit readback before further instructions. Archive
 buttons preserve loaded records. No bank account numbers persist in this UI.
 
-### Native booking details — 2026-11-09
+### Native booking details â€” 2026-11-09
 
 Files: apps/mobile/app/booking/[id].tsx and src/components/booking-*.tsx.
 Summary/action cards use theme surface/border, radius24, padding24 and gap16.
@@ -241,7 +272,7 @@ Keep rental start/end independent of the holding commitment window. Refresh
 explicitly after uncertain writes; disabled controls and visible status explain
 unconfirmed results. Listing hold CTA uses the same primary Button.
 
-### Staff role controls — 2026-11-09
+### Staff role controls â€” 2026-11-09
 
 File: components/admin/StaffRoleControls.tsx.
 Surface: bg-surface-card, border-border-subtle, rounded-2xl, p-5, space-y-4.
@@ -252,7 +283,7 @@ text-text-inverse, hover:bg-accent-hover, focus-visible outline and pending opac
 Long member IDs wrap; no personal emails are sent to this client component.
 Reuse the existing review form pattern and preserve the reason after failure.
 
-### JWT/MongoDB account and local upload flow — 2026-11-09
+### JWT/MongoDB account and local upload flow â€” 2026-11-09
 
 The **Local JWT account flow** in root `ui-registry.md` supersedes earlier
 Supabase/OAuth/verification entries. Visual tokens stay the same; native account
@@ -262,7 +293,7 @@ permission/progress/retry states. Browser continuation buttons explain that web
 sign-in may be needed. Uploaded avatars are verified owner files with relative
 public URLs; private walkthrough/document links expire and never contain app JWTs.
 
-### Expo native components — 2026-11-09
+### Expo native components â€” 2026-11-09
 
 Canonical native pattern details are mirrored in root `ui-registry.md` under
 **Expo native foundations and components**. Files: `apps/mobile/src/theme.ts`,
@@ -272,7 +303,7 @@ NativeListingFields,NativeVideoPreview,WalkthroughCapture}.tsx` and native route
 
 - All colors come from semantic native tokens; Inter is bundled. Page background
   and safe areas use background; cards use surface,1px border,24px radius and
- 16/24px padding. Heading17–20px, body13/14px, help12/13px muted/secondary.
+ 16/24px padding. Heading17â€“20px, body13/14px, help12/13px muted/secondary.
 - Buttons:52px minimum,16px radius, accentBright/inverse; secondary glass/border.
   Inputs:52px minimum,12px radius, surface/border, accent focus; accessible labels.
 - Structural/status pills and44px choices use glass or selected accentMuted with
@@ -309,7 +340,7 @@ Updated 2026-11-07. Files: `components/layout/MarketplaceShell.tsx`, `components
 - Detail fee rows, host records and reviews display projected real data. Neighborhoods obscure street addresses; identity badges never guarantee ownership/condition.
 - Owner profiles show actual assets plus bookings/saved/activity shortcuts. No fabricated balance, lease, credit, license, followers or device count is rendered.
 
-Living document. Updated after every component is built. Read this before building any new component — match existing patterns exactly before inventing new ones.
+Living document. Updated after every component is built. Read this before building any new component â€” match existing patterns exactly before inventing new ones.
 
 ---
 
@@ -318,10 +349,10 @@ Living document. Updated after every component is built. Read this before buildi
 Before building any component:
 
 1. Check if a similar component already exists here
-2. If yes — match its exact classes
-3. If no — build it following ui-rules.md and ui-tokens.md, then add it here
+2. If yes â€” match its exact classes
+3. If no â€” build it following ui-rules.md and ui-tokens.md, then add it here
 
-After building any component — update this file with the component name, file path, and exact classes used.
+After building any component â€” update this file with the component name, file path, and exact classes used.
 
 ---
 
@@ -410,7 +441,7 @@ Historical hero observations below are superseded by the current patterns above.
 - **File Path**: [app/page.tsx](file:///c:/Users/DAVID%20IKEDIASHI/Documents/rentral/app/page.tsx)
 - **Hero Wrapper**: `hero-section relative isolate overflow-hidden bg-brand-vault px-6 pb-20 pt-6 sm:px-10 lg:px-16 lg:pb-24`
 - **Hero Scrim Overlay**: `hero-hover-scrim` (linear gradient from forest green to dark background, fades in on hover via `data-image-hovered` attribute)
-- **Image Capsule (circle)**: `hero-media-shell` (perfect circle: `border-radius: 50%`, 540×540, absolute desktop, expands to `inset-0 border-radius: 0` on hover to fill entire hero section as background)
+- **Image Capsule (circle)**: `hero-media-shell` (perfect circle: `border-radius: 50%`, 540Ã—540, absolute desktop, expands to `inset-0 border-radius: 0` on hover to fill entire hero section as background)
 - **Circle Expand Overlay**: `hero-expand-overlay` (inner div inside `.hero-media-shell`, dark gradient overlay that fades in during expansion so text remains readable over the full-bleed image)
 - **Rotating Text Badge**: `animate-spin-slow` (20 seconds spin rotation applied to SVG textPath, with central star `animate-pulse`)
 
@@ -462,38 +493,38 @@ Historical hero observations below are superseded by the current patterns above.
 - **File Paths**: [app/marketplace/listing/create/page.tsx](app/marketplace/listing/create/page.tsx), [components/listing/CategorySelector.tsx](components/listing/CategorySelector.tsx), [components/listing/CaptureCanvas.tsx](components/listing/CaptureCanvas.tsx), [components/listing/MetadataForm.tsx](components/listing/MetadataForm.tsx), [components/listing/DocumentUploadZone.tsx](components/listing/DocumentUploadZone.tsx), [components/listing/CheckoutPrompt.tsx](components/listing/CheckoutPrompt.tsx)
 - **Route note**: nested under `/marketplace/listing/create` (not top-level `/listing/create`) to match the `/marketplace/profile` convention. Reached via the "Create Listing" CTA on the Listing Hub below, not directly from nav.
 - **Page Shell**: `min-h-screen bg-background-app px-4 py-10 sm:px-6`
-- **Wizard Stepper**: numbered circle `flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold` — active/passed `bg-accent-primary text-text-inverse`, upcoming `bg-glass-light text-text-muted`; connector line `h-px flex-1` — passed `bg-accent-primary`, upcoming `bg-border-subtle`
-- **Selectable List Item (Category Card)**: `flex items-center gap-4 rounded-xl border px-5 py-5 text-left transition-all active:scale-98` — selected `border-accent-primary bg-accent-muted`, unselected `border-border-subtle bg-surface-card`; leading icon in `flex h-12 w-12 items-center justify-center rounded-full border border-glass-border-light bg-glass-light`
+- **Wizard Stepper**: numbered circle `flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold` â€” active/passed `bg-accent-primary text-text-inverse`, upcoming `bg-glass-light text-text-muted`; connector line `h-px flex-1` â€” passed `bg-accent-primary`, upcoming `bg-border-subtle`
+- **Selectable List Item (Category Card)**: `flex items-center gap-4 rounded-xl border px-5 py-5 text-left transition-all active:scale-98` â€” selected `border-accent-primary bg-accent-muted`, unselected `border-border-subtle bg-surface-card`; leading icon in `flex h-12 w-12 items-center justify-center rounded-full border border-glass-border-light bg-glass-light`
 - **Full-Screen Capture Canvas**: `relative isolate aspect-[9/16] w-full overflow-hidden rounded-2xl border border-border-subtle bg-background-app shadow-2xl`; top/bottom overlays use the standard Contextual Glassmorphic Panel treatment (`bg-glass-dark backdrop-blur-lg border border-glass-border-light`)
 - **Status Pill (GPS lock / REC)**: `flex items-center gap-2 rounded-full border bg-glass-dark px-3 py-1.5 backdrop-blur-lg`, dot `h-2 w-2 rounded-full` colored `bg-trust-verified`/`bg-trust-flagged`
 - **Form Input** (matches `components/onboarding/ProfileForm.tsx`): `rounded-xl border border-border-subtle bg-background-app px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary transition-all`; label `text-xs font-medium uppercase tracking-wider text-text-muted`; field error `text-xs text-trust-flagged`
-- **Drag-and-Drop Upload Zone**: `flex flex-col items-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center transition-all` — dragging `border-accent-primary bg-accent-muted`, idle `border-border-subtle bg-surface-card`
+- **Drag-and-Drop Upload Zone**: `flex flex-col items-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center transition-all` â€” dragging `border-accent-primary bg-accent-muted`, idle `border-border-subtle bg-surface-card`
 - **Wizard Nav Buttons**: primary `flex-1 rounded-xl bg-accent-primary px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg hover:bg-accent-hover active:scale-98 disabled:opacity-40`; secondary/back `flex-1 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary active:scale-98`
-- **Recorded-Take Preview** (`CaptureCanvas`): swaps the live `<video autoPlay muted>` for `<video controls playsInline>` inside the same capture canvas frame once `capture.isComplete` — no new container, the 9/16 shell and overlays stay
-- **Retake Button** (`CaptureCanvas`): full-width secondary treatment inside the bottom glass panel — `flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary active:scale-98` with a `RotateCcw` icon (`h-4 w-4`)
-- **GPS-Denied / Inline Step Error**: `text-center text-xs font-semibold text-trust-flagged` rendered inside the step's own panel (capture bottom overlay, below checkout card, under upload zone) — never a toast
+- **Recorded-Take Preview** (`CaptureCanvas`): swaps the live `<video autoPlay muted>` for `<video controls playsInline>` inside the same capture canvas frame once `capture.isComplete` â€” no new container, the 9/16 shell and overlays stay
+- **Retake Button** (`CaptureCanvas`): full-width secondary treatment inside the bottom glass panel â€” `flex w-full items-center justify-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-3 text-xs font-bold uppercase tracking-wide text-text-primary active:scale-98` with a `RotateCcw` icon (`h-4 w-4`)
+- **GPS-Denied / Inline Step Error**: `text-center text-xs font-semibold text-trust-flagged` rendered inside the step's own panel (capture bottom overlay, below checkout card, under upload zone) â€” never a toast
 - **Secure-Context Blocked State** (`CaptureCanvas`): when `window.isSecureContext` is false the camera frame reuses the camera-error treatment (`VideoOff` icon + `text-sm font-medium text-text-muted` copy) with dev-setup instructions, and the Start button is hidden entirely
-- **GPS Pill States** (`CaptureCanvas` top overlay): `GPS Locked` (dot `bg-trust-verified`) / `GPS Blocked` (permission denied, dot `bg-trust-flagged`) / `Acquiring GPS...` / `GPS Required` — driven by store `coords`, `navigator.permissions` state, and the acquiring flag
-- **Async Button Phases** (`CheckoutPrompt`): the primary nav button carries its phase as label text ("Uploading walkthrough..." → "Saving listing..."), both nav buttons `disabled` (`disabled:opacity-70`) while busy
+- **GPS Pill States** (`CaptureCanvas` top overlay): `GPS Locked` (dot `bg-trust-verified`) / `GPS Blocked` (permission denied, dot `bg-trust-flagged`) / `Acquiring GPS...` / `GPS Required` â€” driven by store `coords`, `navigator.permissions` state, and the acquiring flag
+- **Async Button Phases** (`CheckoutPrompt`): the primary nav button carries its phase as label text ("Uploading walkthrough..." â†’ "Saving listing..."), both nav buttons `disabled` (`disabled:opacity-70`) while busy
 - **Wizard Exit Link** (`CategorySelector` step 1 + Done screen): full-width secondary-button-styled `<Link>` with `ArrowLeft` icon back to `/marketplace/listing`; Done screen's primary action is a primary-button-styled `<Link>` ("View Your Listings") that also fires `reset()` via `onClick`
 - **Save Draft Button** (`SaveDraftButton`, wizard shell top-right once a category is chosen): compact secondary treatment `flex items-center gap-2 rounded-xl border border-glass-border-medium bg-glass-light px-4 py-2 text-xs font-bold uppercase tracking-wide` with `Save` icon; busy label "Saving Draft..."; success/failure via sonner `toast` (`import { toast } from 'sonner'` convention)
-- **Shared Listing Fieldsets** (`components/listing/ListingFields.tsx`): the category-specific metadata grid + address + base-price fields with the canonical `listingInputClass`/`listingLabelClass`/`listingErrorClass` — consumed by both `MetadataForm` (wizard) and `ListingEditForm` (edit page); never fork these fieldsets
+- **Shared Listing Fieldsets** (`components/listing/ListingFields.tsx`): the category-specific metadata grid + address + base-price fields with the canonical `listingInputClass`/`listingLabelClass`/`listingErrorClass` â€” consumed by both `MetadataForm` (wizard) and `ListingEditForm` (edit page); never fork these fieldsets
 - **Listing Edit Form** (`ListingEditForm`, `/marketplace/listing/[id]/edit`): same max-w-md form card as wizard steps; leads with a padlock notice row (`Lock` icon + `bg-glass-light` pill) explaining video/GPS/documents are sealed; Cancel is a secondary-styled `<Link>`, Save Changes the primary button
-- **Owner Card Action** (`ListingCard` with `owner` prop, hub only): full-width secondary mini-button `text-[10px]` with `PencilLine` icon — "Continue Editing" (drafts → wizard `?draft=`) or "Edit Listing" (posted → edit page); never rendered on visitor grids
+- **Owner Card Action** (`ListingCard` with `owner` prop, hub only): full-width secondary mini-button `text-[10px]` with `PencilLine` icon â€” "Continue Editing" (drafts â†’ wizard `?draft=`) or "Edit Listing" (posted â†’ edit page); never rendered on visitor grids
 - **Feed Card Nullable States** (`MarketplaceFeedCard`): avatar falls back to an initial in a `bg-glass-light` circle (`FeedAvatar`); trust-score row hidden when null (no fabricated scores); `<video src>` used directly (webm + mp4)
-- **Feed Empty State** (`app/marketplace/page.tsx`): centered `py-20` block — bold title, muted explainer, primary Create Listing CTA
+- **Feed Empty State** (`app/marketplace/page.tsx`): centered `py-20` block â€” bold title, muted explainer, primary Create Listing CTA
 
-**Pattern notes:** Wizard steps reuse the Base Card Surface (`bg-surface-card`/`border-border-subtle`) for static forms and the Contextual Glassmorphic Panel for anything overlaying the live camera feed — never mix the two for the same element. Emerald (`accent-primary`/`accent-muted`) marks the selected/active/passed state everywhere in the wizard (category card, stepper dot, upload zone while dragging); red (`trust-flagged`) is reserved for the GPS-not-yet-locked dot, never for form validation chrome beyond the existing `text-trust-flagged` error-text convention.
+**Pattern notes:** Wizard steps reuse the Base Card Surface (`bg-surface-card`/`border-border-subtle`) for static forms and the Contextual Glassmorphic Panel for anything overlaying the live camera feed â€” never mix the two for the same element. Emerald (`accent-primary`/`accent-muted`) marks the selected/active/passed state everywhere in the wizard (category card, stepper dot, upload zone while dragging); red (`trust-flagged`) is reserved for the GPS-not-yet-locked dot, never for form validation chrome beyond the existing `text-trust-flagged` error-text convention.
 
 ### Listing Hub (My Listings)
 
 - **File Path**: [app/marketplace/listing/page.tsx](app/marketplace/listing/page.tsx)
-- **Page Shell**: identical to `/marketplace/profile` — `bg-background-app min-h-[100dvh] w-full flex`, content column `flex-1 flex justify-center md:ml-64 lg:ml-[244px] pb-16 md:pb-0`, inner `w-full max-w-5xl px-4 py-6 md:px-8 md:py-10`
+- **Page Shell**: identical to `/marketplace/profile` â€” `bg-background-app min-h-[100dvh] w-full flex`, content column `flex-1 flex justify-center md:ml-64 lg:ml-[244px] pb-16 md:pb-0`, inner `w-full max-w-5xl px-4 py-6 md:px-8 md:py-10`
 - **Section Header**: title `text-xl font-bold text-text-primary tracking-wide`, subtitle `text-sm text-text-secondary mt-1`, laid out `flex items-center justify-between gap-4 mb-8`
-- **Primary CTA ("Create Listing")**: `inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg hover:bg-accent-hover active:scale-98` — shown top-right on desktop, repeated full-width below the grid on mobile (`sm:hidden`)
-- **Listings Grid / Empty State**: reuses `components/profile/ListingsGrid.tsx` + `components/profile/ListingCard.tsx` verbatim — do not fork these for the hub; both profile (visitor view) and this hub must stay visually identical since they render the same data shape (`ListingSummary[]`)
+- **Primary CTA ("Create Listing")**: `inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-3 text-xs font-bold uppercase tracking-wide text-text-inverse shadow-lg hover:bg-accent-hover active:scale-98` â€” shown top-right on desktop, repeated full-width below the grid on mobile (`sm:hidden`)
+- **Listings Grid / Empty State**: reuses `components/profile/ListingsGrid.tsx` + `components/profile/ListingCard.tsx` verbatim â€” do not fork these for the hub; both profile (visitor view) and this hub must stay visually identical since they render the same data shape (`ListingSummary[]`)
 
-**Pattern notes:** This is the first place `ListingsGrid` renders for the *owner's own* listings (previously only used on visitor profile views) — its empty state intentionally has no built-in CTA, so every page embedding it must supply its own "Create Listing" / routing action per `ui-rules.md`'s Empty States rule. Sidebar and bottom-nav both route their "Listing" item here, never straight to the wizard.
+**Pattern notes:** This is the first place `ListingsGrid` renders for the *owner's own* listings (previously only used on visitor profile views) â€” its empty state intentionally has no built-in CTA, so every page embedding it must supply its own "Create Listing" / routing action per `ui-rules.md`'s Empty States rule. Sidebar and bottom-nav both route their "Listing" item here, never straight to the wizard.
 
 ### Platform workspaces and privacy controls (2026-11-07)
 
@@ -546,7 +577,7 @@ Backend-only Storage hardening introduces no new UI component or visual pattern.
 Existing document upload/preview controls retain their established semantic tokens.
 Documents stay owner-private; private originals must never gain a public fallback
 when an authorization or preview request fails.
-# Build configuration checkpoint — 2026-11-07
+# Build configuration checkpoint â€” 2026-11-07
 
 Prisma generation is now part of `pnpm build`. No UI components, tokens, layout,
 motion or responsive patterns changed in this build fix.
@@ -560,8 +591,8 @@ avatar-editor.tsx, safety-notice-card.tsx and financial-operation-card.tsx.
 
 - Use existing semantic colors/fonts/space/radius tokens with native StyleSheet.
   Cards use surface, border, radius.xl, padding24 and gap16. Screen titles use
-  bold30; card headings use semibold19–20; help uses muted12–13 with lineHeight21–22.
-- Money uses exact integer kobo formatting, accentBright, bold19–23 and tabular
+  bold30; card headings use semibold19â€“20; help uses muted12â€“13 with lineHeight21â€“22.
+- Money uses exact integer kobo formatting, accentBright, bold19â€“23 and tabular
   numerals. Value/label rows wrap on narrow screens; all controls retain44px targets.
 - Native date/time dialogs and iOS wheels use the installed SDK58 Expo UI picker;
   platform review/payout/bank menus use Expo UI Picker and privacy uses Switch.
@@ -610,7 +641,7 @@ Files: apps/mobile/app/create-listing.tsx, my-listings.tsx, owner-listing/[id].t
 vault.tsx; apps/mobile/src/components/NativeListingFields.tsx, WalkthroughCapture.tsx,
 owner-listing-card.tsx, owner-listing-editor.tsx and owner-listing-media.tsx.
 
-- Retain semantic surface/border cards, radius.xl,16–24px padding and16px field gaps.
+- Retain semantic surface/border cards, radius.xl,16â€“24px padding and16px field gaps.
   Full category forms use labeled inputs, wrapping ChoiceChips and SDK58 Expo UI
   menus/switches. Optional fees use decimal keyboards and explicit naira labels.
 - Owner inventory uses paginated FlatList cards; vault captures use SectionList
@@ -855,3 +886,44 @@ DirectPublicationPanel.tsx and the recording/gallery save controls.
   a single main action and exact receipt readback/retry when outcome is uncertain.
 - Recent dashboard counters must be identified as recent samples. CSV download
   feedback states scope, row count and truncation rather than implying a full dump.
+
+### Workload counts, organization paging and audit history - 2026-11-12
+
+Files: AdminOperationsOverview.tsx, AdminAuditHistory.tsx,
+OrganizationAdminQueue.tsx. Preserve semantic dark rounded-2xl cards, p-5/sm:p-6,
+text-text-primary/secondary/muted and accent focus. Fields have44px minimums and
+16px mobile text. Queue cards stack1column, expand2sm/3xl; never present recent
+samples as global counts. Pair oldest age with explicit WAT time. Counts unavailable
+is an error state, never fabricated zero. Keep validated UTC date filters explicit.
+Read errors/revocation clear old rows. Confirmation callbacks refresh counts only
+after an actual receipt; failed refresh cannot turn a committed decision into a retry.
+Organization selection focuses/scrolls mobile detail; close action restores list.
+
+### Shared asset photo and complete-image inspection - 2026-11-12
+
+Files: AssetPhoto.tsx, ListingGallery.tsx, PhotoViewer.tsx; native ListingPhoto.
+Photo frames are relative, bounded, overflowhidden and use semantic background.
+Use fill/object-cover for preview frames, explicit contain for completephoto mode.
+Preserve originalresolution access in the fullviewer; do not stretch source pixels.
+Onephoto listings still need fullview access. Private sources use the authenticated
+responsive loader, not a public image proxy. Fallback text/icons remain within the
+frame. Gallery fullview supports arrows, Escape and focus restoration. Native uses
+actual decoded aspectratio with bounded extrema and truthful failedimage states.
+
+### Homepage meadow and motion - 2026-11-12
+
+Files: FooterMeadow.tsx, HomeMotion.tsx, HomeFooter.tsx, homepage styles.
+Use canonical semantic green/background tokens inside canvas; no hardcoded palette.
+Grass stays behind pointertransparent decoration and readable foreground controls.
+On phones the wordmark spans both columns, then copy/nav share bounded columns;
+links must not be masked by overflow. Footer utilitybar uses a semantic tinted
+surface and44px links. Respect reducedmotion/paused state across every animation.
+Scrolling remains native; never hide essential content as the paused fallback.
+
+### Listing facts and reviewed safety context - 2026-11-12
+
+ListingFacts sections use border-t/py-7; facts start onecolumn thensm2/lg3, prose
+uses whitespace-pre-line and wrap-anywhere. Render only category allowlists; show
+explicit zero/false/missing distinctions. Insurance and safety are hostdeclarations.
+Existing reviewed safety warnings belong before booking decisions as well as on
+profiles. Display never creates verification or a new safetyfinding.

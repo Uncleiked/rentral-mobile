@@ -16,7 +16,7 @@ vi.mock('@/lib/database/config', () => ({
   mongoDatabaseName: () => 'owned_readiness_fixture',
 }))
 
-import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared, assertOwnerAdminReady, ownerAdminPrepared, assertGoogleAuthReady, googleAuthPrepared, assertOrganizationsReady, organizationsPrepared } from '@/lib/database/readiness'
+import { assertMongoReady, assertStorageClaimsReady, assertFinancialReady, assertLifecycleReady, lifecyclePrepared, closeMongoReadiness, assertMediaUploadReady, assertCommercialReady, assertMessagingActivityReady, commercialPrepared, assertCaptureReady, capturePrepared, assertOwnerAdminReady, ownerAdminPrepared, assertGoogleAuthReady, googleAuthPrepared, assertOrganizationsReady, organizationsPrepared, assertMediaStorageReady, mediaStorageDatabase, assertSocialReady } from '@/lib/database/readiness'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -33,6 +33,15 @@ describe('Mongo readiness recovery', () => {
   })
   afterEach(async () => { await closeMongoReadiness(); vi.unstubAllEnvs(); vi.useRealTimers() })
 
+  it('requires prepared durable media and social collections while reusing the existing native pool', async () => {
+    await assertMongoReady()
+    await expect(assertMediaStorageReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    await expect(assertSocialReady()).rejects.toMatchObject({ code: 'DATABASE_SETUP_REQUIRED' })
+    state.nextRead = () => Promise.resolve({ schemaVersion: 1, mediaStorageVersion: 1, socialVersion: 1 })
+    expect(await mediaStorageDatabase()).toHaveProperty('collection')
+    await assertSocialReady()
+    expect(state.clients).toHaveLength(1)
+  })
   it('keeps core accounts available but blocks storage claims until their feature preparation is recorded', async () => {
     vi.useFakeTimers()
     await assertMongoReady()

@@ -2,12 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, Heart, CalendarDays, LayoutGrid, UserRound } from 'lucide-react'
+import { Search, Bookmark, CalendarDays, LayoutGrid, UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
   { label: 'Discover', href: '/marketplace', icon: Search },
-  { label: 'Saved', href: '/marketplace/saved', icon: Heart },
+  { label: 'Saved', href: '/marketplace/saved', icon: Bookmark },
   { label: 'Bookings', href: '/marketplace/bookings', icon: CalendarDays },
   { label: 'My assets', href: '/marketplace/listing', icon: LayoutGrid },
   { label: 'Profile', href: '/marketplace/profile', icon: UserRound },

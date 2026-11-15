@@ -1,5 +1,27 @@
 ## Rentral Library Docs & Integration Patterns
 
+## Current social and persistent storage rules - 2026-11-15
+
+- Use existing Prisma6.19.3/MongoDB7.8.0 driver packages. Social runtime checks its
+  explicit readiness marker; do not create collections/indexes from user requests.
+- MongoDB GridFS shares the configured database/native readiness pool. Reviewed
+  setup owns its files/chunks indexes and MediaBlob validator. The adapter writes
+  GridFS-spec chunks/files directly to avoid the upload driver's implicit DDL;
+  official GridFSBucket handles bounded range streaming reads.
+- Browser/native upload bodies above3,133,440bytes negotiate capability and send
+  exact sequential parts below the serverless request limit. Validate path,
+  next-part and completion receipts. Never silently replace a saved upload path
+  or retry an uncertain response with a different file/command.
+- Keep filesystem storage for explicit local use/restore verification; changing
+  drivers does not reconstruct or silently migrate old missing originals.
+- New direct social messaging is web/API. Existing native listing chat contracts
+  remain compatible. Public social identity uses username/display name/avatar,
+  not email. Hearts mean public likes; bookmarks mean private saves.
+- Installed Next16.4.5 route-handler docs remain authoritative for promise params,
+  Web Request/Response streaming and runtime configuration. No dependency upgrade
+  was introduced by this increment.
+
+
 ### Current integration rules (2026-11-10)
 
 - Owner/admin decisions, manual document approval, gallery exceptions and fee
@@ -105,7 +127,7 @@ Prioritize MCP Servers: If an MCP server is configured for a tool (e.g., Supabas
 
 Strict Adherence to this Document: The patterns defined here override general library knowledge.
 
-Order of Authority: MCP Server (Real-time) → Skills via AGENTS.md → This Document (Project Rules) → General Training Knowledge.
+Order of Authority: MCP Server (Real-time) â†’ Skills via AGENTS.md â†’ This Document (Project Rules) â†’ General Training Knowledge.
 
 ## 1. Supabase & PostGIS (@supabase/ssr & @supabase/supabase-js)
 
@@ -412,7 +434,7 @@ PostHog is the backbone of our B2B 'Rentral Insights' portal, tracking geospatia
 
 ## 7.1 Client-Side Initialization
 
-// instrumentation-client.ts (Next.js App Router convention — not lib/posthog-client.ts)
+// instrumentation-client.ts (Next.js App Router convention â€” not lib/posthog-client.ts)
 import posthog from "posthog-js";
 
 posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN!, {
@@ -421,12 +443,12 @@ posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN!, {
   capture_exceptions: true,
 });
 
-Note: the `defaults` bundle autocaptures pageviews out of the box. There is no manual pageview trigger in this project — if page-level funnels need to exclude noise later, override with `capture_pageview: false` and call `posthog.capture('$pageview')` manually at that point.
+Note: the `defaults` bundle autocaptures pageviews out of the box. There is no manual pageview trigger in this project â€” if page-level funnels need to exclude noise later, override with `capture_pageview: false` and call `posthog.capture('$pageview')` manually at that point.
 
 
 ## 7.2 Serverless Environment Tracking (CRITICAL)
 
-In Server Actions, API routes, or Supabase Edge Functions, use flushAt: 1 and flush() per call — not a per-call factory + shutdown(). `shutdown()` permanently closes the client, which breaks every subsequent call on a reused instance, so this project uses one module-level singleton for the life of the server process and flushes after every capture instead.
+In Server Actions, API routes, or Supabase Edge Functions, use flushAt: 1 and flush() per call â€” not a per-call factory + shutdown(). `shutdown()` permanently closes the client, which breaks every subsequent call on a reused instance, so this project uses one module-level singleton for the life of the server process and flushes after every capture instead.
 
 ```ts
 // lib/posthog.ts
@@ -458,7 +480,7 @@ await captureServerEvent(userId, "profile_updated", { field: "identity" });
 
 ## Required PostHog Events:
 
-See `code-standards.md` → "PostHog Telemetry Events" for the current list, split into Phase 1 (implemented) and Phase 2+ (future — no backing system yet).
+See `code-standards.md` â†’ "PostHog Telemetry Events" for the current list, split into Phase 1 (implemented) and Phase 2+ (future â€” no backing system yet).
 
 ## 8. Client State Management (zustand)
 
@@ -597,3 +619,13 @@ No Client-Side KYC Mutations: A frontend client MUST NEVER pass a payload to upd
   native search events90days. Reconcile uncertain email outcomes deliberately.
 - Use pnpm staging for explicit .env.staging isolation; keep the example blank.
   See staging-setup.md, identity-review.md, mobile-api.md and release-readiness.md.
+
+### Authenticated photo variants and homepage motion - 2026-11-12
+
+Private listing photos/posters use the bounded source-route custom loader in
+lib/media/image-loader.ts. Never send authenticated originals through Next's public
+optimizer. lib/media/private-image.ts uses the already-installed Sharp0.35.5; it
+resizes copies, stripsmetadata and enforces byte/pixel/queue/time/cache bounds.
+Original evidence storage remains immutable. Public marketing assets retain
+next/image optimization. HomeMotion reuses installedGSAP3.14.2 with scoped cleanup;
+FooterMeadow uses Canvas2D with visibility/reducedmotion/pause behavior. No new SDK.

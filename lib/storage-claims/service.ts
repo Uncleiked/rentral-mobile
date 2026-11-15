@@ -3,7 +3,8 @@ import type { Prisma, StorageObject } from '@prisma/client'
 import prisma from '@/lib/db'
 import { assertStorageClaimsReady, lifecyclePrepared, capturePrepared, ownerAdminPrepared, organizationsPrepared } from '@/lib/database/readiness'
 import { withTransaction } from '@/lib/database/transactions'
-import { createLocalStorage, defaultStorageDirectory, type ObjectMetadata } from '@/lib/local-storage/core'
+import { type ObjectMetadata } from '@/lib/local-storage/core'
+import { createAppStorage } from '@/lib/local-storage/app'
 import { verifiedAvatarReference } from '@/lib/local-storage/avatars'
 import { requireOwnedStoragePath, storagePath, storageFailure, uploadPolicy, StorageError, type StorageBucket } from '@/lib/local-storage/policy'
 
@@ -43,7 +44,7 @@ async function ensureRecord(ownerId: string, bucket: StorageBucket, path: string
 
 async function prepareObject(ownerId: string, bucket: StorageBucket, path: string): Promise<PreparedStorageObject> {
   requireOwnedStoragePath(bucket, path, ownerId)
-  const info = await createLocalStorage(defaultStorageDirectory()).info(bucket, path).catch(error => { throw storageFailure(error) })
+  const info = await createAppStorage().info(bucket, path).catch(error => { throw storageFailure(error) })
   const record = await ensureRecord(ownerId, bucket, path, info)
   sameObject(record, ownerId, bucket, path)
   if (record.state !== 'available') throw unavailable()
@@ -130,7 +131,7 @@ export async function uploadStoredObject(ownerId: string, bucket: StorageBucket,
     if (['deleting', 'deleted'].includes(existing.state)) throw unavailable()
     throw new StorageError(409, 'FILE_EXISTS', 'This filename is already used or uploading. Use a new filename for another file.')
   }
-  const storage = createLocalStorage(defaultStorageDirectory())
+  const storage = createAppStorage()
   let result: { path: string }
   try { result = await storage.upload(bucket, path, body, policy.contentType) }
   catch (error) {
@@ -202,9 +203,37 @@ export async function removeStoredObjects(ownerId: string, bucket: StorageBucket
     for (const [id] of objects) await tx.storageObject.update({ where: { id }, data: { state: 'deleting',
       operation_token: randomUUID(), lease_expires_at: new Date(Date.now() + DELETE_LEASE_MS) } })
   })
-  const storage = createLocalStorage(defaultStorageDirectory())
+  const storage = createAppStorage()
   for (const [id, path] of objects) {
     await storage.remove(bucket, path)
     await prisma.storageObject.updateMany({ where: { id, state: 'deleting' }, data: { state: 'deleted', operation_token: null, lease_expires_at: null } })
   }
+}
+
+/** One immutable storage claim owns every explicitly retried bounded HTTP part. */
+export async function uploadStoredPart(ownerId: string, bucket: StorageBucket, path: string, body: ReadableStream<Uint8Array> | null, contentType: string | null, total: number, part: number) {
+  await assertStorageClaimsReady(); requireOwnedStoragePath(bucket, path, ownerId)
+  const policy = uploadPolicy(bucket, path, contentType), storage = createAppStorage()
+  if (!storage.uploadPart) throw new StorageError(503, 'CHUNKED_UPLOAD_UNAVAILABLE', 'This server uses single-request uploads. Check its current upload capability before retrying.')
+  if (!Number.isSafeInteger(total) || total <= 0 || total > policy.maximumBytes || !Number.isSafeInteger(part) || part < 0) throw new StorageError(400, 'INVALID_UPLOAD_PART', 'Check the original upload size and part number.')
+  const id = storageObjectId(bucket, path)
+  let record = await prisma.storageObject.findUnique({ where: { id } })
+  if (!record) {
+    if (part !== 0) throw new StorageError(409, 'UPLOAD_PART_ORDER', 'Resume from the original first file part.')
+    try { record = await prisma.storageObject.create({ data: { id, bucket, path, owner_id: ownerId, state: 'uploading', operation_token: 'chunked:' + randomUUID(), lease_expires_at: new Date(Date.now() + UPLOAD_LEASE_MS), digest: null, size_bytes: null, content_type: null } }) }
+    catch (error) { if (!uniqueConflict(error)) throw error; record = await prisma.storageObject.findUniqueOrThrow({ where: { id } }) }
+  }
+  sameObject(record, ownerId, bucket, path)
+  if (['deleted', 'deleting'].includes(record.state)) throw unavailable()
+  if (record.state !== 'available' && (!record.operation_token?.startsWith('chunked:') || record.state !== 'uploading')) throw new StorageError(409, 'FILE_EXISTS', 'This file path belongs to another upload. Check its original saved state.')
+  const result = await storage.uploadPart(bucket, path, body, policy.contentType, total, part)
+  if (!result.complete) return result
+  const info = await storage.info(bucket, path)
+  if (info.size !== total || info.contentType !== policy.contentType) throw unavailable()
+  const finished = await prisma.storageObject.updateMany({ where: { id, owner_id: ownerId, state: 'uploading', operation_token: record.operation_token }, data: { state: 'available', ...metadataFields(info), upload_completed_at: new Date(), operation_token: null, lease_expires_at: null, revision: { increment: 1 } } })
+  if (finished.count === 1) return result
+  const current = await prisma.storageObject.findUniqueOrThrow({ where: { id } })
+  if (current.state === 'available' && current.digest === info.digest && current.size_bytes === info.size && current.content_type === info.contentType) return result
+  if (['deleted', 'deleting'].includes(current.state)) await storage.remove(bucket, path)
+  throw new StorageError(503, 'UPLOAD_UNCERTAIN', 'The file transfer finished but its saved status could not be confirmed. Check the original upload before retrying.')
 }

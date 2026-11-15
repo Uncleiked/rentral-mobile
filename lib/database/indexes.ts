@@ -1,5 +1,5 @@
 import type { CreateIndexesOptions, Db, Document, IndexDirection } from 'mongodb'
-import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION, OWNER_ADMIN_VERSION, ORGANIZATION_VERSION, GOOGLE_AUTH_VERSION } from './metadata.ts'
+import { MONGO_SCHEMA_VERSION, MONGO_SETUP_COLLECTION, MONGO_SETUP_ID, STORAGE_CLAIMS_VERSION, FINANCIAL_VERSION, LIFECYCLE_VERSION, MUTATION_VERSION, AUTH_SECURITY_VERSION, MATCHING_VERSION, MEDIA_UPLOAD_VERSION, COMMERCIAL_VERSION, MESSAGING_ACTIVITY_VERSION, PUSH_VERSION, CAPTURE_VERSION, OWNER_ADMIN_VERSION, ORGANIZATION_VERSION, GOOGLE_AUTH_VERSION, SOCIAL_VERSION, MEDIA_STORAGE_VERSION } from './metadata.ts'
 
 type IndexPlan = { collection: string; keys: Record<string, IndexDirection>; options: CreateIndexesOptions }
 const plan = (collection: string, keys: Record<string, IndexDirection>, unique = false): IndexPlan => ({
@@ -13,6 +13,12 @@ const partialUnique = (collection: string, field: string): IndexPlan => ({
 // Never run prisma db push: it cannot describe these nullable unique indexes.
 export const MONGO_INDEXES: readonly IndexPlan[] = [
   plan('GoogleIdentity', { user_id: 1 }, true),
+  plan('MediaBlob', { bucket: 1, state: 1, canonical_path: 1 }),
+  { collection: 'rentral_media.files', keys: { filename: 1, uploadDate: 1 }, options: { name: 'filename_1_uploadDate_1' } },
+  { collection: 'rentral_media.chunks', keys: { files_id: 1, n: 1 }, options: { name: 'files_id_1_n_1', unique: true } },
+  plan('SocialFollow', { follower_id: 1, followed_id: 1 }, true), plan('SocialFollow', { follower_id: 1, active: 1, createdAt: -1, _id: -1 }), plan('SocialFollow', { followed_id: 1, active: 1, createdAt: -1, _id: -1 }),
+  plan('SocialBlock', { blocker_id: 1, blocked_id: 1 }, true), plan('SocialBlock', { blocker_id: 1, active: 1 }), plan('SocialBlock', { blocked_id: 1, active: 1 }),
+  plan('ListingLike', { user_id: 1, listing_id: 1 }, true), plan('ListingLike', { user_id: 1, active: 1, createdAt: -1 }), plan('ListingLike', { listing_id: 1, active: 1 }),
   plan('OrganizationApplication', { user_id: 1 }, true), plan('OrganizationApplication', { status: 1, submitted_at: 1 }), plan('OrganizationApplication', { evidence_paths: 1 }),
   plan('User', { email: 1 }, true), partialUnique('User', 'username'),
   plan('IndividualProfile', { userId: 1 }, true), plan('OrganizationProfile', { userId: 1 }, true),
@@ -37,7 +43,7 @@ export const MONGO_INDEXES: readonly IndexPlan[] = [
   plan('LedgerTransaction', { payment_id: 1 }), partialUnique('LedgerTransaction', 'business_key'), plan('LedgerTransaction', { operation_id: 1 }),
   { ...plan('LedgerTransaction', { payment_id: 1, kind: 1 }, true), options: { name: 'LedgerTransaction_payment_id_kind_key', unique: true, partialFilterExpression: { kind: 'provider_collection' } } },
   plan('LedgerEntry', { transaction_id: 1 }), plan('LedgerEntry', { account_key: 1, createdAt: 1 }),
-  plan('Conversation', { listing_id: 1, seeker_id: 1 }, true), plan('Conversation', { seeker_id: 1, updatedAt: -1 }), plan('Conversation', { lister_id: 1, updatedAt: -1 }),
+  plan('Conversation', { listing_id: 1, seeker_id: 1, lister_id: 1 }, true), plan('Conversation', { kind: 1, initiated_by: 1, createdAt: 1 }), plan('Conversation', { seeker_id: 1, updatedAt: -1 }), plan('Conversation', { lister_id: 1, updatedAt: -1 }),
   plan('Message', { sender_id: 1, client_id: 1 }, true), plan('Message', { conversation_id: 1, createdAt: 1, _id: 1 }), plan('Message', { shared_listing_id: 1 }),
   plan('Review', { booking_id: 1, author_id: 1 }, true), plan('Review', { subject_id: 1, createdAt: -1 }), plan('Review', { author_id: 1 }),
   plan('Dispute', { booking_id: 1 }), plan('Dispute', { opened_by: 1 }), plan('Dispute', { status: 1, createdAt: 1 }),
@@ -111,7 +117,8 @@ export const MONGO_COLLECTIONS = [
   'LeaseTermination', 'WorkerState', 'WorkerFailure', 'PaymentRecipient', 'FinancialOperation', 'FinancialAllocation', 'ProviderReceipt', 'MutationReceipt', 'EmailChange', 'AuthEmailDelivery',
   'MatchProfile', 'MatchConnection', 'MatchMessage', 'MatchBlock', 'MatchReport',
   'ConversationActivity', 'CommercialOrder', 'InsightEntitlement', 'SponsoredCampaign',
-  'PushDevice', 'PushDelivery', 'OrganizationApplication', 'GoogleIdentity',
+  'PushDevice', 'PushDelivery', 'OrganizationApplication', 'GoogleIdentity', 'SocialFollow', 'SocialBlock', 'ListingLike',
+  'MediaBlob', 'rentral_media.files', 'rentral_media.chunks',
 ] as const
 
 const id = { bsonType: 'string', minLength: 1, maxLength: 256 }
@@ -125,6 +132,31 @@ const jsonSchema = (required: string[], properties: Document): Document => ({ $j
 
 // Cross-document balances, ownership and overlapping periods stay in transactional domain services.
 export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
+  MediaBlob: { $and: [jsonSchema(['bucket', 'path', 'canonical_path', 'state', 'created_at', 'updated_at'], {
+    _id: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, bucket: { enum: ['listings-media', 'compliance-docs', 'profile-avatars'] },
+    path: { bsonType: 'string', minLength: 3, maxLength: 500 }, canonical_path: { bsonType: 'string', minLength: 3, maxLength: 500 }, state: { enum: ['uploading', 'available', 'deleted'] },
+    protocol: { enum: ['chunked-v1'] }, declared_size: { bsonType: ['int', 'long', 'double'], minimum: 1, maximum: 209715200 }, next_part: { bsonType: ['int', 'long'], minimum: 0, maximum: 67 }, received_bytes: { bsonType: ['int', 'long', 'double'], minimum: 0, maximum: 209715200 },
+    file_id: { bsonType: 'objectId' }, content_type: { enum: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/webm'] },
+    size_bytes: { bsonType: ['int', 'long', 'double'], minimum: 1, maximum: 209715200 }, digest: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, created_at: { bsonType: 'date' }, updated_at: { bsonType: 'date' },
+  }), { $or: [{ state: 'deleted' }, { $and: [{ state: 'uploading' }, { $jsonSchema: { required: ['file_id', 'content_type'] } }] }, { $and: [{ state: 'available' }, { $jsonSchema: { required: ['file_id', 'content_type', 'size_bytes', 'digest'] } }] }] }] },
+  'rentral_media.files': jsonSchema(['length', 'chunkSize', 'uploadDate', 'filename', 'metadata'], {
+    _id: { bsonType: 'objectId' }, length: { bsonType: ['int', 'long', 'double'], minimum: 1, maximum: 209715200 }, chunkSize: { enum: [261120] }, uploadDate: { bsonType: 'date' },
+    filename: { bsonType: 'string', minLength: 5, maxLength: 520 }, metadata: { bsonType: 'object', required: ['bucket', 'path', 'digest', 'contentType'], properties: {
+      bucket: { enum: ['listings-media', 'compliance-docs', 'profile-avatars'] }, path: { bsonType: 'string', minLength: 3, maxLength: 500 }, digest: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
+      contentType: { enum: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/webm'] },
+    } },
+  }),
+  'rentral_media.chunks': jsonSchema(['files_id', 'n', 'data'], { _id: { bsonType: 'objectId' }, files_id: { bsonType: 'objectId' }, n: { bsonType: ['int', 'long'], minimum: 0, maximum: 803 }, data: { bsonType: 'binData' } }),
+  SocialFollow: { $and: [jsonSchema(['follower_id', 'followed_id', 'active', 'createdAt', 'updatedAt'], { follower_id: id, followed_id: id, active: { bsonType: 'bool' }, notified_at: nullableDate, createdAt: { bsonType: 'date' }, updatedAt: { bsonType: 'date' } }), { $expr: { $ne: ['$follower_id', '$followed_id'] } }] },
+  SocialBlock: { $and: [jsonSchema(['blocker_id', 'blocked_id', 'active', 'createdAt', 'updatedAt'], { blocker_id: id, blocked_id: id, active: { bsonType: 'bool' }, createdAt: { bsonType: 'date' }, updatedAt: { bsonType: 'date' } }), { $expr: { $ne: ['$blocker_id', '$blocked_id'] } }] },
+  ListingLike: jsonSchema(['user_id', 'listing_id', 'active', 'createdAt', 'updatedAt'], { user_id: id, listing_id: id, active: { bsonType: 'bool' }, notified_at: nullableDate, createdAt: { bsonType: 'date' }, updatedAt: { bsonType: 'date' } }),
+  Conversation: { $and: [jsonSchema(['seeker_id', 'lister_id', 'createdAt', 'updatedAt'], {
+    listing_id: { bsonType: ['string', 'null'] }, seeker_id: id, lister_id: id, kind: { enum: ['listing', 'direct', null] }, initiated_by: { bsonType: ['string', 'null'] },
+    accepted_at: nullableDate, accepted_by: { bsonType: ['string', 'null'] }, seeker_read_at: nullableDate, lister_read_at: nullableDate, createdAt: { bsonType: 'date' }, updatedAt: { bsonType: 'date' },
+  }), { $expr: { $and: [{ $ne: ['$seeker_id', '$lister_id'] }, { $or: [{ $ne: [{ $ifNull: ['$kind', 'listing'] }, 'direct'] }, { $and: [
+    { $in: ['$initiated_by', ['$seeker_id', '$lister_id']] }, { $eq: [{ $ifNull: ['$listing_id', null] }, null] },
+    { $or: [{ $eq: [{ $ifNull: ['$accepted_by', null] }, null] }, { $in: ['$accepted_by', ['$seeker_id', '$lister_id']] }] },
+  ] }] }] } }] },
   GoogleIdentity: jsonSchema(['user_id', 'email_at_link', 'credential_fingerprint', 'createdAt'], { user_id: id, credential_fingerprint: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' }, email_at_link: { bsonType: 'string', minLength: 3, maxLength: 254 }, createdAt: { bsonType: 'date' } }),
   OrganizationApplication: jsonSchema(['user_id', 'legal_name', 'registration_type', 'registration_number', 'representative_name', 'representative_role', 'document_kind', 'document_path', 'document_proof', 'status', 'submitted_at'], {
     user_id: id, legal_name: { bsonType: 'string', minLength: 2, maxLength: 160 }, registration_type: { enum: ['company', 'business_name', 'llp', 'incorporated_trustees'] },
@@ -258,7 +290,7 @@ export const MONGO_VALIDATORS: Readonly<Record<string, Document>> = {
   }),
   WorkerState: jsonSchema([], { lease_expires_at: nullableDate, last_started_at: nullableDate, last_completed_at: nullableDate }),
   MutationReceipt: jsonSchema(['actor_id', 'scope', 'client_id', 'input_hash', 'resource_id'], {
-    actor_id: id, scope: { enum: ['listing_submit', 'listing_draft_save', 'booking_create', 'admin_command', 'manual_inspection_request', 'organization_submit', 'organization_review'] }, client_id: id, resource_id: id,
+    actor_id: id, scope: { enum: ['listing_publish', 'listing_submit', 'listing_draft_save', 'booking_create', 'admin_command', 'manual_inspection_request', 'organization_submit', 'organization_review', 'social_follow', 'social_like', 'social_block', 'direct_conversation_start', 'conversation_accept'] }, client_id: id, resource_id: id,
     input_hash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
   }),
   AdminAudit: { $and: [jsonSchema(['action', 'target_type', 'target_id', 'reason'], {
@@ -349,11 +381,20 @@ export async function ensureMongoIndexes(db: Db): Promise<{ collections: number;
     if (legacyPaymentIdentity.unique !== true || Object.keys(legacyPaymentIdentity.key).length !== 1 || legacyPaymentIdentity.key.provider_transaction_id !== 1) throw new Error('UNEXPECTED_LEGACY_PAYMENT_INDEX')
     await payments.dropIndex('PaymentIntent_provider_transaction_id_key')
   }
+  // Create the replacement before removing the legacy constraint, which
+  // incorrectly conflates direct threads sharing a null listing and seeker.
+  const conversations = db.collection('Conversation')
+  const legacyConversation = (await conversations.indexes()).find(index => index.name === 'Conversation_listing_id_seeker_id_key')
+  if (legacyConversation) {
+    if (legacyConversation.unique !== true || Object.keys(legacyConversation.key).length !== 2 || legacyConversation.key.listing_id !== 1 || legacyConversation.key.seeker_id !== 1) throw new Error('UNEXPECTED_LEGACY_CONVERSATION_INDEX')
+    await conversations.dropIndex('Conversation_listing_id_seeker_id_key')
+  }
+  await conversations.updateMany({ $or: [{ revision: { $exists: false } }, { revision: null }] }, { $set: { revision: 0 } })
   // Commit readiness last: a partial or failed setup must not enable unindexed writes.
-  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; ownerAdminVersion: number; organizationVersion: number; googleAuthVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
+  await db.collection<{ _id: string; schemaVersion: number; storageClaimsVersion: number; financialVersion: number; lifecycleVersion: number; mutationVersion: number; authSecurityVersion: number; matchingVersion: number; mediaUploadVersion: number; commercialVersion: number; messagingActivityVersion: number; pushVersion: number; captureVersion: number; ownerAdminVersion: number; organizationVersion: number; googleAuthVersion: number; socialVersion: number; mediaStorageVersion: number; completedAt: Date }>(MONGO_SETUP_COLLECTION).updateOne(
     { _id: MONGO_SETUP_ID }, { $set: { schemaVersion: MONGO_SCHEMA_VERSION, storageClaimsVersion: STORAGE_CLAIMS_VERSION,
       financialVersion: FINANCIAL_VERSION, lifecycleVersion: LIFECYCLE_VERSION, mutationVersion: MUTATION_VERSION, authSecurityVersion: AUTH_SECURITY_VERSION,
-      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, ownerAdminVersion: OWNER_ADMIN_VERSION, organizationVersion: ORGANIZATION_VERSION, googleAuthVersion: GOOGLE_AUTH_VERSION, completedAt: new Date() } }, { upsert: true },
+      matchingVersion: MATCHING_VERSION, mediaUploadVersion: MEDIA_UPLOAD_VERSION, commercialVersion: COMMERCIAL_VERSION, messagingActivityVersion: MESSAGING_ACTIVITY_VERSION, pushVersion: PUSH_VERSION, captureVersion: CAPTURE_VERSION, ownerAdminVersion: OWNER_ADMIN_VERSION, organizationVersion: ORGANIZATION_VERSION, googleAuthVersion: GOOGLE_AUTH_VERSION, socialVersion: SOCIAL_VERSION, mediaStorageVersion: MEDIA_STORAGE_VERSION, completedAt: new Date() } }, { upsert: true },
   )
   return { collections: MONGO_COLLECTIONS.length, indexes: MONGO_INDEXES.length }
 }

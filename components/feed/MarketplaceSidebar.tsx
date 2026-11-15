@@ -11,6 +11,7 @@ const navigation = [
   { label: 'Discover', href: '/marketplace' },
   { label: 'My bookings', href: '/marketplace/bookings' },
   { label: 'Saved', href: '/marketplace/saved' },
+  { label: 'People', href: '/marketplace/people' },
   { label: 'My assets', href: '/marketplace/listing' },
   { label: 'Dashboard', href: '/marketplace/dashboard' },
 ]
@@ -25,6 +26,8 @@ const actionClass = 'inline-flex size-11 shrink-0 items-center justify-center ro
 // Compatibility name: existing imports now receive a top navigation, never a sidebar.
 export function MarketplaceSidebar() {
   const pathname = usePathname()
+  const adminContext = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/marketplace/admin')
+  const logoHref = adminContext ? '/admin' : '/marketplace'
   const [menuPath, setMenuPath] = useState<string | null>(null)
   const menuOpen = menuPath === pathname
   const headerRef = useRef<HTMLElement>(null)
@@ -55,7 +58,7 @@ export function MarketplaceSidebar() {
   return (
     <header ref={headerRef} className="sticky top-0 z-50 border-b border-border-subtle bg-background-app/95 text-text-primary backdrop-blur-xl">
       <div className="mx-auto flex min-h-[76px] w-full max-w-[1440px] min-w-0 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-10">
-        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-hover" aria-label="Rentral home">
+        <Link href={logoHref} className="inline-flex min-h-11 shrink-0 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-hover" aria-label={adminContext ? 'Rentral admin dashboard' : 'Rentral marketplace'}>
           <RentralLogo className="text-xl" />
         </Link>
         <nav aria-label="Main navigation" className="hidden min-w-0 items-center gap-1 xl:flex">

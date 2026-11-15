@@ -1,6 +1,22 @@
 ## Rentral Build Plan
 
-## Current delivery plan — 2026-11-09
+## Latest authorized increment - 2026-11-15
+
+Complete the Nov13 admin/gallery/social request in RentralMobile using the current
+npm/Mongo/JWT stack. Gallery approval now includes manual-review bypass for
+complete gallery submissions; free posting and recorded direct-publication remain
+independent. Add contextual logos, scoped categorized admin search, clear audited
+decision saving, web People/follows/likes/private saves, consented direct messaging,
+typing and notifications. Fix durable serverless media and bounded part transport
+in the same database. See [release guide](social-admin-release.md).
+
+Source and final verification are saved: unit/lint/native types/production build
+passed, all121owned Mongo cases passed, and local dev is restored at3000.
+Hosted setup and deployment remain pending; no provider/device success or
+perfect-platform guarantee is implied.
+
+
+## Current delivery plan â€” 2026-11-09
 
 User-authorized stack: Expo Android/iOS, npm 11.19.1 workspaces/Node 24, local
 Next.js 16.4.5 backend, MongoDB via Prisma 6.19.3, JWT email/password accounts and
@@ -59,7 +75,7 @@ groupings and must not reinstate KYC, hosted migrations or obsolete stack rules.
 
 Strict Decoupling of Presentation and Logic: Full-page UI is built with mock data first and verified visually before any backend infrastructure, AI orchestration, or spatial logic is written. Every feature must follow a visible, testable, two-step lifecycle. There are no invisible backend phases. If the UI is not polished, responsive, and behaviorally sound, no database mutations or third-party APIs (OPay, Gemini, PostGIS) are wired.
 
-## Phase 1 — Foundation & Core Infrastructure
+## Phase 1 â€” Foundation & Core Infrastructure
 
 ### 01 Homepage & Navigation
 
@@ -111,9 +127,9 @@ Set up behavioral tracking before any core marketplace logic to power the B2B 'R
 
 #### Logic:
 
-Create lib/posthog-client.ts — initialize PostHog browser client with NEXT_PUBLIC_POSTHOG_KEY.
+Create lib/posthog-client.ts â€” initialize PostHog browser client with NEXT_PUBLIC_POSTHOG_KEY.
 
-Create lib/posthog-server.ts — initialize PostHog server client with flushAt: 1 and flushInterval: 0 for immediate backend event logging.
+Create lib/posthog-server.ts â€” initialize PostHog server client with flushAt: 1 and flushInterval: 0 for immediate backend event logging.
 
 Wrap the Next.js App Layout in the PostHog Provider.
 
@@ -139,9 +155,9 @@ Provision Storage Buckets: listings-media, compliance-docs, termination-docs.
 
 Enforce Row Level Security (RLS) policies on all tables ensuring users can only mutate their own records.
 
-## Phase 2 — Hardware-Locked Inventory & AI Audits
+## Phase 2 â€” Hardware-Locked Inventory & AI Audits
 
-#### 05 Listing Capture — Full UI
+#### 05 Listing Capture â€” Full UI
 
 Build the mobile-first asset capture flow with mock video streams. No DB saves yet.
 
@@ -153,7 +169,7 @@ Metadata Form: Dynamic Zustand-powered multi-step fields based on category (e.g.
 
 AI Document Upload Zone: Drag-and-drop area for C of O or CAC registration, clearly labeled "AI Forgery Check".
 
-Checkout Prompt: UI for the ₦1,000 anti-spam platform listing fee.
+Checkout Prompt: UI for the â‚¦1,000 anti-spam platform listing fee.
 
 #### 06 Spatial Integrity & Upload Logic
 
@@ -167,7 +183,7 @@ Invariant: Deny capture completely if GPS permission is rejected, unavailable, o
 
 Pipe video buffer to Mux Video API for HLS transcoding; store raw backup in listings-media bucket.
 
-Generate OPay dynamic Virtual Account for the ₦1,000 listing fee. Wait for webhook confirmation.
+Generate OPay dynamic Virtual Account for the â‚¦1,000 listing fee. Wait for webhook confirmation.
 
 Save listing to DB: Server Action converts raw GPS to PostGIS Point ST_SetSRID(ST_MakePoint(lon, lat), 4326).
 
@@ -207,9 +223,9 @@ Server Action validates updates specifically to base_rent_amount and asset_metad
 
 Constraint Enforcement: The API route explicitly strips any payload attempting to alter hardware_coordinates or video_raw.mp4. If physical traits change, the user is prompted to create a brand-new listing, preventing spatial bait-and-switch fraud.
 
-## Phase 3 — Discovery & Multi-Year Booking Engine
+## Phase 3 â€” Discovery & Multi-Year Booking Engine
 
-#### 09 Discovery Feed — Full UI
+#### 09 Discovery Feed â€” Full UI
 
 Build the vertical video scrolling discovery experience.
 
@@ -267,7 +283,7 @@ Notify Seeker and Lister that the inspection phase is unlocked.
 
 Dispatch PostHog event multi_year_escrow_locked.
 
-### Phase 4 — Physical Handshake & Settlement
+### Phase 4 â€” Physical Handshake & Settlement
 
 ## 13 Proximity Handshake UI
 
@@ -321,7 +337,7 @@ Implement Zustand to handle typing indicators and optimistic UI updates for a ze
 
 Restrict message attachments to strictly prevent off-platform direct payments.
 
-## Phase 5 — Continuous Lifecycle & Analytics
+## Phase 5 â€” Continuous Lifecycle & Analytics
 
 ## 16 Continuous Lease Renewal Trust Routing (Year 2+)
 
@@ -385,15 +401,15 @@ Pull read-only analytical chart data securely using the PostHog Server API, aggr
 
 ## Execution Summary
 
-Phase 1 — Foundation: 4 Core Features (Homepage UI, superbase auth, Didit, PostHog, PostGIS Schema)
+Phase 1 â€” Foundation: 4 Core Features (Homepage UI, superbase auth, Didit, PostHog, PostGIS Schema)
 
-Phase 2 — Hardware Inventory: 4 Core Features (Capture UI, GPS/Mux Logic, Gemini Audits, Locked Editing)
+Phase 2 â€” Hardware Inventory: 4 Core Features (Capture UI, GPS/Mux Logic, Gemini Audits, Locked Editing)
 
-Phase 3 — Discovery Engine: 4 Core Features (Feed UI, Spatial Queries, Multi-Year Checkout UI, OPay Escrow)
+Phase 3 â€” Discovery Engine: 4 Core Features (Feed UI, Spatial Queries, Multi-Year Checkout UI, OPay Escrow)
 
-Phase 4 — Settlement: 3 Core Features (Handshake UI, ST_DWithin Logic, Realtime Chat)
+Phase 4 â€” Settlement: 3 Core Features (Handshake UI, ST_DWithin Logic, Realtime Chat)
 
-Phase 5 — Continuous Lifecycle: 3 Core Features (Year 2+ CRON Renewals, Gemini Move-Out Unfreezing, PostHog Dashboards)
+Phase 5 â€” Continuous Lifecycle: 3 Core Features (Year 2+ CRON Renewals, Gemini Move-Out Unfreezing, PostHog Dashboards)
 
 Total Architectural Milestones: 18 distinct, highly testable engineering phases.
 
@@ -405,3 +421,12 @@ save/resume and owner trusted-publishing completion. See
 admin-publishing-workflow.md for final decisions and verification limits. Human
 approval remains the default; selected publishers can bypass it while retaining
 all factual asset, admission and fee checks. Hosted data remains unchanged.
+
+## Platform quality and homepage motion extension - 2026-11-12
+
+Delivered verified orgqueue starvation fix, real permission-scoped workload counts,
+searchable paginated audit history, public material listingfacts/safety context,
+directsubmit transport correction, image/fullview/optimizedprivatevariants and
+nativephotoframe/adminpermissionparity. User's additional homepage request delivered
+cursor-responsive grass, page motion and pause/reducedmotion controls.
+See platform-quality-audit.md for implementation and honest release boundaries.

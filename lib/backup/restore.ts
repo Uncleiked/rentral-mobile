@@ -8,6 +8,7 @@ import { MONGO_SETUP_COLLECTION, MONGO_SETUP_ID } from '../database/metadata.ts'
 import { assertNoSymlinks, pathWithin } from './capture.ts'
 import { BackupError, safeBackupPath, withVerifiedBackup, type BackupSummary } from './archive.ts'
 import { createLocalStorage } from '../local-storage/core.ts'
+import { createMongoStorage } from '../local-storage/mongodb.ts'
 import { storageBucket, type StorageBucket } from '../local-storage/policy.ts'
 import { verifyGalleryReferences } from './gallery.ts'
 
@@ -39,14 +40,32 @@ async function verifyJournals(db: Db): Promise<number> {
 }
 async function verifyStorageClaims(db: Db, storage: string): Promise<number> {
   let count = 0
-  const store = createLocalStorage(storage)
+  const store = createLocalStorage(storage), durable = createMongoStorage(async () => db)
+  const hasDurable = await db.listCollections({ name: 'MediaBlob' }, { nameOnly: true }).hasNext()
   async function verifyFile(bucket: StorageBucket, path: string, ownerId: unknown) {
     if (typeof ownerId !== 'string' || path.split('/')[0] !== ownerId) throw new BackupError('STORAGE_REFERENCE_OWNER_INVALID')
-    const info = await store.info(bucket, path)
+    const identity = createHash('sha256').update(`${bucket}\0${path.toLowerCase()}`).digest('hex')
+    const head = hasDurable ? await db.collection<{ _id: string }>('MediaBlob').findOne({ _id: identity }) : null
+    const info = await (head ? durable : store).info(bucket, path)
     const hash = createHash('sha256')
-    for await (const chunk of createReadStream(join(storage, bucket, ...safeBackupPath(path)))) hash.update(chunk)
+    // A durable head takes precedence, including tombstones. Never silently
+    // substitute old local bytes for a missing or corrupted MongoDB object.
+    if (head) {
+      const reader = (await durable.stream(bucket, path)).getReader()
+      try { while (true) { const chunk = await reader.read(); if (chunk.done) break; hash.update(chunk.value) } }
+      catch (error) { await reader.cancel().catch(() => undefined); throw error }
+      finally { reader.releaseLock() }
+    }
+    else { for await (const chunk of createReadStream(join(storage, bucket, ...safeBackupPath(path)))) hash.update(chunk) }
     if (hash.digest('hex') !== info.digest) throw new BackupError('STORAGE_FILE_DIGEST_MISMATCH')
     return info
+  }
+  if (hasDurable) {
+    const blobs = db.collection('MediaBlob').find({ state: 'available' }, { projection: { bucket: 1, path: 1 }, batchSize: 50 })
+    try { for await (const blob of blobs) {
+      if (typeof blob.bucket !== 'string' || typeof blob.path !== 'string') throw new BackupError('STORAGE_CLAIM_INVALID')
+      await verifyFile(storageBucket(blob.bucket), blob.path, blob.path.split('/')[0])
+    } } finally { await blobs.close() }
   }
   const cursor = db.collection<{ _id: string; [key: string]: unknown }>('StorageObject').find({ state: 'available' }, { batchSize: 50 })
   try {

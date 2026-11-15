@@ -1,12 +1,13 @@
 import type { AuthUser } from '@/lib/auth/types'
 import { storageBucket, storagePath } from '@/lib/local-storage/policy'
+import { sendBrowserStoredFile } from '@/lib/local-storage/upload-client'
 
 type UploadBody = Blob | ArrayBuffer
 type UploadOptions = { contentType?: string; upsert?: boolean; cacheControl?: string }
 
-async function jsonRequest<T>(url: string, init?: RequestInit): Promise<{ data: T | null; error: Error | null }> {
+async function jsonRequest<T>(url: string, init?: RequestInit, suppliedResponse?: Response): Promise<{ data: T | null; error: Error | null }> {
   try {
-    const response = await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store' })
+    const response = suppliedResponse ?? await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store' })
     const envelope: unknown = await response.json()
     if (!response.ok || !envelope || typeof envelope !== 'object' || !('success' in envelope) || envelope.success !== true || !('data' in envelope)) {
       const message = envelope && typeof envelope === 'object' && 'error' in envelope && typeof envelope.error === 'string' ? envelope.error : 'This request could not be completed.'
@@ -36,8 +37,10 @@ export function createClient() {
         async upload(path: string, body: UploadBody, options?: UploadOptions) {
           try {
             storagePath(bucket, path)
-            return await jsonRequest<{ path: string }>(endpoint, { method: 'POST', headers: { 'X-Upload-Path': path, 'Content-Type': options?.contentType ?? (body instanceof Blob ? body.type : 'application/octet-stream') }, body })
-          } catch { return { data: null, error: new Error('The upload path is invalid. Please choose the file again.') } }
+            const contentType = options?.contentType ?? (body instanceof Blob ? body.type : 'application/octet-stream')
+            const response = await sendBrowserStoredFile(endpoint, body instanceof Blob ? body : new Blob([body], { type: contentType }), { headers: { 'X-Upload-Path': path, 'Content-Type': contentType } })
+            return await jsonRequest<{ path: string }>(endpoint, undefined, response)
+          } catch (error) { return { data: null, error: error instanceof Error ? error : new Error('This upload could not be confirmed. Keep the original file and check its status before retrying.') } }
         },
         async remove(paths: string[]) { return jsonRequest<{ name: string }[]>(endpoint, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths }) }) },
         async list(prefix = '', options?: { limit?: number }) { return jsonRequest<{ name: string; id: string | null; metadata: { size: number; mimetype: string } | null }[]>(`${endpoint}?${new URLSearchParams({ prefix, limit: String(options?.limit ?? 100) })}`) },

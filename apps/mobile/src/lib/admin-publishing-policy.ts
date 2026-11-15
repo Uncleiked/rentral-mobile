@@ -8,8 +8,8 @@ export function nativePublishingChoices(user: AdminUser, actorId: string, actorR
   if (user.closed || user.suspended || (user.role === 'owner' && user.id !== actorId) || (user.id === actorId && actorRole !== 'owner')) return []
   const choices: GrantChoice[] = []
   const ownerOverride = user.id === actorId
-  if (permissions.includes('gallery:manage')) choices.push({ operation: 'set_gallery_permission', label: 'Gallery uploads', current: user.galleryAllowed, ownerOverride, help: 'Allows gallery media. This does not waive fees or bypass publication review.' })
+  if (permissions.includes('gallery:manage')) choices.push({ operation: 'set_gallery_permission', label: 'Gallery uploads', current: user.galleryAllowed, ownerOverride, help: 'Allows gallery media and publication without manual review. Complete details, valid documents and media are required. Fees are separate and are not waived.' })
   if (permissions.includes('listing:waive')) choices.push({ operation: 'set_free_posting_permission', label: 'Free posting', current: user.freePostingAllowed, ownerOverride, help: 'Applies to future submissions. Existing listing waivers remain separate.' })
-  if (permissions.includes('gallery:manage')) choices.push({ operation: 'set_direct_publish_permission', label: 'Direct publishing', current: user.directPublishAllowed, ownerOverride, help: 'Bypasses human approval; valid documents, media and the publication fee or waiver are still required.' })
+  if (permissions.includes('gallery:manage')) choices.push({ operation: 'set_direct_publish_permission', label: 'Direct publishing', current: user.directPublishAllowed, ownerOverride, help: 'For recorded listings, bypasses human approval; valid documents, media, location checks and the publication fee or waiver are still required.' })
   return choices
 }

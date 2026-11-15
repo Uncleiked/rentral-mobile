@@ -34,14 +34,14 @@ function messageFor(error: unknown): string {
 
 type Props = {
   actorId: string; disabled: boolean; selectedId: string | null; refreshToken: number
-  scope: AdminListingScope | null; onClearScope: () => void; onSelect: (listing: AdminListing) => void
+  initialQuery?: string; scope: AdminListingScope | null; onClearScope: () => void; onSelect: (listing: AdminListing) => void
   onClearSelection: () => void; detail: ReactNode
 }
 
 /** Search is always server-backed: a match outside the first page remains discoverable. */
-export function AdminListingQueue({ actorId, disabled, selectedId, refreshToken, scope, onClearScope, onSelect, onClearSelection, detail }: Props) {
-  const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState<Filters>(() => ({ ...defaults, status: scope ? 'all' : 'review' }))
+export function AdminListingQueue({ actorId, disabled, selectedId, refreshToken, scope, onClearScope, onSelect, onClearSelection, detail, initialQuery = '' }: Props) {
+  const [query, setQuery] = useState(initialQuery)
+  const [filters, setFilters] = useState<Filters>(() => ({ ...defaults, query: initialQuery, status: scope || initialQuery ? 'all' : 'review', archived: initialQuery ? 'include' : 'exclude' }))
   const [cursor, setCursor] = useState<string | null>(null)
   const [history, setHistory] = useState<(string | null)[]>([])
   const [page, setPage] = useState<AdminListingPage | null>(null)
@@ -142,7 +142,7 @@ export function AdminListingQueue({ actorId, disabled, selectedId, refreshToken,
 
   return <div className="space-y-5">
     <header className="flex min-w-0 flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0"><h2 className="text-xl font-semibold">Listing review queue</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">Find submitted listings by host email, username, title, address or listing reference. Upload permission, free posting and publication review are separate decisions.</p></div>
+      <div className="min-w-0"><h2 className="text-xl font-semibold">Listing review queue</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">Find submitted listings by host email, username, title, address or listing reference. Gallery approval allows publication without manual review. Recorded direct publication and free posting have separate controls.</p></div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={button} disabled={disabled || loading} onClick={() => { onClearSelection(); void load() }}><RefreshCw className={'size-4 shrink-0 ' + (loading ? 'animate-spin' : '')} />Refresh queue</button>
         <button type="button" className={button} disabled={disabled || loading || exporting || queryPending || !rows.length} onClick={() => { void download() }}><Download className="size-4 shrink-0" />{exporting ? 'Preparing CSV...' : 'Export matching listings'}</button>

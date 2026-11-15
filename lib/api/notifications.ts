@@ -1,13 +1,7 @@
-import { z } from 'zod'
+import { notificationPageSchema } from '@/lib/contracts/notifications'
 import prisma from '@/lib/db'
 import { ApiError } from './http'
 import { archiveBoundary, nextArchiveCursor, type ArchiveQuery } from './archive'
-
-const notificationSchema = z.object({
-  id: z.uuid(), kind: z.string().min(1).max(80), title: z.string().min(1).max(200), body: z.string().max(4000),
-  href: z.string().max(1000).nullable(), readAt: z.string().datetime({ offset: true }).nullable(), createdAt: z.string().datetime({ offset: true }),
-}).strict()
-const notificationPageSchema = z.object({ items: z.array(notificationSchema).max(50), nextCursor: z.string().nullable(), limit: z.number().int().min(1).max(50) }).strict()
 
 export function notificationHref(value: string | null): string | null {
   if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\u0000-\u001f]/.test(value)) return null

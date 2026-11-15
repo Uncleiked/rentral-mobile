@@ -1,3 +1,4 @@
+import { LikeListingButton } from '@/components/social/LikeListingButton'
 import { AssetPhoto } from '@/components/listing/AssetPhoto'
 import Link from 'next/link'
 import { ArrowUpRight, BadgeCheck, Play } from 'lucide-react'
@@ -18,6 +19,7 @@ export function ListingGridCard({ listing }: Props) {
     </div>
     <div className="flex items-start justify-between gap-3"><Link href={`/marketplace/listing/${listing.id}`} className="min-w-0"><h2 className="truncate text-sm font-semibold text-text-primary">{listing.location}</h2><p className="mt-1 truncate text-xs text-text-muted">{listing.title}</p></Link><ArrowUpRight aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" /></div>
     <p className="mt-2 flex flex-wrap items-baseline gap-1.5 text-xs"><span className="max-w-full break-words text-base font-semibold text-text-primary">₦{listing.price}</span>{listing.intent !== 'buy' && <span className="text-text-muted">/ {listing.priceDenomination}</span>}</p>
+    <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2"><LikeListingButton listingId={listing.id} compact /></div>
     <Link href={`/marketplace/profile/${encodeURIComponent(listing.username)}`} className="mt-1 inline-flex min-h-11 max-w-full items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary"><span className="truncate">@{listing.username}</span>{listing.isVerified && <BadgeCheck aria-label="Identity verified" className="h-3.5 w-3.5 text-accent-hover" />}</Link>
   </article>
 }

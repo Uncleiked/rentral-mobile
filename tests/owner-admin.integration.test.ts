@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import { MongoClient } from 'mongodb'
+import { Long, MongoClient, type Document } from 'mongodb'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import prisma from '@/lib/db'
 import { localMongoDatabaseName, localMongoUrl } from '@/lib/database/config'
@@ -24,6 +24,8 @@ import { GET as documentPreview } from '@/app/api/v1/admin/listings/[id]/documen
 import { searchAdminListings } from '@/lib/operations/admin-listings'
 import { getAdminListingMedia } from '@/lib/operations/admin-media'
 import { publishOwnListing } from '@/lib/listings/publishing'
+import { createMongoStorage } from '@/lib/local-storage/mongodb'
+import { UPLOAD_PART_BYTES } from '@/lib/contracts/upload-transport'
 import { PUBLICATION_FEE_KOBO } from '@/lib/contracts/listing-payments'
 import { GET as manualStatus, POST as manualRequest } from '@/app/api/v1/bookings/[id]/manual-inspection/route'
 
@@ -79,7 +81,7 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
   }
   beforeAll(async () => {
     if (!uri || !fixtureOwner || !/^[a-f0-9]{32}$/.test(fixtureOwner) || localMongoDatabaseName(uri) !== `rentral_test_${fixtureOwner}` || process.env.MONGODB_URL !== uri || process.env.DATABASE_URL !== uri) throw new Error('Use the owned isolated Mongo fixture; never the selected application database.')
-    native = new MongoClient(localMongoUrl(uri), { serverSelectionTimeoutMS: 5000 }); await native.connect()
+    native = new MongoClient(localMongoUrl(uri), { serverSelectionTimeoutMS: 5000, monitorCommands: true }); await native.connect()
     const db = native.db(localMongoDatabaseName(uri))
     if ((await db.listCollections({}, { nameOnly: true }).toArray()).length) throw new Error('Owner fixture database must be new and empty.')
     await db.collection<{ _id: string }>('_FixtureOwnership').insertOne({ _id: fixtureOwner })
@@ -91,7 +93,7 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     limiterSpy = vi.spyOn(apiRateLimiter, 'allow').mockImplementation((key, maximum) => originalAllow(key, maximum, limiterClock))
     ;[platformOwner, admin, host, renter] = await Promise.all(Array.from({ length: 4 }, () => registerAccount({ email: `${randomUUID()}@fixture.invalid`, password })))
     const bootstrapArgs = ['--experimental-strip-types', resolve('scripts/bootstrap-owner.ts'), '--email', platformOwner.user.email, '--reason', reason]
-    const options = { cwd: process.cwd(), env: { ...process.env, MONGODB_URL: uri, DATABASE_URL: uri }, encoding: 'utf8' as const, windowsHide: true, timeout: 20000 }
+    const options = { cwd: storageRoot, env: { ...process.env, MONGODB_URL: uri, DATABASE_URL: uri }, encoding: 'utf8' as const, windowsHide: true, timeout: 20000 }
     expect(JSON.parse(execFileSync(process.execPath, bootstrapArgs, options))).toMatchObject({ dryRun: true, accountMatched: true, existingOwners: 0, ready: true })
     expect(execFileSync(process.execPath, [...bootstrapArgs, '--apply-owner'], options)).toContain('Platform ownership saved')
     expect((await command(platformOwner, 'change_role', admin.user.id, { role: 'admin' })).response.status).toBe(200)
@@ -204,14 +206,14 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     expect((await prisma.user.findUniqueOrThrow({ where: { id: host.user.id } })).gallery_upload_allowed).toBe(false)
     expect(await prisma.listing.count({ where: { lister_id: host.user.id, listing_status: 'active' } })).toBe(0)
   }, 15000)
-  it('applies free posting only to future submissions and keeps human review separate from gallery upload approval', async () => {
+  it('applies free posting only to future submissions while current gallery approval skips human review', async () => {
     const earlier = await createGallery()
     expect((await prisma.listing.findUniqueOrThrow({ where: { id: earlier.listingId } })).fee_waived_at).toBeNull()
     expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: true })).response.status).toBe(200)
     const fresh = await createGallery()
     const row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId }, include: { documentReview: true } })
-    expect(row).toMatchObject({ listing_status: 'pending_verification', fee_waived_by: platformOwner.user.id, fee_waiver_reason: reason })
-    expect(row.fee_waived_at).toBeInstanceOf(Date); expect(row.publication_mode).not.toBe('trusted_publisher')
+    expect(row).toMatchObject({ listing_status: 'active', fee_waived_by: platformOwner.user.id, fee_waiver_reason: reason })
+    expect(row.fee_waived_at).toBeInstanceOf(Date); expect(row.publication_mode).toBe('trusted_publisher')
     expect(row.documentReview?.status).not.toBe('approved')
     expect((await prisma.listing.findUniqueOrThrow({ where: { id: earlier.listingId } })).fee_waived_at).toBeNull()
     expect(await ownedPublicationFee(host.user.id, fresh.listingId)).toMatchObject({ waived: true, payment: null, actions: { checkout: false } })
@@ -228,7 +230,7 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     const row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId }, include: { documentReview: true } })
     expect(row).toMatchObject({ listing_status: 'active', publication_mode: 'trusted_publisher', capture_id: null })
     expect(row.documentReview?.status).not.toBe('approved')
-    expect(row.direct_publish_proof).toMatchObject({ ownerId: host.user.id, grantedBy: platformOwner.user.id, documentPath: fresh.documentPath, documentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+    expect(row.direct_publish_proof).toMatchObject({ version: 2, basis: 'gallery_permission', ownerId: host.user.id, galleryPermissionRevision: row.gallery_permission_revision, documentPath: fresh.documentPath, documentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) })
     expect((await searchAdminListings(platformOwner.user.id, { status: 'review', listerId: host.user.id })).items.some(item => item.id === fresh.listingId)).toBe(false)
     expect((await searchAdminListings(platformOwner.user.id, { status: 'all', query: host.user.email })).items.some(item => item.id === fresh.listingId)).toBe(true)
     const preview = await getAdminListingMedia(platformOwner.user.id, fresh.listingId)
@@ -239,7 +241,7 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
     expect((await prisma.user.findUniqueOrThrow({ where: { id: host.user.id } })).direct_publish_at).toEqual(grant.direct_publish_at)
     expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: false })).response.status).toBe(200)
-    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } }))).toMatchObject({ listing_status: 'pending_verification', publication_mode: 'manual_review' })
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } }))).toMatchObject({ listing_status: 'active', publication_mode: 'trusted_publisher' })
     expect((await command(platformOwner, 'set_free_posting_permission', host.user.id, { allowed: false })).response.status).toBe(200)
     expect(await prisma.paymentIntent.count()).toBe(0); expect(outbound).not.toHaveBeenCalled()
   }, 20000)
@@ -250,8 +252,10 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     expect(row).toMatchObject({ listing_status: 'pending_verification', publication_mode: 'trusted_publisher', fee_waived_at: null })
     expect((await searchAdminListings(platformOwner.user.id, { status: 'review', listerId: host.user.id })).items.some(item => item.id === fresh.listingId)).toBe(false)
     expect((await searchAdminListings(platformOwner.user.id, { status: 'pending_verification', query: fresh.listingId })).items.map(item => item.id)).toEqual([fresh.listingId])
-    await expect(publishOwnListing(host.user.id, fresh.listingId, { clientId: randomUUID(), expectedRevision: row.revision })).rejects.toMatchObject({ code: 'PUBLICATION_FEE_REQUIRED' })
-    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).listing_status).toBe('pending_verification')
+    const unpaidInstruction = { clientId: randomUUID(), expectedRevision: row.revision }
+    await expect(publishOwnListing(host.user.id, fresh.listingId, unpaidInstruction)).rejects.toMatchObject({ code: 'PUBLICATION_FEE_REQUIRED' })
+    expect(await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).toMatchObject({ listing_status: 'pending_verification', revision: row.revision, fee_waived_at: null })
+    expect(await prisma.mutationReceipt.count({ where: { actor_id: host.user.id, scope: 'listing_publish', client_id: unpaidInstruction.clientId } })).toBe(0)
     expect((await command(platformOwner, 'waive_fee', fresh.listingId)).response.status).toBe(200)
     row = await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })
     const instruction = { clientId: randomUUID(), expectedRevision: row.revision }
@@ -260,10 +264,11 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
     expect(await prisma.adminAudit.count({ where: { action: 'trusted_listing_published', target_id: fresh.listingId } })).toBe(1)
     expect(await prisma.documentReview.count({ where: { listing_id: fresh.listingId, status: 'approved' } })).toBe(0)
     expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: false })).response.status).toBe(200)
-    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).listing_status).toBe('pending_verification')
+    // Current gallery approval remains the authority for this gallery listing.
+    expect((await prisma.listing.findUniqueOrThrow({ where: { id: fresh.listingId } })).listing_status).toBe('active')
     expect(await prisma.paymentIntent.count()).toBe(0); expect(await prisma.financialOperation.count()).toBe(0)
   }, 20000)
-  it('keeps privileged grants unavailable to members and does not conflate an upload grant with direct or free posting', async () => {
+  it('keeps privileged grants unavailable to members and keeps gallery approval separate from fees and the additional recorded-publication grant', async () => {
     expect((await command(host, 'set_free_posting_permission', renter.user.id, { allowed: true })).response.status).toBe(403)
     expect((await command(host, 'set_direct_publish_permission', renter.user.id, { allowed: true })).response.status).toBe(403)
     await grantGallery()
@@ -302,7 +307,15 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
       expect((await command(platformOwner, 'set_direct_publish_permission', host.user.id, { allowed: true })).response.status).toBe(200)
       const listing = await createGallery(), other = await createGallery()
       const base = { listing_id: listing.listingId, user_id: host.user.id, kind: 'listing_fee', status: 'succeeded', currency: 'NGN', amount_kobo: BigInt(PUBLICATION_FEE_KOBO), provider_environment: 'test', customer_email: host.user.email }
-      const unrelated = [{ status: 'failed' }, { kind: 'inspection_fee' }, { listing_id: other.listingId }, { user_id: renter.user.id }, { currency: 'USD' }, { amount_kobo: BigInt(PUBLICATION_FEE_KOBO) - BigInt(1) }, { provider_environment: 'live' }]
+      // The prepared database rejects unsupported currencies before application
+      // publication logic can see them. Test that constraint directly rather
+      // than disabling validation to seed an impossible payment record.
+      const invalidCurrencyId = randomUUID()
+      await expect(native.db(localMongoDatabaseName(uri!)).collection<Document & { _id: string }>('PaymentIntent').insertOne({ _id: invalidCurrencyId, ...base,
+        amount_kobo: Long.fromString(PUBLICATION_FEE_KOBO), currency: 'USD', reference: `owned-fixture-${randomUUID()}`, idempotency_key: randomUUID(), revision: 0,
+        createdAt: new Date(), updatedAt: new Date() })).rejects.toMatchObject({ code: 121 })
+      expect(await native.db(localMongoDatabaseName(uri!)).collection<Document & { _id: string }>('PaymentIntent').countDocuments({ _id: invalidCurrencyId })).toBe(0)
+      const unrelated = [{ status: 'failed' }, { kind: 'inspection_fee' }, { listing_id: other.listingId }, { user_id: renter.user.id }, { amount_kobo: BigInt(PUBLICATION_FEE_KOBO) - BigInt(1) }, { provider_environment: 'live' }]
       for (const fields of unrelated) {
         const payment = await prisma.paymentIntent.create({ data: { ...base, ...fields, reference: `owned-fixture-${randomUUID()}`, idempotency_key: randomUUID() } })
         paymentIds.push(payment.id)
@@ -322,6 +335,50 @@ fixture('owned owner/admin, gallery and manual-review acceptance', () => {
       vi.stubEnv('PAYMENTS_ENABLED', 'false')
     }
   }, 30000)
+  it('round-trips durable media between adapter instances without runtime collection or index setup', async () => {
+    const db = native.db(localMongoDatabaseName(uri!)), path = `${host.user.id}/durable/roundtrip.png`
+    const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(600000, 7)])
+    const writer = createMongoStorage(async () => db), reader = createMongoStorage(async () => db), commands: string[] = []
+    const record = (event: { commandName: string }) => { if (['create', 'createIndexes', 'collMod'].includes(event.commandName)) commands.push(event.commandName) }
+    native.on('commandStarted', record)
+    try {
+      await writer.upload('listings-media', path, new Blob([new Uint8Array(png)]).stream(), 'image/png')
+      expect(await reader.info('listings-media', path)).toMatchObject({ size: png.length, digest: createHash('sha256').update(png).digest('hex') })
+      expect(Buffer.from(await (await reader.download('listings-media', path)).arrayBuffer()).equals(png)).toBe(true)
+      expect(Buffer.from(await new Response(await reader.stream('listings-media', path, { start: 261118, end: 261125 })).arrayBuffer())).toEqual(png.subarray(261118, 261126))
+      expect(await db.collection('rentral_media.chunks').countDocuments()).toBeGreaterThanOrEqual(3)
+      await writer.remove('listings-media', path)
+      await expect(reader.info('listings-media', path)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      await expect(writer.upload('listings-media', path, new Blob([new Uint8Array(png)]).stream(), 'image/png')).rejects.toMatchObject({ code: 'FILE_NAME_USED' })
+      expect(commands).toEqual([])
+    } finally { native.off('commandStarted', record) }
+  })
+  it('resumes immutable HTTP-sized GridFS parts and verifies exact cross-chunk bytes without runtime DDL', async () => {
+    const db = native.db(localMongoDatabaseName(uri!)), path = `${host.user.id}/durable/chunked.png`
+    const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(UPLOAD_PART_BYTES + 34567, 9)])
+    const writer = createMongoStorage(async () => db), reader = createMongoStorage(async () => db), commands: string[] = []
+    const record = (event: { commandName: string }) => { if (['create', 'createIndexes', 'collMod'].includes(event.commandName)) commands.push(event.commandName) }
+    const first = png.subarray(0, UPLOAD_PART_BYTES), last = png.subarray(UPLOAD_PART_BYTES)
+    native.on('commandStarted', record)
+    try {
+      expect(await writer.uploadPart('listings-media', path, stream(first), 'image/png', png.length, 0)).toEqual({ path, complete: false, nextPart: 1 })
+      await expect(reader.info('listings-media', path)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      expect(await reader.uploadPart('listings-media', path, stream(first), 'image/png', png.length, 0)).toEqual({ path, complete: false, nextPart: 1 })
+      const changed = Buffer.from(first); changed[128] ^= 1
+      await expect(writer.uploadPart('listings-media', path, stream(changed), 'image/png', png.length, 0)).rejects.toMatchObject({ code: 'UPLOAD_PART_CONFLICT' })
+      expect(await writer.uploadPart('listings-media', path, stream(last), 'image/png', png.length, 1)).toEqual({ path, complete: true, nextPart: 2 })
+      expect(await reader.uploadPart('listings-media', path, stream(last), 'image/png', png.length, 1)).toEqual({ path, complete: true, nextPart: 2 })
+      expect(await reader.info('listings-media', path)).toMatchObject({ size: png.length, digest: createHash('sha256').update(png).digest('hex') })
+      expect(Buffer.from(await (await reader.download('listings-media', path)).arrayBuffer()).equals(png)).toBe(true)
+      const crossPart = Buffer.from(await new Response(await reader.stream('listings-media', path, { start: UPLOAD_PART_BYTES - 8, end: UPLOAD_PART_BYTES + 8 })).arrayBuffer())
+      expect(crossPart.equals(png.subarray(UPLOAD_PART_BYTES - 8, UPLOAD_PART_BYTES + 9))).toBe(true)
+      await writer.remove('listings-media', path)
+      await expect(reader.info('listings-media', path)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      await expect(writer.uploadPart('listings-media', path, stream(first), 'image/png', png.length, 0)).rejects.toMatchObject({ code: 'FILE_NAME_USED' })
+      expect(commands).toEqual([])
+    } finally { native.off('commandStarted', record) }
+  }, 15000)
+
   it('transfers the only owner atomically and immediately removes old owner transfer authority', async () => {
     expect((await command(platformOwner, 'transfer_ownership', admin.user.id)).response.status).toBe(200)
     expect(await prisma.user.count({ where: { staff_role: 'owner' } })).toBe(1)

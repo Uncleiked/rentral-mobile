@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { conversationActivitySchema, type ConversationActivity } from '@/lib/contracts/messaging'
 
-export function useConversationActivity(id: string, userId: string, body: string) {
+export function useConversationActivity(id: string, userId: string, body: string, enabled = true) {
   const [activity, setActivity] = useState<ConversationActivity | null>(null)
   const [shareActivity, setShareActivity] = useState(true)
   const typingRef = useRef({ hasText: false, editedAt: 0 })
@@ -19,6 +19,7 @@ export function useConversationActivity(id: string, userId: string, body: string
     void heartbeatRef.current?.()
   }, [body])
   useEffect(() => {
+    if (!enabled) return
     let active = true, busy = false
     const read = async () => {
       if (!active || busy || document.visibilityState !== 'visible') return
@@ -56,6 +57,6 @@ export function useConversationActivity(id: string, userId: string, body: string
       window.removeEventListener('focus', focus); window.removeEventListener('online', focus); document.removeEventListener('visibilitychange', focus)
       if (shareActivity) clear()
     }
-  }, [clear, path, userId, shareActivity])
-  return { activity, shareActivity, setShareActivity }
+  }, [clear, path, userId, shareActivity, enabled])
+  return { activity: enabled ? activity : null, shareActivity, setShareActivity }
 }

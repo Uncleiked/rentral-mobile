@@ -1,5 +1,6 @@
+import { ProfileSocialControls } from '@/components/social/ProfileSocialControls'
 import Link from 'next/link'
-import { ArrowUpRight, CalendarDays, Heart, LayoutDashboard, Plus } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, Bookmark, LayoutDashboard, Plus } from 'lucide-react'
 import { OwnerProfileHeader } from '@/components/profile/OwnerProfileHeader'
 import { ListingsGrid } from '@/components/profile/ListingsGrid'
 import { SecurityCard } from '@/components/profile/SecurityCard'
@@ -10,7 +11,7 @@ import { SafetyNoticeBanner } from '@/components/trust/SafetyNoticeBanner'
 type Props = { profile: OwnProfileDetails }
 const shortcuts = [
   { href: '/marketplace/bookings', label: 'My bookings', description: 'Your requests and upcoming plans', icon: CalendarDays },
-  { href: '/marketplace/saved', label: 'Saved finds', description: 'Keep your next move close', icon: Heart },
+  { href: '/marketplace/saved', label: 'Saved finds', description: 'Keep your next move close', icon: Bookmark },
   { href: '/marketplace/dashboard', label: 'Activity', description: 'Your actual marketplace records', icon: LayoutDashboard },
 ]
 
@@ -18,6 +19,7 @@ export async function OwnerProfileView({ profile }: Props) {
   const listings = await getListingsForProfile(profile.id, { includeDrafts: true })
   return <div className="space-y-9">
     <OwnerProfileHeader profile={profile} />
+    <ProfileSocialControls profileId={profile.id} own />
     <SafetyNoticeBanner subjectId={profile.id} owner />
     <Link href="/marketplace/appeals" className="inline-flex min-h-11 items-center text-sm text-text-muted underline underline-offset-4 hover:text-text-primary max-w-full break-words">Safety notices & appeals</Link>
     <div className="grid gap-3 sm:grid-cols-3">{shortcuts.map(item => <Link key={item.href} href={item.href} className="group flex flex-col rounded-2xl border border-border-subtle bg-surface-card p-5 transition-colors hover:border-glass-border-medium min-w-0 max-w-full wrap-anywhere text-text-primary min-h-11 break-words"><div className="mb-5 flex items-center justify-between min-w-0 flex-wrap gap-3"><item.icon className="h-5 w-5 text-accent-hover" /><ArrowUpRight className="h-4 w-4 text-text-muted group-hover:text-text-primary" /></div><span className="text-sm font-semibold">{item.label}</span><span className="mt-1 text-xs leading-relaxed text-text-muted">{item.description}</span></Link>)}</div>

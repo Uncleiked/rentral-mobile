@@ -1,3 +1,4 @@
+import { ProfileSocialControls } from '@/components/social/ProfileSocialControls'
 import { VisitorProfileHeader } from '@/components/profile/VisitorProfileHeader'
 import { ProfileTabs } from '@/components/profile/ProfileTabs'
 import { ListingsGrid } from '@/components/profile/ListingsGrid'
@@ -11,6 +12,7 @@ export async function VisitorProfileView({ profile }: Props) {
   const [listings, reviews] = await Promise.all([getListingsForProfile(profile.id), getProfileReviews(profile.id)])
   return <div className="space-y-8">
     <VisitorProfileHeader profile={profile} listingsCount={listings.length} listingId={listings[0]?.id} />
+    <ProfileSocialControls profileId={profile.id} />
     <SafetyNoticeBanner subjectId={profile.id} />
     <ProfileTabs reviewsCount={reviews.length} listingsContent={<ListingsGrid listings={listings} />}
       reviewsContent={<div className="space-y-4">{reviews.length ? reviews.map(review => <article key={review.id} className="rounded-2xl border border-border-subtle bg-surface-card p-5 min-w-0 max-w-full wrap-anywhere text-text-primary"><div className="flex flex-wrap items-center justify-between gap-2 min-w-0"><span className="text-xs font-semibold">@{review.author}</span><span className="text-xs text-accent-hover">{review.rating} / 5</span></div><p className="mt-3 text-sm leading-relaxed text-text-secondary">{review.comment}</p><p className="mt-3 text-[10px] text-text-muted">From a completed booking</p></article>) : <div className="py-12 text-center"><p className="text-sm font-medium">No reviews yet</p><p className="mt-2 text-xs text-text-muted">Reviews appear after a completed booking.</p></div>}</div>}

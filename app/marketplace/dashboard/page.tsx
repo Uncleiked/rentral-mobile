@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { CalendarDays, Heart, Layers3, MessageCircle, ArrowUpRight, ReceiptText } from 'lucide-react'
+import { CalendarDays, Bookmark, Layers3, MessageCircle, ArrowUpRight, ReceiptText } from 'lucide-react'
 import { requireUserId } from '@/lib/action-helpers'
 import prisma from '@/lib/db'
 import { platformEnabled } from '@/lib/platform'
@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   const counts = dashboard?.counts ?? { assets: 0, activeBookings: 0, saved: 0, conversations: 0 }
   const cards = [{ label: 'Your assets', count: counts.assets, icon: Layers3, href: '/marketplace/listing' },
     { label: 'Active bookings', count: counts.activeBookings, icon: CalendarDays, href: '/marketplace/bookings' },
-    { label: 'Saved finds', count: counts.saved, icon: Heart, href: '/marketplace/saved' },
+    { label: 'Saved finds', count: counts.saved, icon: Bookmark, href: '/marketplace/saved' },
     { label: 'Conversations', count: counts.conversations, icon: MessageCircle, href: '/marketplace/messages' }]
   const links = [['/marketplace/vault', 'Media vault'], ['/marketplace/renewals', 'Lease renewals'], ['/marketplace/terminations', 'Early lease end'],
     ['/marketplace/squat-mates', 'Squat-Mates'], ['/marketplace/insights', 'Insights'], ['/marketplace/purchases', 'Purchases'],

@@ -53,6 +53,11 @@ model User {
   conversationsAsSeeker Conversation[] @relation("ConversationSeeker")
   conversationsAsLister Conversation[] @relation("ConversationLister")
   sentMessages Message[]
+  socialFollowers SocialFollow[] @relation("SocialFollowed")
+  socialFollowing SocialFollow[] @relation("SocialFollower")
+  socialBlocksSent SocialBlock[] @relation("SocialBlocker")
+  socialBlocksReceived SocialBlock[] @relation("SocialBlocked")
+  listingLikes ListingLike[]
   safetyNotices SafetyNotice[] @relation("SafetySubject")
   issuedSafetyNotices SafetyNotice[] @relation("SafetyIssuer")
   safetyAppeals SafetyAppeal[] @relation("SafetyAppellant")
@@ -95,6 +100,7 @@ model Listing {
   savedBy          SavedListing[]
   bookings         Booking[]
   conversations    Conversation[]
+  likes ListingLike[]
   sharedMessages   Message[]
   payments         PaymentIntent[]
   documentReview   DocumentReview?
@@ -322,11 +328,16 @@ model LedgerEntry {
 }
 
 model Conversation {
+  revision Int @default(0)
+  kind String?
+  initiated_by String?
+  accepted_at DateTime?
+  accepted_by String?
   id String @id @map("_id") @default(uuid())
-  listing_id String
+  listing_id String?
   seeker_id String
   lister_id String
-  listing Listing @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  listing Listing? @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   seeker User @relation("ConversationSeeker", fields: [seeker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   lister User @relation("ConversationLister", fields: [lister_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   seeker_read_at DateTime?
@@ -334,7 +345,7 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   messages Message[]
-  @@unique([listing_id, seeker_id])
+  @@unique([listing_id, seeker_id, lister_id])
   @@index([seeker_id, updatedAt(sort: Desc)])
   @@index([lister_id, updatedAt(sort: Desc)])
 }
@@ -1065,4 +1076,43 @@ model GoogleIdentity {
   email_at_link String
   credential_fingerprint String
   createdAt DateTime @default(now())
+}
+
+model SocialFollow {
+  id String @id @map("_id")
+  follower_id String
+  followed_id String
+  active Boolean @default(true)
+  notified_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  follower User @relation("SocialFollower",fields:[follower_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  followed User @relation("SocialFollowed",fields:[followed_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@index([follower_id,active,createdAt(sort:Desc),id(sort:Desc)])
+  @@index([followed_id,active,createdAt(sort:Desc),id(sort:Desc)])
+}
+model SocialBlock {
+  id String @id @map("_id")
+  blocker_id String
+  blocked_id String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  blocker User @relation("SocialBlocker",fields:[blocker_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  blocked User @relation("SocialBlocked",fields:[blocked_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@index([blocker_id,active])
+  @@index([blocked_id,active])
+}
+model ListingLike {
+  id String @id @map("_id")
+  user_id String
+  listing_id String
+  active Boolean @default(true)
+  notified_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields:[user_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  listing Listing @relation(fields:[listing_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@index([user_id,active,createdAt(sort:Desc)])
+  @@index([listing_id,active])
 }

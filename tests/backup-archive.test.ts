@@ -10,7 +10,7 @@ vi.mock('node:zlib', async original => {
   const zlib = await original<typeof import('node:zlib')>()
   return { ...zlib, createGunzip: (...args: Parameters<typeof zlib.createGunzip>) => { inflate.calls += 1; inflate.before?.(); return zlib.createGunzip(...args) } }
 })
-import { backupKey, backupRecordSchema, verifyEncryptedArchive, withVerifiedBackup, writeEncryptedArchive, type BackupRecord } from '@/lib/backup/archive'
+import { backupKey, backupRecordSchema, backupCollectionName, verifyEncryptedArchive, withVerifiedBackup, writeEncryptedArchive, type BackupRecord } from '@/lib/backup/archive'
 import { captureBackup } from '@/lib/backup/capture'
 import { verifyOwnedRestore } from '@/lib/backup/restore'
 
@@ -133,4 +133,9 @@ describe('encrypted backup format and restore boundary', () => {
     expect(stderr).toContain('OWNED_RESTORE_ARGUMENTS_REQUIRED')
     expect(stderr).not.toMatch(/ERR_MODULE_NOT_FOUND|ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX/)
   })
+})
+
+it('allows only the reviewed GridFS dotted collection names in encrypted archives', () => {
+  for (const name of ['MediaBlob', 'rentral_media.files', 'rentral_media.chunks', 'SocialFollow', 'SocialBlock', 'ListingLike']) expect(backupCollectionName.safeParse(name).success).toBe(true)
+  for (const name of ['system.users', 'rentral_media.other', 'rentral_media.files.extra', 'other.files', 'rentral_media/../files']) expect(backupCollectionName.safeParse(name).success).toBe(false)
 })

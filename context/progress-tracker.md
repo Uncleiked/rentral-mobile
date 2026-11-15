@@ -1,5 +1,84 @@
 ## Progress Tracker
 
+## Admin/social completion verification - 2026-11-15
+
+The Nov13 request is implemented in RentralMobile: gallery approval now includes
+publication without manual review, clear admin decision prerequisites, grouped
+category search/handoff, contextual logos, public People/follows/likes, private
+saves, new direct Requests/Primary/Sent with recipient consent/typing privacy and
+atomic notifications. Durable same-database GridFS storage and bounded
+browser/native part uploads address serverless upload persistence/body limits.
+The [release guide](social-admin-release.md) supersedes older independent gallery
+review statements. Posting fees and recorded direct-publication remain separate.
+
+Verification complete: final full unit run passed2,286tests across181files;
+121 database checks were intentionally guarded in that aggregate and all121
+ran separately against uniquely owned loopback Mongo fixtures. The latest unique
+database coverage is core55, admin18, social6, financial18, account-security20,
+backup2 and avatars2; reruns are not counted twice. Global lint, native TypeScript
+and production build passed (Next16.4.5;115generated pages). Browser workflows
+for social/notifications, category search and publishing permissions pass at
+320/390/768/1440. The actual local server returns200 for home,307/sign-in for
+protected pages and401 for unauthenticated admin/People APIs.
+
+The Windows Prisma DLL lock was resolved by stopping only the verified local
+RentralMobile Next dev server after the owned tests exited. Normal Prisma
+generation succeeded, then the build's verified cache was reused. Local Next dev
+was restored at3000. No dependency versions or hosted configuration changed.
+
+The Nov15 People screenshot is the expected missing socialVersion readiness
+gate. Owner instructions supplied: npm.cmd run db:setup -- --allow-remote for
+the selected Atlas connection, restart dev, refresh People. No hosted setup or
+deployment performed by this agent. Saved code does not mean a previous Vercel
+deployment has changed. Ordinary users now see a community-unavailable message,
+not terminal/database setup instructions. See memory.md for current handoff.
+
+
+## Platform quality and homepage motion - 2026-11-12
+
+Completed verified admin gaps: permission-scoped current workload totals with oldest
+waiting dates, search/filter/cursor paging across audit history, and server-filtered
+organization review queues defaulting to oldest pending. Confirmed organization
+reviews refresh workload totals; a postcommit refresh failure never offers a new
+review command. Member @handle/email searches preserve literal punctuation.
+
+Web listing facts now expose validated descriptions/preferences/vehicle insurance
+and marine safety terms, distinguishing host declarations/false/zero/missing data.
+Existing reviewed safety notices appear on detail and booking pages. Fixed valid
+trusted active submit responses being incorrectly rejected by web transport.
+Native admin gained the same independent gallery/free/direct permission controls
+through existing audited commands and current-role/owner safeguards.
+
+Shared photo frames fill previews consistently; full-photo viewer supports original
+resolution, keyboard/focus/close controls, and one-photo gallery listings. Native
+photo frames use actual bounded aspect ratios. Private listing images now use
+responsive authenticated WebP derivatives with immutable originals, type/digest/
+size/pixel/time/cache bounds and a2active/16queued FIFO scheduler. This fixes both
+unwanted gaps/crops and loading fullresolution files for ordinary thumbnails.
+
+User's additional homepage request implemented: grass bends with cursor direction,
+settles with a gentle breeze, pauses offscreen/hidden and respects reduced motion.
+Added staggered reveals, photo parallax, tracing section rules and moving text
+ribbon. Footer Pause/Resume controls all page motion; phone footer links fit fully
+above a readable utilitybar. Awwwards motion references recorded in the audit.
+
+Final validation: full Vitest2,168PASS,113SKIP across6opt-infiles;171filesPASS.
+Global lint PASS without warnings; web/mobile TypeScript PASS; production build
+PASS (Next16.4.5,112staticpages). Existing actualNext homepage12/12PASS; new grass/
+motion36groupedchecksPASS; photo/fullview/facts36groupedchecksPASS; admin new
+workload/history24casesPASS; organization review16casesPASS. These are separate
+browser workflows at320/390/768/1440px, not an invented combined provider test.
+Actual raster resize/metadata/digest/concurrency tests passed; physical device and
+realprovider acceptance are not implied. Docker daemon remains unavailable, so
+ownedMongo tests stay safely skipped. No hosted DB/env/provider/dependency/setup/
+deployment changes. Local homepage returnsHTTP200. Observed sourceHEAD20fe6f8;
+this agent did not create commits/pushes. New context notes saved separately.
+
+See platform-quality-audit.md for changes, evidence, repeatable fixtures and
+remaining durableproductionstorage/provider/device requirements plus future
+product-policy boundaries. Existing direct/gallery/free authorization remains intact.
+
+
 ## Admin publishing and draft workflow extension - 2026-11-12
 
 Implemented independent administrator grants for gallery uploads, free posting and
@@ -197,7 +276,7 @@ google-sign-in-setup.md and runtime-admin-auth-repair-plan.md. Changes are saved
 locally; no commit/push/deployment was performed.
 
 
-## Owner administration, gallery media and upload recovery — 2026-11-10
+## Owner administration, gallery media and upload recovery â€” 2026-11-10
 
 The [approved owner/admin increment](owner-admin-media-blueprint.md) implements
 web `/admin` and native Admin, deliberate persisted ownership, manual document
@@ -274,7 +353,7 @@ acceptance and deployment/store release remain separate. Full Vercel hosting
 still needs object storage and deliberate worker/webhook hosting. The delivery
 revision belongs to Git history and the verified final handback.
 
-## Previous recording location, branding and recovery — `cb42fd1`, 2026-11-10
+## Previous recording location, branding and recovery â€” `cb42fd1`, 2026-11-10
 
 The following checkpoint predates the owner/admin increment. Its environment,
 runtime and acceptance counts are historical, not the current provider state.
@@ -338,7 +417,7 @@ storage/launch checks, provider acceptance, and Vercel object-storage/worker
 hosting remain separate. No public tunnel, real provider send/charge, deployment,
 EAS/store build or release was performed by this work.
 
-## Baseline source and local verification — 2026-11-10
+## Baseline source and local verification â€” 2026-11-10
 
 The evidence below records the previously delivered whole-app revision
 `6f2af2f`; current increment results are above. Its pre-push handoff wording is
@@ -413,7 +492,7 @@ account/session writes. These complete responses supersede earlier exploratory
 evidence. Bounded 10s native Mongo connection/selection remains. Temporary traces,
 helper and flag references were removed. The owned backend runs on **3000** and
 Expo on **8090**; its manifest confirms Rentral, one owned development server each.
-Other projects on 8081–8083 remain untouched. **Only final staged review and the
+Other projects on 8081â€“8083 remain untouched. **Only final staged review and the
 authorized Git commit/push remain; no final pushed revision is claimed here.**
 
 Browser acceptance is now reproducible through tracked
@@ -431,7 +510,7 @@ capture/GPS/files/interruption/background/playback/push, real merchant/provider
 activation and backup/recovery custody still require their own acceptance. A
 public release additionally needs HTTPS and deliberate hosting/store decisions.
 
-## Earlier checkpoint log — superseded by current verification above
+## Earlier checkpoint log â€” superseded by current verification above
 
 Final web account boundary: the marketplace layout captures its authenticated
 actor for commerce and matching requests. Clients attach the existing
@@ -504,7 +583,7 @@ provider-agent fixture run); all owned resources were cleaned. This
 increment has not prepared matching on Atlas or sent actual member messages.
 See [matching contracts and boundaries](matching.md).
 
-## Approved completion build — in progress 2026-11-09
+## Approved completion build â€” in progress 2026-11-09
 
 Lifecycle/API increment (source implemented; aggregate acceptance still pending):
 member notifications with cursor/read state, public host/review/listing projections,
@@ -557,7 +636,7 @@ route types. Verified duplicate workspace processes were stopped and a single
 Metro regenerated the file. Keep one Next development server and one Metro;
 revalidate process ownership rather than trusting old session IDs.
 
-## Phone runtime follow-up — verified 2026-11-09
+## Phone runtime follow-up â€” verified 2026-11-09
 
 - User-selected Atlas is preserved. Corrected public-IP drift; native TLS,
   replica-set checks and direct Prisma reads PASS. Authorized preparation:
@@ -587,7 +666,7 @@ revalidate process ownership rather than trusting old session IDs.
   Uncleiked/rentral-mobile. Git history and the final delivery response identify
   the delivered revision.
 
-## Current local Expo / MongoDB / JWT delivery — 2026-11-09
+## Current local Expo / MongoDB / JWT delivery â€” 2026-11-09
 
 - User authority: Android+iOS Expo app, no KYC onboarding, npm 11.19.1 workspaces,
   Node 24.x, MongoDB/user accounts, local JWT authentication, local uploads and local
@@ -653,7 +732,7 @@ The following entries preserve provenance. Their stack, commands, deployment
 plans, mandatory verification and feature-gate status do not override the current
 implementation above. Unimplemented financial/provider capabilities remain limits.
 
-## Vercel generated-client build fix — 2026-11-07
+## Vercel generated-client build fix â€” 2026-11-07
 
 - Fresh Vercel install compiled JavaScript but failed TypeScript because
   `@prisma/client` had no generated `Prisma` export. The build script now generates
@@ -668,7 +747,7 @@ implementation above. Unimplemented financial/provider capabilities remain limit
   The clean fixture had no generated client; generation and a Prisma type-import
   probe then passed without database credentials. Exact results saved in `memory.md`.
 
-## Local configuration and continuation — 2026-11-07
+## Local configuration and continuation â€” 2026-11-07
 
 - User cancelled staging and selected `.env.local`. Its API keys and both database
   connections pass credential-safe read-only checks. Supabase's public CA is saved
@@ -843,35 +922,35 @@ Next: restore database connectivity, replay/verify the pending migration in stag
 
 ### Historical Implementation Notes
 
-Phase: Phase 1 — Foundation, Auth, & Core Infrastructure (with Profile UI pulled forward from Phase 7)
-Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed). Also: Marketplace Profile Page — Owner + Visitor UI (`/marketplace/profile`, `/marketplace/profile/[username]`), built ahead of schedule with real identity data (username/name/verification/account type from Prisma), real trust-stat counts via `getTrustSummary()` (with a `null`/"Coming soon" placeholder for the 3 metrics with no backing system yet), and a real empty state for listings until the Listing table exists. Profile is editable end-to-end: bio + avatar_url added to `User`, a public `profile-avatars` Storage bucket with owner-scoped RLS, live username-availability checking, Supabase secure (double-confirm) email change synced back to Prisma via `app/auth/callback/route.ts`, real Sign Out, and a Copy Link/WhatsApp/X/Facebook share menu.
-Also: 05 Telemetry & PostHog Initialization — `posthog-js` client init (`instrumentation-client.ts`) + `posthog-node` server client (`lib/posthog.ts`, `flushAt: 1`, flush-per-call so events land before short-lived server actions/route handlers exit). 6 events wired to real code paths: `user_signed_in`/`user_signed_up` (sign-in actions), `verification_started` (onboarding `initiateVerification`), `verification_completed` (Didit webhook), `onboarding_completed` (`submitProfile`), `profile_updated` (`updateProfileIdentity`/`updateAvatarUrl`, tagged by `field`).
-Also: Listing Capture — Full UI (build-plan.md Phase 2, Item 05). Wizard shell (Category → Walkthrough → Details → Documents → Activate → Done) now nested at `/marketplace/listing/create` (moved from a top-level `/listing/create` to match the `/marketplace/profile` convention), `useRentralStore` (Zustand) driving wizard state, category-specific metadata schemas (House/Car/Boat) in `lib/schemas.ts`. `CaptureCanvas` uses a real `getUserMedia` live preview; countdown, GPS-lock dot, document upload, and the ₦1,000 checkout screen are simulated local state — no `navigator.geolocation`, no DB writes, no Mux/Gemini/OPay calls yet.
-Also: Listing Hub (`/marketplace/listing`) — "Your Listings" page reusing the existing `ListingsGrid`/`getListingsForProfile()` (previously only rendered on visitor profile views) plus a "Create Listing" CTA into the wizard. Sidebar (`MarketplaceSidebar`) and mobile bottom nav (`MarketplaceBottomNav`) "Listing" items — previously dead `href="#"` placeholders — now both route here instead of straight to the wizard. Homepage's "Create listing" CTA still goes directly to `/marketplace/listing/create`. Verified end-to-end with a headless Chrome + fake-camera-device Playwright run across both entry points (sidebar → hub → wizard, and homepage → wizard directly): real video frames rendered, correct routing at every hop, zero console errors. Also confirmed the existing `proxy.ts` auth gate correctly protects all of these routes (redirects unauthenticated visitors to `/sign-in`, then to `/marketplace`/`/onboarding` per profile state).
-Also: 06 Spatial Integrity & Upload Logic (pragmatic slice — no Mux/OPay/Gemini keys yet). The wizard is now real end-to-end: `CaptureCanvas` records actual video via `MediaRecorder` (vp9→vp8→webm→mp4 codec fallback) gated on a real `navigator.geolocation` fix (recording is blocked entirely if location is denied — spatial invariant), with an in-player review of the recorded take, a Retake button, and a canvas-captured JPEG poster frame. Numeric metadata fields (bedrooms/bathrooms/sizeSqm/mileageKm/seats/capacityPersons/basePrice) are digits-only via zod regex + `inputMode="numeric"`. `DocumentUploadZone` holds the real `File` (type/size validated). On "I've Paid" (fee still simulated), the browser client uploads video/poster to the public `listings-media` bucket and the doc to the private `compliance-docs` bucket at `{uid}/{draftId}/...` (uid-first instead of architecture.md's `listings/{listing_id}/...` because the client uploads before the row exists and owner-folder RLS keys on the first path segment; server actions cap bodies at 1MB so media can't ride through the action). Then the `saveListing` server action (`app/actions/listingActions.ts`) re-validates with zod, checks path ownership, and in one transaction inserts the `Listing` row via Prisma + sets `hardware_coordinates` (PostGIS `geography(Point,4326)`, written via raw `ST_SetSRID(ST_MakePoint(...))` since Prisma treats geography as Unsupported — which also means Prisma can never SELECT it back to a client). Status starts at `pending_verification`; `listing_created` PostHog event fires. `getListingsForProfile(listerId)` is now a real Prisma query feeding "Your Listings" and visitor profiles (explicit select, never coordinates); wizard step 1 gained a "Back to Your Listings" exit link and the Done screen links to the hub. Migrations: `20260724100000_add_listing_model` (postgis extension, RLS-hardened Prisma-only table) + `20260724100500_add_listing_storage_buckets` (both buckets + owner-scoped policies).
-Also: GPS capture hardening — camera/GPS require a secure context, so `pnpm dev:https` (`next dev --experimental-https`, mkcert-backed) was added for phone testing over the LAN (plain `http://192.168.x.x:3000` can never grant them; only localhost is exempt). `CaptureCanvas` now: shows a secure-connection explainer instead of a dead camera on insecure origins, pre-checks `navigator.permissions` for a hard "denied" (pill shows "GPS Blocked", clears live on unblock via the `change` event), maps `GeolocationPositionError.code` to specific instructions (denied → site settings; unavailable → OS Location Services; timeout → retry), and auto-falls back from high-accuracy GPS (15s) to network/Wi-Fi location (`enableHighAccuracy: false`, 20s, 60s cache) before surfacing an error — the path that actually succeeds on desktops.
-Also: Marketplace Feed + Listing Editor + Drafts. (1) **Feed**: `app/marketplace/page.tsx` is now an async server component rendering real non-draft listings via `getMarketplaceFeed()` (`lib/listing-data.ts` — joins lister username/avatar/kyc, public Storage URLs, category-derived badges, "Pending Verification" badge until real verification lands); mock cards removed, real empty state with a Create CTA. `MarketplaceFeedCard` tolerates null avatar (initial fallback), null poster, null trustScore (hidden — no fabricated scores), and plays webm/mp4 via `src`. (2) **Drafts**: "Save Draft & Exit" appears in the wizard once a category is chosen (`SaveDraftButton`); it uploads any in-memory media to Storage (shared `lib/listing-upload.ts`, timestamped filenames under a stable `{uid}/{mediaFolderId}/` folder) and upserts via the `saveDraft` action (`listing_status='draft'`, `wizard_step` saved for resume, coords stored server-side only). Draft columns are nullable with a `Listing_posted_complete_check` DB CHECK forcing completeness for any non-draft status — save/post transactions write fields while status='draft', set PostGIS coords, then flip status last (verified against the live DB in both directions). Resume: "Continue Editing" on the hub card → `/marketplace/listing/create?draft=<id>` → server-fetched `DraftPayload` (never raw coordinates — only a `hasCoords` boolean) hydrates the Zustand store; CaptureCanvas previews the uploaded take from Storage and treats server-held GPS as locked; retake clears both. (3) **Editing**: `/marketplace/listing/[id]/edit` (ownership-scoped 404, drafts redirect to the wizard) → `ListingEditForm` edits metadata/address/price only — video/GPS/documents stay padlocked per Item 11 — via the `updateListing` action. Shared `ListingFields` fieldset now powers both the wizard details step and the edit form. Hub (`/marketplace/listing`) shows drafts + owner-only Edit/Continue buttons (`ListingsGrid`/`ListingCard` `owner` prop); visitor profiles exclude drafts.
-Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 real OPay ₦1,000 fee (still stubbed: storage-direct playback, `pending_verification` status, simulated payment). Follow-ups: GC for replaced draft media objects; Feed "Book"/like/save buttons are still local-only UI.
+Phase: Phase 1 â€” Foundation, Auth, & Core Infrastructure (with Profile UI pulled forward from Phase 7)
+Last completed: 02 Auth, 03 KYC & Onboarding Pipeline (proxy.ts, Didit webhook, multi-step onboarding with ProfileForm, all 3 pipeline bugs fixed). Also: Marketplace Profile Page â€” Owner + Visitor UI (`/marketplace/profile`, `/marketplace/profile/[username]`), built ahead of schedule with real identity data (username/name/verification/account type from Prisma), real trust-stat counts via `getTrustSummary()` (with a `null`/"Coming soon" placeholder for the 3 metrics with no backing system yet), and a real empty state for listings until the Listing table exists. Profile is editable end-to-end: bio + avatar_url added to `User`, a public `profile-avatars` Storage bucket with owner-scoped RLS, live username-availability checking, Supabase secure (double-confirm) email change synced back to Prisma via `app/auth/callback/route.ts`, real Sign Out, and a Copy Link/WhatsApp/X/Facebook share menu.
+Also: 05 Telemetry & PostHog Initialization â€” `posthog-js` client init (`instrumentation-client.ts`) + `posthog-node` server client (`lib/posthog.ts`, `flushAt: 1`, flush-per-call so events land before short-lived server actions/route handlers exit). 6 events wired to real code paths: `user_signed_in`/`user_signed_up` (sign-in actions), `verification_started` (onboarding `initiateVerification`), `verification_completed` (Didit webhook), `onboarding_completed` (`submitProfile`), `profile_updated` (`updateProfileIdentity`/`updateAvatarUrl`, tagged by `field`).
+Also: Listing Capture â€” Full UI (build-plan.md Phase 2, Item 05). Wizard shell (Category â†’ Walkthrough â†’ Details â†’ Documents â†’ Activate â†’ Done) now nested at `/marketplace/listing/create` (moved from a top-level `/listing/create` to match the `/marketplace/profile` convention), `useRentralStore` (Zustand) driving wizard state, category-specific metadata schemas (House/Car/Boat) in `lib/schemas.ts`. `CaptureCanvas` uses a real `getUserMedia` live preview; countdown, GPS-lock dot, document upload, and the â‚¦1,000 checkout screen are simulated local state â€” no `navigator.geolocation`, no DB writes, no Mux/Gemini/OPay calls yet.
+Also: Listing Hub (`/marketplace/listing`) â€” "Your Listings" page reusing the existing `ListingsGrid`/`getListingsForProfile()` (previously only rendered on visitor profile views) plus a "Create Listing" CTA into the wizard. Sidebar (`MarketplaceSidebar`) and mobile bottom nav (`MarketplaceBottomNav`) "Listing" items â€” previously dead `href="#"` placeholders â€” now both route here instead of straight to the wizard. Homepage's "Create listing" CTA still goes directly to `/marketplace/listing/create`. Verified end-to-end with a headless Chrome + fake-camera-device Playwright run across both entry points (sidebar â†’ hub â†’ wizard, and homepage â†’ wizard directly): real video frames rendered, correct routing at every hop, zero console errors. Also confirmed the existing `proxy.ts` auth gate correctly protects all of these routes (redirects unauthenticated visitors to `/sign-in`, then to `/marketplace`/`/onboarding` per profile state).
+Also: 06 Spatial Integrity & Upload Logic (pragmatic slice â€” no Mux/OPay/Gemini keys yet). The wizard is now real end-to-end: `CaptureCanvas` records actual video via `MediaRecorder` (vp9â†’vp8â†’webmâ†’mp4 codec fallback) gated on a real `navigator.geolocation` fix (recording is blocked entirely if location is denied â€” spatial invariant), with an in-player review of the recorded take, a Retake button, and a canvas-captured JPEG poster frame. Numeric metadata fields (bedrooms/bathrooms/sizeSqm/mileageKm/seats/capacityPersons/basePrice) are digits-only via zod regex + `inputMode="numeric"`. `DocumentUploadZone` holds the real `File` (type/size validated). On "I've Paid" (fee still simulated), the browser client uploads video/poster to the public `listings-media` bucket and the doc to the private `compliance-docs` bucket at `{uid}/{draftId}/...` (uid-first instead of architecture.md's `listings/{listing_id}/...` because the client uploads before the row exists and owner-folder RLS keys on the first path segment; server actions cap bodies at 1MB so media can't ride through the action). Then the `saveListing` server action (`app/actions/listingActions.ts`) re-validates with zod, checks path ownership, and in one transaction inserts the `Listing` row via Prisma + sets `hardware_coordinates` (PostGIS `geography(Point,4326)`, written via raw `ST_SetSRID(ST_MakePoint(...))` since Prisma treats geography as Unsupported â€” which also means Prisma can never SELECT it back to a client). Status starts at `pending_verification`; `listing_created` PostHog event fires. `getListingsForProfile(listerId)` is now a real Prisma query feeding "Your Listings" and visitor profiles (explicit select, never coordinates); wizard step 1 gained a "Back to Your Listings" exit link and the Done screen links to the hub. Migrations: `20260724100000_add_listing_model` (postgis extension, RLS-hardened Prisma-only table) + `20260724100500_add_listing_storage_buckets` (both buckets + owner-scoped policies).
+Also: GPS capture hardening â€” camera/GPS require a secure context, so `pnpm dev:https` (`next dev --experimental-https`, mkcert-backed) was added for phone testing over the LAN (plain `http://192.168.x.x:3000` can never grant them; only localhost is exempt). `CaptureCanvas` now: shows a secure-connection explainer instead of a dead camera on insecure origins, pre-checks `navigator.permissions` for a hard "denied" (pill shows "GPS Blocked", clears live on unblock via the `change` event), maps `GeolocationPositionError.code` to specific instructions (denied â†’ site settings; unavailable â†’ OS Location Services; timeout â†’ retry), and auto-falls back from high-accuracy GPS (15s) to network/Wi-Fi location (`enableHighAccuracy: false`, 20s, 60s cache) before surfacing an error â€” the path that actually succeeds on desktops.
+Also: Marketplace Feed + Listing Editor + Drafts. (1) **Feed**: `app/marketplace/page.tsx` is now an async server component rendering real non-draft listings via `getMarketplaceFeed()` (`lib/listing-data.ts` â€” joins lister username/avatar/kyc, public Storage URLs, category-derived badges, "Pending Verification" badge until real verification lands); mock cards removed, real empty state with a Create CTA. `MarketplaceFeedCard` tolerates null avatar (initial fallback), null poster, null trustScore (hidden â€” no fabricated scores), and plays webm/mp4 via `src`. (2) **Drafts**: "Save Draft & Exit" appears in the wizard once a category is chosen (`SaveDraftButton`); it uploads any in-memory media to Storage (shared `lib/listing-upload.ts`, timestamped filenames under a stable `{uid}/{mediaFolderId}/` folder) and upserts via the `saveDraft` action (`listing_status='draft'`, `wizard_step` saved for resume, coords stored server-side only). Draft columns are nullable with a `Listing_posted_complete_check` DB CHECK forcing completeness for any non-draft status â€” save/post transactions write fields while status='draft', set PostGIS coords, then flip status last (verified against the live DB in both directions). Resume: "Continue Editing" on the hub card â†’ `/marketplace/listing/create?draft=<id>` â†’ server-fetched `DraftPayload` (never raw coordinates â€” only a `hasCoords` boolean) hydrates the Zustand store; CaptureCanvas previews the uploaded take from Storage and treats server-held GPS as locked; retake clears both. (3) **Editing**: `/marketplace/listing/[id]/edit` (ownership-scoped 404, drafts redirect to the wizard) â†’ `ListingEditForm` edits metadata/address/price only â€” video/GPS/documents stay padlocked per Item 11 â€” via the `updateListing` action. Shared `ListingFields` fieldset now powers both the wizard details step and the edit form. Hub (`/marketplace/listing`) shows drafts + owner-only Edit/Continue buttons (`ListingsGrid`/`ListingCard` `owner` prop); visitor profiles exclude drafts.
+Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 real OPay â‚¦1,000 fee (still stubbed: storage-direct playback, `pending_verification` status, simulated payment). Follow-ups: GC for replaced draft media objects; Feed "Book"/like/save buttons are still local-only UI.
 
 ## Progress
 
-### Phase 1 — Foundation, Auth, & Core Infrastructure
+### Phase 1 â€” Foundation, Auth, & Core Infrastructure
 
-[x] 01 Homepage & Navigation — Full UI (Hero, Value Prop, Trust Loop)
+[x] 01 Homepage & Navigation â€” Full UI (Hero, Value Prop, Trust Loop)
 
 [x] 02 Authentication & Middleware Protection (Supabase Auth, proxy.ts Edge interception, sign-in/sign-up flows, OAuth callback)
 
-[x] 03 KYC & Identity Resolution (Didit NIN/BVN/Passport Webhook, multi-step onboarding: account type → KYC → profile form → username → marketplace)
+[x] 03 KYC & Identity Resolution (Didit NIN/BVN/Passport Webhook, multi-step onboarding: account type â†’ KYC â†’ profile form â†’ username â†’ marketplace)
 
 [x] 04 Database Schema & Prisma Setup (User, IndividualProfile, OrganizationProfile, WebhookLog models)
 
 [x] 05 Telemetry & PostHog Initialization (Client & Server-side flush setup)
 
-## Phase 2 — Hardware-Locked Inventory & AI Audits
+## Phase 2 â€” Hardware-Locked Inventory & AI Audits
 
-[x] 06 Mobile-First Capture UI (WebRTC Camera & HTML5 Geolocation hooks — real MediaRecorder + GPS-gated capture with retake)
+[x] 06 Mobile-First Capture UI (WebRTC Camera & HTML5 Geolocation hooks â€” real MediaRecorder + GPS-gated capture with retake)
 
-[x] 07 Dynamic Spatial Metadata Forms (Category-specific: House, Car, Boat — digits-only validation, persisted to `Listing.asset_metadata`)
+[x] 07 Dynamic Spatial Metadata Forms (Category-specific: House, Car, Boat â€” digits-only validation, persisted to `Listing.asset_metadata`)
 
 [~] 08 Media Transcoding & Ingestion (Storage flow and gated Mux lifecycle implemented; migration, credentials, private originals and live acceptance pending)
 
@@ -881,7 +960,7 @@ Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 re
 
 [ ] 11 Listing Editor (Padlocked spatial/media attributes)
 
-## Phase 3 — Discovery Feed & Multi-Asset Search
+## Phase 3 â€” Discovery Feed & Multi-Asset Search
 
 [ ] 12 Discovery Feed UI (Vertical Mux scroll, Glassmorphic overlays, badges)
 
@@ -893,7 +972,7 @@ Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 re
 
 [ ] 16 Dispute & Appeals System (For flagged listers to appeal warnings)
 
-## Phase 4 — Transaction Pipelines & Escrow Settlement
+## Phase 4 â€” Transaction Pipelines & Escrow Settlement
 
 [ ] 17 Proximity Handshake UI (Seeker OTP Scanner, Lister Check-in View)
 
@@ -905,7 +984,7 @@ Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 re
 
 [ ] 21 Default Monetization Engine (Supabase Edge Function for 70/30 split payout)
 
-## Phase 5 — Unified Messaging & AI Lifestyle Engine
+## Phase 5 â€” Unified Messaging & AI Lifestyle Engine
 
 [ ] 22 Real-Time Negotiations (Supabase Realtime WebSockets Chat UI & Logic)
 
@@ -913,7 +992,7 @@ Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 re
 
 [ ] 24 AI "Squat-Mate" Matching (Gemini conversational agent for co-living matches)
 
-## Phase 6 — Continuous Lifecycle & Retention
+## Phase 6 â€” Continuous Lifecycle & Retention
 
 [ ] 25 Automated Notification Engine (Month 11 renewal pulses, escrow alerts)
 
@@ -921,7 +1000,7 @@ Next: finish Item 08's Mux transcoding leg, Item 09 Gemini doc audit, Item 10 re
 
 [ ] 27 Lease Termination & Asset Unfreezing (Gemini Move-Out / Vacancy Deed Audit)
 
-## Phase 7 — Admin Command Center & B2B Insights
+## Phase 7 â€” Admin Command Center & B2B Insights
 
 [ ] 28 Profile & Trust Ledger Dashboard (Active inventory, bookings, score history)
 
@@ -947,7 +1026,7 @@ _AI Gatekeeper: Google Gemini 1.5 Pro is used strictly as a multi-modal forensic
 
 _B2B Analytics First: PostHog is integrated at the server level (flushAt: 1) to capture all search patterns, checkout dropouts, and spatial defaults to feed the B2B 'Rentral Insights' portal._
 
-_Error Monitoring: Oluso (@oluso/nextjs) is wired through root `instrumentation.ts` — `register()` installs uncaughtException/unhandledRejection handlers and `onRequestError` catches server-side errors from Server Components, Route Handlers, Server Actions, and Proxy on both Node and Edge runtimes. API key lives in `.env` as OLUSO_API_KEY (gitignored); `environment: process.env.NODE_ENV` keeps dev errors from triggering notification emails or auto-fix PRs._
+_Error Monitoring: Oluso (@oluso/nextjs) is wired through root `instrumentation.ts` â€” `register()` installs uncaughtException/unhandledRejection handlers and `onRequestError` catches server-side errors from Server Components, Route Handlers, Server Actions, and Proxy on both Node and Edge runtimes. API key lives in `.env` as OLUSO_API_KEY (gitignored); `environment: process.env.NODE_ENV` keeps dev errors from triggering notification emails or auto-fix PRs._
 
 _State Management: Used Zustand (useRentralStore) for transient multi-step wizard states (video recording, dynamic forms, and checkout configurations) to prevent unnecessary DB writes before the user commits._
 
@@ -955,7 +1034,7 @@ _State Management: Used Zustand (useRentralStore) for transient multi-step wizar
 
 ## Notes
 
-### Current verified extension — 2026-11-09
+### Current verified extension â€” 2026-11-09
 
 The approved completion blueprint and latest user decisions supersede historical
 provider/database notes below. Paystack only, npm, MongoDB/JWT and no personal
@@ -980,4 +1059,4 @@ _Admin Security: The admin-bypass-verification and is-admin-override flags must 
 
 _Holding Lock Split: When a 24-hour holding lock expires, the Edge Function must programmatically distribute 30% to the platform and 70% to the asset owner's bank account before resetting the listing to 'active'._
 
-_Listing Capture Boundary (updated with Item 06): recording, GPS, storage uploads, and the DB write are real. Still simulated/deferred pending API keys: the ₦1,000 OPay fee (button confirms without payment), Gemini document audit (docs land in `compliance-docs` unreviewed), and Mux transcoding (cards play the raw Storage file). Listings therefore stay `pending_verification` — nothing auto-activates. Wizard blobs live only in Zustand memory, so a refresh at checkout requires redoing capture/document steps (guarded with a clear error, no orphan rows; failed saves best-effort delete their uploads)._
+_Listing Capture Boundary (updated with Item 06): recording, GPS, storage uploads, and the DB write are real. Still simulated/deferred pending API keys: the â‚¦1,000 OPay fee (button confirms without payment), Gemini document audit (docs land in `compliance-docs` unreviewed), and Mux transcoding (cards play the raw Storage file). Listings therefore stay `pending_verification` â€” nothing auto-activates. Wizard blobs live only in Zustand memory, so a refresh at checkout requires redoing capture/document steps (guarded with a clear error, no orphan rows; failed saves best-effort delete their uploads)._

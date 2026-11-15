@@ -1,17 +1,18 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const fixture=vi.hoisted(()=>({fetch:vi.fn(),session:vi.fn(),invalidate:vi.fn(),arrayBuffer:vi.fn(),copy:vi.fn(),removeDirectory:vi.fn(),get:vi.fn(),set:vi.fn(),remove:vi.fn(),values:new Map<string,string>(),size:200*1024*1024,exists:true}))
+const fixture=vi.hoisted(()=>({fetch:vi.fn(),session:vi.fn(),invalidate:vi.fn(),arrayBuffer:vi.fn(),readBytes:vi.fn(),open:vi.fn(),close:vi.fn(),copy:vi.fn(),removeDirectory:vi.fn(),get:vi.fn(),set:vi.fn(),remove:vi.fn(),values:new Map<string,string>(),size:200*1024*1024,exists:true}))
 vi.mock('expo-crypto',()=>({randomUUID:()=> 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}))
 vi.mock('expo/fetch',()=>({fetch:fixture.fetch}))
 vi.mock('expo-file-system',()=>({
   Directory:class Directory{uri:string;exists=true;constructor(...parts:(string|{uri:string})[]){this.uri=parts.map(part=>typeof part==='string'?part:part.uri).join('/')}create(){}delete(){fixture.removeDirectory(this.uri)}},
-  Paths:{document:{uri:'file:///private/documents'}},
-  File:class File{uri:string;constructor(...parts:(string|{uri:string})[]){this.uri=parts.map(part=>typeof part==='string'?part:part.uri).join('/')}get exists(){return fixture.exists}get size(){return fixture.size}arrayBuffer=fixture.arrayBuffer;async copy(target:{uri:string}){fixture.copy(this.uri,target.uri)}},
+  Paths:{document:{uri:'file:///private/documents'}}, FileMode:{ReadOnly:'r'},
+  File:class File{uri:string;constructor(...parts:(string|{uri:string})[]){this.uri=parts.map(part=>typeof part==='string'?part:part.uri).join('/')}get exists(){return fixture.exists}get size(){return fixture.size}arrayBuffer=fixture.arrayBuffer;open(mode:string){fixture.open(this.uri,mode);return {offset:0,readBytes:fixture.readBytes,close:fixture.close}}async copy(target:{uri:string}){fixture.copy(this.uri,target.uri)}},
 }))
 vi.mock('../apps/mobile/src/lib/auth',()=>({getSession:fixture.session,invalidateSession:fixture.invalidate}))
 vi.mock('../apps/mobile/src/lib/config',()=>({config:{apiUrl:'http://192.168.0.1:3000'},configurationError:null}))
 vi.mock('../apps/mobile/src/lib/session-storage',()=>({sessionStorage:{getItem:fixture.get,setItem:fixture.set,removeItem:fixture.remove}}))
 import {ApiError}from'../apps/mobile/src/lib/api'
+import {UPLOAD_PART_BYTES}from'../lib/contracts/upload-transport'
 import {prepareNativeListingUpload,uploadPreparedNativeListingFile}from'../apps/mobile/src/lib/native-upload'
 import {buildNativeDraftCommand,canClearDeclinedDraft,isLegacyDraftCommand}from'../apps/mobile/src/lib/native-draft-workflow'
 import {dismissNativeDeviceDraft,loadNativeDeviceDraft,nativeDraftDirectory,newNativeDeviceDraft,resolveNativeDeviceDraft,saveNativeDeviceDraft,stashNativeDraftFile,type NativeDeviceDraft}from'../apps/mobile/src/lib/native-draft-store'
@@ -29,20 +30,24 @@ it('never discards an older uncertain listing nonce after a rejected retry, acto
 const form={...EMPTY_LISTING_FORM,address:'Fixture address in Yaba',basePrice:'500000',bedrooms:'2',bathrooms:'2',sizeSqm:'80',agencyFee:'123.45',rentalIntent:'shortlet' as const,propertyType:'apartment' as const,kitchens:'1',floors:'2'}
 const savedServer={id:serverId,revision:8,category:'house',status:'draft',address:form.address,basePrice:form.basePrice,metadata:nativeListingMetadata('house',form),wizardStep:'checkout',videoPath:`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/1_video.mp4`,posterPath:null,documentPath:`${actor}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/2_proof.pdf`,documentName:'proof.pdf',hasCoords:true,captureId,createdAt:'2030-01-01T10:00:00.000Z',updatedAt:'2030-01-01T10:00:00.000Z',archivedAt:null,actions:{edit:false,resume:true,archive:true,restore:false}}
 beforeEach(()=>{
- vi.resetAllMocks();fixture.values.clear();fixture.size=200*1024*1024;fixture.exists=true
+ vi.resetAllMocks();fixture.values.clear();fixture.size=2048;fixture.exists=true
  fixture.get.mockImplementation(async key=>fixture.values.get(key)??null)
  fixture.set.mockImplementation(async(key,value)=>{fixture.values.set(key,value)})
  fixture.remove.mockImplementation(async key=>{fixture.values.delete(key)})
  fixture.session.mockResolvedValue({user:{id:actor},access_token:'fixture-access'})
  fixture.arrayBuffer.mockImplementation(()=>{throw new Error('A whole-video allocation is forbidden')})
+ fixture.readBytes.mockImplementation(async length=>new Uint8Array(length))
  fixture.invalidate.mockResolvedValue(undefined)
 })
-it('streams a200MB native File without reading an ArrayBuffer and preserves MOV format',async()=>{
+it('streams a200MB native File after checking single-request capability and preserves MOV format',async()=>{
+ fixture.size=200*1024*1024
  const prepared=prepareNativeListingUpload('file:///camera/recording.mov','video',actor)
  expect(prepared.contentType).toBe('video/quicktime');expect(prepared.path.endsWith('.mov')).toBe(true)
- fixture.fetch.mockResolvedValue(Response.json({success:true,data:{path:prepared.path}},{status:201}))
+ fixture.fetch.mockResolvedValueOnce(Response.json({success:true,data:{chunked:false,partSize:UPLOAD_PART_BYTES}})).mockResolvedValueOnce(Response.json({success:true,data:{path:prepared.path}},{status:201}))
  expect(await uploadPreparedNativeListingFile(prepared,actor)).toBe(prepared.path)
- expect(fixture.fetch).toHaveBeenCalledExactlyOnceWith('http://192.168.0.1:3000/api/v1/uploads/listings-media',expect.objectContaining({body:expect.objectContaining({uri:'file:///camera/recording.mov'}),headers:expect.objectContaining({'Content-Type':'video/quicktime','X-Upload-Path':prepared.path})}))
+ expect(fixture.fetch).toHaveBeenCalledTimes(2)
+ expect(fixture.fetch).toHaveBeenNthCalledWith(1,'http://192.168.0.1:3000/api/v1/uploads/listings-media?capabilities=1',expect.objectContaining({method:'GET',credentials:'omit',headers:{Authorization:'Bearer fixture-access'}}))
+ expect(fixture.fetch).toHaveBeenNthCalledWith(2,'http://192.168.0.1:3000/api/v1/uploads/listings-media',expect.objectContaining({body:expect.objectContaining({uri:'file:///camera/recording.mov'}),headers:expect.objectContaining({'Content-Type':'video/quicktime','X-Upload-Path':prepared.path})}))
  expect(fixture.arrayBuffer).not.toHaveBeenCalled()
 })
 it('streams an approved gallery photo with its current grant revision and preserves an exact upload acknowledgment',async()=>{
@@ -200,7 +205,7 @@ it('keeps original upload metadata and aborts only the explicitly cancelled tran
  controller.abort()
  await expect(uploadPreparedNativeListingFile(prepared,actor,controller.signal)).rejects.toMatchObject({status:0,code:'UPLOAD_UNCERTAIN'})
  expect(prepared.path).toContain(actor)
- expect(fixture.fetch).toHaveBeenCalledTimes(1)
+ expect(fixture.fetch).not.toHaveBeenCalled()
  expect(fixture.arrayBuffer).not.toHaveBeenCalled()
 })
 it('reports a definite upload rejection as an error without inventing success',async()=>{
@@ -242,4 +247,44 @@ it('sends only a confirmed sealed capture id with the exact video, never editabl
  expect(command.listing).toMatchObject({captureId,videoPath:upload.path})
  expect(command.listing).not.toHaveProperty('lat');expect(command.listing).not.toHaveProperty('lng');expect(command.listing).not.toHaveProperty('accuracy')
  expect(()=>buildNativeDraftCommand({...current,captureSession:{...current.captureSession,phase:'sealing'}},'submit',clientId)).toThrow('backend location binding')
+})
+
+it('uses bounded read-only native file handles for sequential production upload parts',async()=>{
+ fixture.size=UPLOAD_PART_BYTES+23
+ const prepared=prepareNativeListingUpload('file:///camera/recording.mp4','video',actor)
+ fixture.fetch.mockResolvedValueOnce(Response.json({success:true,data:{chunked:true,partSize:UPLOAD_PART_BYTES}}))
+  .mockResolvedValueOnce(Response.json({success:true,data:{path:prepared.path,complete:false,nextPart:1}}))
+  .mockResolvedValueOnce(Response.json({success:true,data:{path:prepared.path,complete:true,nextPart:2}}))
+ expect(await uploadPreparedNativeListingFile(prepared,actor)).toBe(prepared.path)
+ expect(fixture.open).toHaveBeenCalledExactlyOnceWith(prepared.uri,'r')
+ expect(fixture.readBytes.mock.calls).toEqual([[UPLOAD_PART_BYTES],[23]])
+ expect(fixture.close).toHaveBeenCalledOnce()
+ expect(fixture.fetch).toHaveBeenCalledTimes(3)
+ for(const[request,part,length]of[[fixture.fetch.mock.calls[1],0,UPLOAD_PART_BYTES],[fixture.fetch.mock.calls[2],1,23]]as const){
+  expect(request[1]).toMatchObject({method:'POST',credentials:'omit',headers:{'X-Upload-Path':prepared.path,'X-Upload-Total-Size':String(prepared.size),'X-Upload-Part':String(part)}})
+  expect(request[1].body).toBeInstanceOf(Uint8Array);expect(request[1].body.byteLength).toBe(length)
+ }
+ expect(fixture.arrayBuffer).not.toHaveBeenCalled()
+})
+it('closes the native file handle and retains the original path after an uncertain part without replaying it',async()=>{
+ fixture.size=UPLOAD_PART_BYTES+23
+ const prepared=prepareNativeListingUpload('file:///camera/recording.mov','video',actor)
+ fixture.fetch.mockResolvedValueOnce(Response.json({success:true,data:{chunked:true,partSize:UPLOAD_PART_BYTES}})).mockRejectedValueOnce(new TypeError('connection lost'))
+ await expect(uploadPreparedNativeListingFile(prepared,actor)).rejects.toMatchObject({code:'UPLOAD_UNCERTAIN',status:0})
+ expect(fixture.fetch).toHaveBeenCalledTimes(2);expect(fixture.readBytes).toHaveBeenCalledExactlyOnceWith(UPLOAD_PART_BYTES);expect(fixture.close).toHaveBeenCalledOnce()
+ expect(prepared.path).toContain(actor);expect(fixture.arrayBuffer).not.toHaveBeenCalled()
+})
+it('rejects changed bytes and inconsistent chunk acknowledgments instead of advancing the saved upload',async()=>{
+ fixture.size=UPLOAD_PART_BYTES+23
+ const prepared=prepareNativeListingUpload('file:///camera/recording.mp4','video',actor)
+ fixture.fetch.mockResolvedValueOnce(Response.json({success:true,data:{chunked:true,partSize:UPLOAD_PART_BYTES}}))
+ fixture.readBytes.mockResolvedValueOnce(new Uint8Array(1))
+ await expect(uploadPreparedNativeListingFile(prepared,actor)).rejects.toMatchObject({code:'FILE_CHANGED',status:409})
+ expect(fixture.fetch).toHaveBeenCalledTimes(1);expect(fixture.close).toHaveBeenCalledOnce()
+ fixture.fetch.mockClear();fixture.close.mockClear()
+ fixture.fetch.mockResolvedValueOnce(Response.json({success:true,data:{chunked:true,partSize:UPLOAD_PART_BYTES}}))
+  .mockResolvedValueOnce(Response.json({success:true,data:{path:prepared.path,complete:true,nextPart:1}}))
+ await expect(uploadPreparedNativeListingFile(prepared,actor)).rejects.toMatchObject({code:'INVALID_RESPONSE',status:200})
+ expect(fixture.fetch).toHaveBeenCalledTimes(2);expect(fixture.close).toHaveBeenCalledOnce()
+ expect(fixture.arrayBuffer).not.toHaveBeenCalled()
 })

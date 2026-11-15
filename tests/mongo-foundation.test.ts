@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+﻿import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Prisma } from '@prisma/client'
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn() }))
@@ -6,7 +6,8 @@ vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction } }))
 import { withTransaction, lockRecord } from '@/lib/database/transactions'
 import { assertAppendOnlyOperation } from '@/lib/database/append-only'
 import { localMongoUrl, localMongoDatabaseName, mongoUrl, mongoDatabaseName } from '@/lib/database/config'
-import { MONGO_INDEXES } from '@/lib/database/indexes'
+import { mutationCommand } from '@/lib/database/mutations'
+import { MONGO_INDEXES, MONGO_VALIDATORS } from '@/lib/database/indexes'
 
 beforeEach(() => vi.resetAllMocks())
 afterEach(() => vi.useRealTimers())
@@ -150,9 +151,17 @@ it('uses partial unique indexes for nullable keys and preserves message/save/pay
   for (const [collection, field] of [['User', 'username'], ['MediaAsset', 'mux_asset_id'], ['MediaAsset', 'playback_id'], ['PaymentIntent', 'provider_transaction_id'], ['Notification', 'dedupe_key']]) {
     expect(MONGO_INDEXES.find(index => index.collection === collection && field in index.keys)?.options).toMatchObject({ unique: true, partialFilterExpression: { [field]: { $type: 'string' } } })
   }
-  for (const [collection, keys] of [['SavedListing', ['user_id', 'listing_id']], ['Message', ['sender_id', 'client_id']], ['Conversation', ['listing_id', 'seeker_id']], ['PaymentIntent', ['idempotency_key']]] as const) {
+  for (const [collection, keys] of [['SavedListing', ['user_id', 'listing_id']], ['Message', ['sender_id', 'client_id']], ['Conversation', ['listing_id', 'seeker_id', 'lister_id']], ['PaymentIntent', ['idempotency_key']]] as const) {
     expect(MONGO_INDEXES.some(index => index.collection === collection && index.options.unique && keys.every(key => key in index.keys))).toBe(true)
   }
   const names = MONGO_INDEXES.map(index => `${index.collection}:${index.options.name}`)
   expect(new Set(names).size).toBe(names.length)
+})
+
+it('admits explicit publication completion and social receipt commands in the reviewed database validator', () => {
+  const validator = MONGO_VALIDATORS.MutationReceipt.$jsonSchema.properties.scope.enum
+  for (const scope of ['listing_publish', 'social_follow', 'social_like', 'social_block', 'direct_conversation_start', 'conversation_accept'] as const) {
+    const command = mutationCommand('11111111-1111-4111-8111-111111111111', scope, '22222222-2222-4222-8222-222222222222', {})
+    expect(validator).toContain(command?.scope)
+  }
 })

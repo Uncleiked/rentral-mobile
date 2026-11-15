@@ -1,6 +1,22 @@
 ## PROJECT OVERVIEW: RENTRAL
 
-## Current implementation and authority — 2026-11-10
+## Latest admin/social authority - 2026-11-15
+
+Current gallery approval permits publication without manual review for complete
+gallery listings. Required owned media/documents and payment or separate waiver
+still apply; no human document/GPS proof is invented. Recorded direct publication
+retains its separate grant. New web People/follows/likes/private saves, direct
+Requests/Primary messaging, typing privacy and notification events share existing
+Mongo/JWT account authorization.
+
+Runtime storage supports MongoDB GridFS in the same database (default on Vercel)
+and the existing local filesystem (default local development). New readiness
+setup must precede social/persistent-upload activation. See
+[social/admin release guide](social-admin-release.md). Current source changes
+have not been applied to the hosted database or deployed.
+
+
+## Current implementation and authority â€” 2026-11-10
 
 Rentral now has an Expo SDK 58 Android/iOS application in `apps/mobile` and the
 existing Next.js web/API backend. The user selected npm 11.19.1 workspaces,
@@ -29,7 +45,7 @@ The completion build adds full member/host native booking, check-in, listing/dra
 vault, messaging, feedback, notification, saved-search, lease and account controls.
 Owner/admin decisions are available in the native app and canonical web `/admin`;
 specialized finance, matching and lifecycle workspaces remain on the web.
-Asset documents receive human review; current database grants control gallery
+Asset documents receive human review by default; selected publishers may use current audited direct-publication permission without fabricating a human approval. Current database grants control gallery
 uploads, location exceptions and publication-fee waivers. Squat-Mates uses opt-in preferences and mutual contact;
 Insights uses consented coarse aggregates with privacy thresholds. Paid Insights
 terms and independently reviewed sponsorship require verified Paystack collections.
@@ -146,23 +162,23 @@ The user types the physical address. The system geocodes this address and conver
 If , the asset's spatial legitimacy is verified.
 The user inputs structural properties (e.g., bedrooms, vehicle transmission, vessel capacity) and sets the price.
 Then they submit the corresponding document for the listen for example if its a property they submit the deed of assignment or prove of ownership and if its a vehicle they submit the vehicle particulars and if its a boat they submit the boat registration documents.
-To activate the listing, the lister pays a small micro-payment (e.g., ₦1,000) through a dynamic OPay virtual account number, preventing remote bot spam.
+To activate the listing, the lister pays a small micro-payment (e.g., â‚¦1,000) through a dynamic OPay virtual account number, preventing remote bot spam.
 
 ## 3. Seekers: Interactive Discovery & Proximity Inspection
 
 The seeker discovers the listing on the vertical-scrolling /marketplace.
-The seeker commits an inspection fee (e.g., ₦3,000) directly into Rentral's master OPay escrow wallet, locking a viewing block. The system issues an encrypted one-time password (OTP) token.
+The seeker commits an inspection fee (e.g., â‚¦3,000) directly into Rentral's master OPay escrow wallet, locking a viewing block. The system issues an encrypted one-time password (OTP) token.
 On-site, the lister presents their check-in screen. The seeker scans the token.
 The platform immediately calls browser geolocation APIs on both devices. A database PostGIS query verifies that both users are physically standing within a 20-meter radius of the property coordinates:
-If validated, the ₦3,000 escrow is instantly payouts-routed to the lister's traditional bank account (e.g., GTBank).
+If validated, the â‚¦3,000 escrow is instantly payouts-routed to the lister's traditional bank account (e.g., GTBank).
 If the lister no-shows, the seeker taps "Lister Absent". The system checks the seeker's GPS history, issues an automated refund, and flags the lister's reputation index.
 
 ## 4. Holding Deposits & Defaulter Splits
 
-If a seeker loves the asset after inspection but requires a 24-hour window to liquidate the full lease funds, they can activate a "Holding Lock" by transferring a commitment fee (e.g., ₦20,000) via a dynamic virtual account.
+If a seeker loves the asset after inspection but requires a 24-hour window to liquidate the full lease funds, they can activate a "Holding Lock" by transferring a commitment fee (e.g., â‚¦20,000) via a dynamic virtual account.
 The listing status instantly changes to on_hold in the database, initiating a strict 24-hour countdown timer.
-If the seeker completes the total lease balance before the countdown hits zero, the ₦20,000 is credited toward their checkout.
-If the timer expires, a Supabase Edge Function executes a split payout: Rentral retains a 30% processing surcharge (₦6,000), and routes the remaining 70% (₦14,000) directly to the landlord's traditional bank account. Landlords are paid for their wasted time, and Rentral captures pure high-margin profit. Seekers can pay proportional fees to extend the hold for multiple days.
+If the seeker completes the total lease balance before the countdown hits zero, the â‚¦20,000 is credited toward their checkout.
+If the timer expires, a Supabase Edge Function executes a split payout: Rentral retains a 30% processing surcharge (â‚¦6,000), and routes the remaining 70% (â‚¦14,000) directly to the landlord's traditional bank account. Landlords are paid for their wasted time, and Rentral captures pure high-margin profit. Seekers can pay proportional fees to extend the hold for multiple days.
 
 ## 5. Year 2 and other years Automated Churn Routing
 

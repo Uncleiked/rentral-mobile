@@ -1,4 +1,4 @@
-import { File } from 'expo-file-system'
+import { File, FileMode } from 'expo-file-system'
 import { fetch } from 'expo/fetch'
 import * as Crypto from 'expo-crypto'
 import { z } from 'zod'
@@ -6,6 +6,7 @@ import { getSession, invalidateSession } from './auth'
 import { config, configurationError } from './config'
 import { ApiError } from './api'
 import { MAX_NATIVE_DOCUMENT_BYTES, MAX_NATIVE_VIDEO_BYTES } from './native-listing'
+import { UPLOAD_PART_BYTES, uploadCapabilitiesSchema, uploadPartResultSchema } from '../../../../lib/contracts/upload-transport'
 
 export const nativeUploadSchema = z.object({ uri: z.string().min(1).max(3000), kind: z.enum(['video', 'document', 'photo']), bucket: z.enum(['listings-media', 'compliance-docs']),
   path: z.string().min(1).max(500), contentType: z.enum(['video/mp4', 'video/quicktime', 'video/webm', 'application/pdf', 'image/jpeg', 'image/png', 'image/webp']), size: z.number().int().positive().max(MAX_NATIVE_VIDEO_BYTES), galleryPermissionRevision: z.number().int().nonnegative().optional() }).strict()
@@ -26,7 +27,7 @@ export function prepareNativeListingUpload(uri: string, kind: 'video' | 'documen
   return nativeUploadSchema.parse({ uri, kind, bucket: kind === 'document' ? 'compliance-docs' : 'listings-media', path, contentType, size: file.size, ...(galleryPermissionRevision === undefined ? {} : { galleryPermissionRevision }) })
 }
 
-/** SDK58 sends the native File body directly; no whole-video ArrayBuffer enters JS. */
+/** SDK58 File.slice reads the whole file; bounded FileHandle reads keep large videos out of JS memory. */
 export async function uploadPreparedNativeListingFile(input: NativeListingUpload, actorId: string, signal?: AbortSignal): Promise<string> {
   if (configurationError) throw new ApiError(configurationError, 'CONFIGURATION_REQUIRED', 503)
   const saved = nativeUploadSchema.parse(input)
@@ -35,24 +36,58 @@ export async function uploadPreparedNativeListingFile(input: NativeListingUpload
   const session = await getSession()
   if (!session) throw new ApiError('Sign in again before uploading your listing.', 'UNAUTHORIZED', 401)
   if (session.user.id !== actorId) throw new ApiError('Your signed-in account changed. Reopen the listing before uploading.', 'ACCOUNT_CHANGED', 409)
-  const controller = new AbortController()
-  const abort = () => controller.abort()
+  const accessToken = session.access_token
+  const controller = new AbortController(), abort = () => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
   if (signal?.aborted) controller.abort()
   const timeout = setTimeout(abort, 180000)
-  try {
-    const galleryQuery = saved.galleryPermissionRevision === undefined ? '' : `?mediaSource=approved_gallery&permissionRevision=${saved.galleryPermissionRevision}`
-    const response = await fetch(`${config.apiUrl}/api/v1/uploads/${saved.bucket}${galleryQuery}`, { method: 'POST', credentials: 'omit', signal: controller.signal,
-      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': saved.contentType, 'X-Upload-Path': saved.path }, body: new File(saved.uri) })
+  const endpoint = config.apiUrl + '/api/v1/uploads/' + saved.bucket
+  const galleryQuery = saved.galleryPermissionRevision === undefined ? '' : '?mediaSource=approved_gallery&permissionRevision=' + saved.galleryPermissionRevision
+  const headers = { Authorization: 'Bearer ' + accessToken, 'Content-Type': saved.contentType, 'X-Upload-Path': saved.path }
+  async function result<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
     if (response.status === 401) {
-      try { await invalidateSession(session.access_token) }
+      try { await invalidateSession(accessToken) }
       catch { throw new ApiError('Your sign-in expired, but secure storage could not be cleared. Try signing out again before uploading.', 'SESSION_CLEAR_FAILED', 401) }
     }
     let payload: unknown
-    try { payload = await response.json() } catch { throw new ApiError('This upload response could not be confirmed. Check the saved upload before sending another file.', 'INVALID_RESPONSE', response.status) }
-    if (!response.ok) throw new ApiError(payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string' ? payload.error : 'Your upload could not be completed. Keep the original file for retry.', 'UPLOAD_FAILED', response.status)
-    if (!payload || typeof payload !== 'object' || !('success' in payload) || payload.success !== true || !('data' in payload) || !payload.data || typeof payload.data !== 'object'
-      || !('path' in payload.data) || payload.data.path !== saved.path) throw new ApiError('This upload response could not be confirmed. Check the saved upload before sending another file.', 'INVALID_RESPONSE', 200)
+    try { payload = await response.json() }
+    catch { throw new ApiError('This upload response could not be confirmed. Check the saved upload before sending another file.', 'INVALID_RESPONSE', response.status) }
+    if (!response.ok) {
+      const failure = z.object({ error: z.string().max(1000), code: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/).optional() }).safeParse(payload)
+      throw new ApiError(failure.success ? failure.data.error : 'Your upload could not be completed. Keep the original file for retry.', failure.success ? failure.data.code ?? 'UPLOAD_FAILED' : 'UPLOAD_FAILED', response.status)
+    }
+    const parsed = z.object({ success: z.literal(true), data: schema }).strict().safeParse(payload)
+    if (!parsed.success) throw new ApiError('This upload response could not be confirmed. Check the saved upload before sending another file.', 'INVALID_RESPONSE', response.status)
+    return parsed.data.data
+  }
+  try {
+    if (controller.signal.aborted) throw new ApiError('The upload was interrupted. Your original file and upload path are kept; check its status before retrying.', 'UPLOAD_UNCERTAIN', 0)
+    if (saved.size > UPLOAD_PART_BYTES) {
+      const capabilities = await result(await fetch(endpoint + '?capabilities=1', { method: 'GET', credentials: 'omit', signal: controller.signal, headers: { Authorization: headers.Authorization } }), uploadCapabilitiesSchema)
+      if (capabilities.chunked) {
+        const file = new File(saved.uri), handle = file.open(FileMode.ReadOnly)
+        const totalParts = Math.ceil(saved.size / UPLOAD_PART_BYTES)
+        let part = 0
+        try {
+          while (part < totalParts) {
+            if (controller.signal.aborted) throw new ApiError('The upload was interrupted. Keep your original file and check its saved status before retrying.', 'UPLOAD_UNCERTAIN', 0)
+            const offset = part * UPLOAD_PART_BYTES, length = Math.min(UPLOAD_PART_BYTES, saved.size - offset)
+            handle.offset = offset
+            const bytes = await handle.readBytes(length)
+            if (bytes.byteLength !== length) throw new ApiError('The original file changed while uploading. Keep this upload recovery and check its status before selecting another file.', 'FILE_CHANGED', 409)
+            const receipt = await result(await fetch(endpoint + galleryQuery, { method: 'POST', credentials: 'omit', signal: controller.signal,
+              headers: { ...headers, 'X-Upload-Total-Size': String(saved.size), 'X-Upload-Part': String(part) }, body: bytes }), uploadPartResultSchema)
+            if (receipt.path !== saved.path || receipt.nextPart <= part || receipt.nextPart > totalParts || receipt.complete !== (receipt.nextPart === totalParts)) throw new ApiError('The upload progress could not be confirmed. Keep your original file and check its saved status before retrying.', 'INVALID_RESPONSE', 200)
+            if (receipt.complete) return saved.path
+            // An explicit retry always sends part0. The server verifies those same bytes before allowing a prefix skip.
+            part = receipt.nextPart
+          }
+        } finally { handle.close() }
+        throw new ApiError('The complete upload could not be confirmed. Check its saved status before retrying.', 'INVALID_RESPONSE', 200)
+      }
+    }
+    const receipt = await result(await fetch(endpoint + galleryQuery, { method: 'POST', credentials: 'omit', signal: controller.signal, headers, body: new File(saved.uri) }), z.object({ path: z.string() }).strict())
+    if (receipt.path !== saved.path) throw new ApiError('This upload response could not be confirmed. Check the saved upload before sending another file.', 'INVALID_RESPONSE', 200)
     return saved.path
   } catch (failure) {
     if (failure instanceof ApiError) throw failure

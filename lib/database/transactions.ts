@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 
-export type LockModel = 'user' | 'listing' | 'listingCapture' | 'booking' | 'paymentIntent' | 'mediaAsset' | 'dispute' | 'safetyNotice' | 'safetyAppeal' | 'renewal' | 'leaseTermination' | 'workerState' | 'paymentRecipient' | 'financialOperation' | 'providerReceipt' | 'matchProfile' | 'matchConnection' | 'matchReport' | 'commercialOrder' | 'sponsoredCampaign' | 'pushDevice' | 'pushDelivery'
+export type LockModel = 'conversation' | 'user' | 'listing' | 'listingCapture' | 'booking' | 'paymentIntent' | 'mediaAsset' | 'dispute' | 'safetyNotice' | 'safetyAppeal' | 'renewal' | 'leaseTermination' | 'workerState' | 'paymentRecipient' | 'financialOperation' | 'providerReceipt' | 'matchProfile' | 'matchConnection' | 'matchReport' | 'commercialOrder' | 'sponsoredCampaign' | 'pushDevice' | 'pushDelivery'
 const TRANSACTION_ATTEMPTS = 5
 const TRANSACTION_BUDGET_MS = 15000
 const TRANSACTION_MAX_WAIT_MS = 5000
@@ -42,6 +42,7 @@ export async function withTransaction<T>(operation: (tx: Prisma.TransactionClien
 export async function lockRecord(tx: Prisma.TransactionClient, model: LockModel, id: string): Promise<boolean> {
   const args = { where: { id }, data: { revision: { increment: 1 } } }
   switch (model) {
+    case 'conversation': return (await tx.conversation.updateMany(args)).count === 1
     case 'user': return (await tx.user.updateMany(args)).count === 1
     case 'listing': return (await tx.listing.updateMany(args)).count === 1
     case 'listingCapture': return (await tx.listingCapture.updateMany(args)).count === 1

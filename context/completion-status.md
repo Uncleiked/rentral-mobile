@@ -1,6 +1,34 @@
 # Rentral current completion matrix
 
-## Current owner administration and approved gallery increment — 2026-11-10
+## Current admin/social increment - 2026-11-15
+
+Requested web admin/gallery/social functionality is implemented and locally
+verified. [Release/setup guide](social-admin-release.md) documents actual policy,
+scoped search, direct message consent, typing/notification behavior, persistent
+uploads and exact owner setup commands.
+
+Final full unit regression:2,286PASS/121guardedSKIP across181passing files.
+All121unique guarded Mongo cases ran separately and passed. Global lint, native
+TypeScript and production build passed. New browser flows passed320/390/768/1440.
+The local development server is restored at3000 and unauthenticated routes remain
+guarded. Hosted setup/deployment and physical-device/live-provider acceptance
+have not been performed. Earlier sections are historical; they must not reinstate
+manual gallery review for currently approved gallery accounts.
+
+## Latest platform quality and homepage motion - 2026-11-12
+
+See [audit](platform-quality-audit.md) and [progress](progress-tracker.md).
+Authoritative workload counts, paginated organization/audit discovery, public
+material listing facts/reviewed warnings, image sizing/fullview/private optimization,
+native admin/photo parity and cursorgrass/homepage motion are implemented.
+Full tests2,168PASS/113opt-inSKIP; lint, web/native types and productionbuildPASS.
+Responsive browser and actual image transformation evidence is recorded separately.
+Hosteddata/settings and production deployment unchanged. Durable production storage,
+realprovider/device acceptance and ownedMongo fixture verification remain release
+requirements. Earlier matrices below are historical and do not override the latest
+independent gallery/free/direct permission policy or acceptance limits.
+
+## Current owner administration and approved gallery increment â€” 2026-11-10
 
 The [approved increment](owner-admin-media-blueprint.md) adds current-role web/native
 administration, persisted ownership, human document decisions, audited publication
@@ -41,7 +69,7 @@ checks passed; both private environment files remain untracked.
 Physical-device and live-provider acceptance, deployment and store release are
 separate. Git history and the final handback identify the delivered revision.
 
-## Previous capture/location/brand increment — delivered as `cb42fd1`
+## Previous capture/location/brand increment â€” delivered as `cb42fd1`
 
 This checkpoint predates the owner/admin/gallery changes. Its provider and runtime
 notes are historical and are superseded by the current review above.
@@ -76,7 +104,7 @@ recovery. The [Windows Mux guide](mux-local-setup.md) covers the CLI platform
 limitation and remaining webhook secret. A full Vercel launch still needs object
 storage and deliberate worker/webhook hosting.
 
-## Whole-app baseline — delivered as `6f2af2f`
+## Whole-app baseline â€” delivered as `6f2af2f`
 
 The following evidence records the previous whole-app delivery. Its original
 pre-push handoff wording is historical; current increment results are above.
@@ -181,7 +209,7 @@ These are distinct observed runs, not numbers to add into a new aggregate:
   Only the core safety flag changed; all other parsed private settings/provider
   gates were preserved. Real selected-Atlas read-only probes returned **/sign-in
   200** and **nonexistent-account login 401**, with no account/session/provider
-  write. Other projects on 8081–8083 were not stopped.
+  write. Other projects on 8081â€“8083 were not stopped.
 
 ## Historical areas mapped to current implementation
 

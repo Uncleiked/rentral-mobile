@@ -4,14 +4,19 @@ import { requireApiIdentity } from '@/lib/api/auth'
 import { apiFailure, apiSearchParams, apiSuccess, readApiJson } from '@/lib/api/http'
 import { archiveQuerySchema, nextArchiveCursor } from '@/lib/api/archive'
 import { beginConversation, getInbox } from '@/lib/messaging/service'
+import { beginDirectConversation } from '@/lib/messaging/direct'
+import { getConversationInboxPage } from '@/lib/messaging/inbox'
+import { directConversationInputSchema, messageInboxQuerySchema } from '@/lib/contracts/messaging'
 
 export const runtime = 'nodejs'
-const conversationInput = z.object({ listingId: z.uuid() }).strict()
+const conversationInput = z.union([z.object({ listingId: z.uuid() }).strict(), directConversationInputSchema])
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const identity = await requireApiIdentity(request, { platform: true })
-    const query = archiveQuerySchema.parse(apiSearchParams(request))
+    const params = apiSearchParams(request)
+    if (Object.hasOwn(params, 'folder')) return apiSuccess(await getConversationInboxPage(identity.userId, messageInboxQuerySchema.parse(params)))
+    const query = archiveQuerySchema.parse(params)
     const conversations = await getInbox(identity.userId, query)
     return apiSuccess({ items: conversations.slice(0, query.limit).map(thread => ({
       id: thread.id, listingId: thread.listing_id, updatedAt: thread.updatedAt.toISOString(),
@@ -27,7 +32,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const identity = await requireApiIdentity(request, { platform: true, mutation: true, verified: true })
     const input = conversationInput.parse(await readApiJson(request))
-    const id = await beginConversation(identity.userId, input.listingId)
+    const id = 'recipientId' in input ? await beginDirectConversation(identity.userId, input) : await beginConversation(identity.userId, input.listingId)
     revalidatePath('/marketplace/messages')
     return apiSuccess({ id }, 201)
   } catch (error) { return apiFailure(error, 'messages') }

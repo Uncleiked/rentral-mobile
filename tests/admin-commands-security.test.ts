@@ -91,7 +91,7 @@ describe('owner administration authorization and original-command receipts', () 
   })
   it('revoking direct publishing returns only live or pending direct inventory to manual review', async () => {
     await executeAdminCommand(owner, command('set_direct_publish_permission', { allowed: false }))
-    expect(state.listingUpdate).toHaveBeenCalledExactlyOnceWith({ where: { lister_id: member, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
+    expect(state.listingUpdate).toHaveBeenCalledExactlyOnceWith({ where: { lister_id: member, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', AND: [{ OR: [{ media_source: 'recorded' }, { media_source: null }, { media_source: { isSet: false } }] }], OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
   })
   it.each(['set_free_posting_permission', 'set_direct_publish_permission'])('requires an explicit owner acknowledgment for self %s', async operation => {
     await expect(executeAdminCommand(owner, command(operation, { targetId: owner, allowed: true }))).rejects.toMatchObject({ status: 403 })
@@ -115,7 +115,7 @@ describe('owner administration authorization and original-command receipts', () 
     const result = await executeAdminCommand(owner, command('set_gallery_permission', { allowed: false }))
     expect(result).toEqual({ clientId: nonce, auditId, committed: true })
     expect(state.userUpdate).toHaveBeenCalledWith({ where: { id: member }, data: { gallery_upload_allowed: false, gallery_permission_revision: 5 } })
-    expect(state.listingUpdate).toHaveBeenCalledWith({ where: { lister_id: member, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', revision: { increment: 1 } } })
+    expect(state.listingUpdate).toHaveBeenCalledWith({ where: { lister_id: member, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', publication_mode: 'manual_review', revision: { increment: 1 } } })
     expect(state.audits).toHaveBeenCalledTimes(1); expect(state.receipts.size).toBe(1)
   })
   it('notifies a newly approved gallery uploader once, including original-command replay', async () => {

@@ -139,7 +139,10 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
   } else if (data.operation === 'set_gallery_permission') {
     if (data.allowed && !accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore access before approving gallery uploads.')
     if (previous.galleryAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { gallery_upload_allowed: data.allowed, gallery_permission_revision: previous.galleryPermissionRevision + 1 } })
-    if (!data.allowed) await tx.listing.updateMany({ where: { lister_id: target.id, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', revision: { increment: 1 } } })
+    if (!data.allowed) {
+      await tx.listing.updateMany({ where: { lister_id: target.id, media_source: 'approved_gallery', listing_status: 'active' }, data: { listing_status: 'suspended', publication_mode: 'manual_review', revision: { increment: 1 } } })
+      await tx.listing.updateMany({ where: { lister_id: target.id, media_source: 'approved_gallery', listing_status: 'pending_verification', publication_mode: 'trusted_publisher' }, data: { publication_mode: 'manual_review', revision: { increment: 1 } } })
+    }
   } else if (data.operation === 'set_free_posting_permission' || data.operation === 'set_direct_publish_permission') {
     if (data.allowed && !accountIsActive(target)) throw new ApiError(409, 'ACCOUNT_UNAVAILABLE', 'Restore account access before enabling publishing privileges.')
     const at = new Date()
@@ -147,7 +150,7 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
       if (previous.freePostingAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { listing_fee_exempt: data.allowed, listing_fee_exempt_by: data.allowed ? actorId : null, listing_fee_exempt_at: data.allowed ? at : null, listing_fee_exempt_reason: data.allowed ? data.reason : null } })
     } else {
       if (previous.directPublishAllowed !== data.allowed) await tx.user.update({ where: { id: target.id }, data: { direct_publish_allowed: data.allowed, direct_publish_by: data.allowed ? actorId : null, direct_publish_at: data.allowed ? at : null, direct_publish_reason: data.allowed ? data.reason : null } })
-      if (!data.allowed) await tx.listing.updateMany({ where: { lister_id: target.id, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
+      if (!data.allowed) await tx.listing.updateMany({ where: { lister_id: target.id, listing_status: { in: ['active', 'pending_verification'] }, publication_mode: 'trusted_publisher', AND: [{ OR: [{ media_source: 'recorded' }, { media_source: null }, { media_source: { isSet: false } }] }], OR: [{ archived_at: null }, { archived_at: { isSet: false } }] }, data: { listing_status: 'pending_verification', publication_mode: 'manual_review', revision: { increment: 1 } } })
     }
   } else if (data.operation === 'suspend_user') {
     await tx.user.update({ where: { id: target.id }, data: { suspended_at: new Date(), suspension_reason: data.reason, gallery_upload_allowed: false, gallery_permission_revision: previous.galleryPermissionRevision + 1, listing_fee_exempt: false, listing_fee_exempt_by: null, listing_fee_exempt_at: null, listing_fee_exempt_reason: null, direct_publish_allowed: false, direct_publish_by: null, direct_publish_at: null, direct_publish_reason: null } })
@@ -161,7 +164,7 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
   if (data.operation === 'set_gallery_permission' && previous.galleryAllowed !== data.allowed) {
     await tx.notification.createMany({ data: [{ user_id: target.id, kind: 'gallery_permission',
       title: data.allowed ? 'Gallery uploads approved' : 'Gallery upload permission removed',
-      body: data.allowed ? 'An administrator approved gallery photos and videos for your account. Open Create Listing to choose your files. Publication follows your separate review and fee settings.' : 'Gallery uploads are no longer approved. Your drafts and files are retained; affected published gallery listings need review before they can appear again.',
+      body: data.allowed ? 'An administrator approved gallery photos and videos for your account. Open Create Listing to choose your files. Gallery approval includes publication without manual review after required document, media and fee checks. Free posting remains separate.' : 'Gallery uploads are no longer approved. Your drafts and files are retained; affected published gallery listings need review before they can appear again.',
       href: data.allowed ? '/marketplace/listing/create?gallery=1' : '/marketplace/listing',
     }] })
   }
@@ -171,7 +174,7 @@ async function userCommand(tx: Prisma.TransactionClient, actorId: string, data: 
     if (before !== data.allowed) await tx.notification.createMany({ data: [{ user_id: target.id, kind: 'publishing_permission',
       title: free ? (data.allowed ? 'Free posting enabled' : 'Free posting disabled') : (data.allowed ? 'Direct publishing enabled' : 'Direct publishing disabled'),
       body: free ? (data.allowed ? 'Your new listing submissions can receive a publication-fee waiver. This is separate from upload permission and listing review.' : 'New submissions require their normal publication fee. Existing recorded waivers are retained.')
-        : (data.allowed ? 'Complete eligible listings can publish without manual review. File, media and fee checks still apply.' : 'Direct publication is disabled. Previously unchecked live listings return to the review queue.'),
+        : (data.allowed ? 'Complete eligible listings can publish without manual review. File, media and fee checks still apply.' : 'The separate direct-publication permission is disabled. Affected recorded listings return to review; current gallery approval still governs gallery listings.'),
       href: '/marketplace/listing',
     }] })
   }

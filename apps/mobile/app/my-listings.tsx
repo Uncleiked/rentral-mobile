@@ -18,7 +18,7 @@ export default function MyListingsScreen() {
         <Button title="Create or recover a listing" onPress={() => router.push('/create-listing')} /><Button title="Private media vault" secondary onPress={() => router.push('/vault')} />
         {resource.error && resource.data ? <Text accessibilityRole="alert" style={styles.error}>Could not refresh: {resource.error}</Text> : null}
       </View>}
-      ListEmptyComponent={resource.loading ? <StatusView loading message="Loading your listings…" /> : resource.error ? <StatusView title="Listings unavailable" message={resource.error} onRetry={refresh} /> : <StatusView title="Your next listing starts here" message="Record a walkthrough, add the details and privately submit your ownership or listing-authority document for asset review." />}
+      ListEmptyComponent={resource.loading ? <StatusView loading message="Loading your listings…" /> : resource.error ? <StatusView title="Listings unavailable" message={resource.error} onRetry={refresh} /> : <StatusView title="Your next listing starts here" message="Record a walkthrough or use approved gallery media, add the details and privately provide your ownership or listing-authority document." />}
       renderItem={({ item }) => <OwnerListingCard listing={item} />}
       ListFooterComponent={<View style={styles.header}>{resource.moreError ? <Text accessibilityRole="alert" style={styles.error}>{resource.moreError}</Text> : null}{resource.hasMore ? <Button title="Older listings" secondary busy={resource.loadingMore} onPress={() => { void resource.loadMore() }} /> : null}</View>} />
   </SafeAreaView>

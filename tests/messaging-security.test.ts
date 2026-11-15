@@ -1,8 +1,10 @@
+vi.mock('@/lib/social/relationships', () => ({ areSociallyBlocked: vi.fn(async () => false), areUsersMutualFollowers: vi.fn(async () => false), assertSocialInteractionAllowed: vi.fn(async () => undefined) }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/accounts/availability', async original => ({ ...await original<typeof import('@/lib/accounts/availability')>(), assertActiveAccounts: vi.fn(async () => undefined) }))
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), lock: vi.fn(), user: vi.fn(), thread: vi.fn(), duplicate: vi.fn(),
+const mocks = vi.hoisted(() => ({ socialReady: vi.fn(), transaction: vi.fn(), lock: vi.fn(), user: vi.fn(), thread: vi.fn(), duplicate: vi.fn(),
   count: vi.fn(), create: vi.fn(), update: vi.fn(), notify: vi.fn(), shared: vi.fn(), verified: vi.fn(), authenticated: vi.fn(), markRead: vi.fn(), messages: vi.fn(), latest: vi.fn() }))
+vi.mock('@/lib/database/readiness', () => ({ socialPrepared: mocks.socialReady }))
 vi.mock('@/lib/db', () => ({ default: { $transaction: mocks.transaction, conversation: { findFirst: mocks.thread, updateMany: mocks.markRead }, message: { findMany: mocks.messages } } }))
 vi.mock('@/lib/action-helpers', () => ({ requireVerifiedUserId: mocks.verified, requireUserId: mocks.authenticated }))
 vi.mock('@/lib/database/transactions', () => ({ withTransaction: (work: (tx: unknown) => Promise<unknown>) => mocks.transaction(work), lockRecord: async (_tx: unknown, model: string, id: string) => { mocks.lock(model, id); return true } }))
@@ -16,7 +18,7 @@ const threadId = '11111111-1111-4111-8111-111111111111', clientId = '22222222-22
 const input = { conversationId: threadId, clientId, body: 'Hello, is an inspection available?' }
 
 beforeEach(() => {
-  vi.resetAllMocks(); vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true')
+  vi.resetAllMocks(); vi.stubEnv('RENTRAL_PLATFORM_ENABLED', 'true'); mocks.socialReady.mockResolvedValue(true)
   mocks.user.mockResolvedValue({ kyc_verified: true }); mocks.thread.mockResolvedValue({ seeker_id: 'seeker', lister_id: 'host' })
   mocks.duplicate.mockResolvedValue(null); mocks.count.mockResolvedValue(0); mocks.create.mockResolvedValue({ id: 'message-1' })
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({ $queryRaw: mocks.lock,

@@ -1,4 +1,4 @@
-import { createLocalStorage, defaultStorageDirectory } from '@/lib/local-storage/core'
+import { createAppStorage } from '@/lib/local-storage/app'
 import { storageBucket, storageFailure, storagePath, StorageError } from '@/lib/local-storage/policy'
 import { verifyStorageToken } from '@/lib/local-storage/urls'
 import prisma from '@/lib/db'
@@ -29,7 +29,7 @@ async function fileResponse(request: Request, context: Context): Promise<Respons
     storagePath(bucket, path)
     if (bucket !== 'profile-avatars') await verifyStorageToken(url.searchParams.get('token'), bucket, path)
     else if (!await prisma.user.findFirst({ where: { id: params.path[0], ...activeAccountWhere }, select: { id: true } })) throw new StorageError(404, 'NOT_FOUND', 'This file is unavailable.')
-    const storage = createLocalStorage(defaultStorageDirectory())
+    const storage = createAppStorage()
     const info = await storage.info(bucket, path)
     const etag = `"${info.digest}"`
     const headers: Record<string, string> = {
